@@ -336,22 +336,31 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     '''
     print('intrinsic', intrinsic_cube.shape)  # 300, 300, 62
 
+    '''
+    if out_name is not None:
+        hdu = fits.PrimaryHDU(intrinsic_cube)
+        hdul = fits.HDUList([hdu])
+        hdul.writeto('okay_but_hows_this_n15.fits')
+    '''
+    
     # CONVERT INTRINSIC TO OBSERVED
     # take velocity slice from intrinsic data cube, convolve with alma beam --> observed data cube
     beam_psf = make_beam_psf(grid_size=len(intrinsic_cube[:, :, 0]), x_std=0.319, y_std=0.233, rot=np.deg2rad(90-78.4))
     print(beam_psf.shape)  # 300,300
     convolved_cube = []
+    start_time = time.time()
     for z3 in range(len(z_ax)):
         print(z3)
         # CONVOLVE intrinsic_cube[:, :, z3] with alma beam
         # alma_beam needs to have same dimensions as intrinsic_cube[:, :, z3]
         convolved_cube.append(signal.convolve2d(intrinsic_cube[:, :, z3], beam_psf, mode='same'))
-        print(z3)
+        # print(z3)
+        print("Convolution loop " + str(z3) + " took {0} seconds".format(time.time() - start_time))
         # ISSUE: each signal.convolve2d step takes ~40s (takes ~16 seconds in terminal for same sized objects...)
         # mode=same keeps output size same
         # welp according to Barth+2016 this is the most time-consuming step of the modeling calculations
     convolved_cube = np.asarray(convolved_cube)
-    print('convolved!')
+    print('convolved! Total convolution loop took {0} seconds'.format(time.time() - start_time))
 
     # WRITE OUT RESULTS TO FITS FILE
     if out_name is not None:
@@ -363,6 +372,18 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     if incl_fig:
 
         fig = plt.figure(figsize=(12, 10))
+        for x in range(len(x_obs)):
+            xtemp = [x_obs[x]] * len(y_obs)
+            plt.scatter(xtemp, y_obs, c=v_obs[x, :], vmin=np.amin(v_obs), vmax=np.amax(v_obs), s=25,
+                        cmap='RdBu_r')  # viridis, RdBu_r, inferno
+        plt.colorbar()
+        plt.xlabel(r'x [Mpc]', fontsize=30)
+        plt.ylabel(r'y [Mpc]', fontsize=30)
+        plt.xlim(min(x_obs), max(x_obs))
+        plt.ylim(min(y_obs), max(y_obs))
+        plt.show()
+
+        fig2 = plt.figure(figsize=(12, 10))
         for x in range(len(x_obs)):
             xtemp = [x_obs[x]] * len(y_obs)
             plt.scatter(xtemp, y_obs, c=v_obs[x, :], vmin=np.amin(v_obs), vmax=np.amax(v_obs), s=25,
@@ -386,7 +407,7 @@ if __name__ == "__main__":
 
     v = model_grid(x_width=21., y_width=21., resolution=0.07, s=6, n_channels=60, spacing=20.1, x_off=0., y_off=0.,
                    mbh=6.*10**8, inc=np.deg2rad(83.), dist=17., theta=np.deg2rad(-207.5), data_cube=cube,
-                   lucy_output='lucy_out_n15.fits', out_name='howbadisthis_n15.fits', incl_fig=False)
+                   lucy_output='lucy_out_n15.fits', out_name='howbadisthis_n15.fits', incl_fig=True)
     # NOTE: from Fig3 of Barth+2016, their theta=~117 deg appears to be measured from +x to redshifted side of disk
     #       since I want redshifted side of disk to +y (counterclockwise), I want -(117.5+90) = -207.5
     # beam_axes = [0.319, 0.233]  # arcsecs
