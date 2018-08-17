@@ -3,6 +3,7 @@ import astropy.io.fits as fits
 from astropy.table import Table
 import matplotlib.pyplot as plt
 import scipy
+from scipy import signal
 from astropy import modeling
 # from pyraf import iraf
 # from pyraf import irraffunctions
@@ -209,19 +210,15 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     # SUBPIXELS
     # take deconvolved flux map (output from lucy), take subpixels, assign each subpixel flux=(real pixel flux)/s**2
     # --> these are the weights to apply to gaussians
-    xpix = 0
-    ypix = 0
+    print('start')
     subpix_deconvolved = np.zeros(shape=(len(lucy_out) * s, len(lucy_out[0]) * s))  # 300*s, 300*s
     for x_subpixel in range(len(subpix_deconvolved)):
         for y_subpixel in range(len(subpix_deconvolved[0])):
-            if x_subpixel < s * (1+xpix):
-                if y_subpixel < s * (1+ypix):
-                    subpix_deconvolved[x_subpixel, y_subpixel] = lucy_out[xpix, ypix] / s**2
-                else:
-                    ypix += 1
-            else:
-                xpix += 1
+            xpix = int(x_subpixel / 10.)
+            ypix = int(y_subpixel / 10.)
+            subpix_deconvolved[x_subpixel, y_subpixel] = lucy_out[xpix, ypix] / s**2
     # print(subpix_deconvolved[0], subpix_deconvolved[0, 9])
+    print('deconvolved')
 
     # GAUSSIAN STEP
     # get gaussian velocity for each subpixel, apply weights to gaussians (weights = subpix_deconvolved output)
@@ -315,74 +312,46 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     obs3d = np.asarray(obs3d)
     print('obs3d')
 
-    print(oops)
-    '''
-    for  x in range(len(x_obs)):
-        for y in range(len(y_obs)):
-            # CONVERT FROM x_obs, y_obs TO x_disk, y_disk (still in pc)
-            x_disk = (x_obs[x] - x_bhctr) * np.cos(theta) - (y_obs[y] - y_bhctr) * np.sin(theta)
-            y_disk = (y_obs[y] - y_bhctr) * np.cos(theta) + (x_obs[x] - x_bhctr) * np.sin(theta)
-
-            # CALCULATE THE RADIUS (R) OF EACH POINT (x_disk, y_disk) IN THE DISK (pc)
-            R[x, y] = np.sqrt((x_disk ** 2 / np.cos(inc) ** 2) + y_disk ** 2)
-
-            # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
-            vel[x, y] = np.sqrt(constants.G_pc * mbh / R[x, y])
-            # 3.086 * 10 ** 19  # Mpc to km
-
-            # CALCULATE LINE-OF-SIGHT VELOCITY AT EACH POINT (x_disk, y_disk) IN THE DISK (km/s)
-            # alpha = POSITION ANGLE AROUND THE DISK, measured from +x (minor axis) toward +y (major axis)
-            # alpha = np.arctan((y_disk * np.cos(inc)) / x_disk)
-            # v_obs = v_sys - v_los = v_sys - v(R)*sin(i)*cos(alpha)
-            # = v_sys - sqrt(GM/R)*sin(i)*cos(alpha)
-            # = v_sys - sqrt(GM)*sin(i)*cos(alpha)/[(x_obs / cos(i))**2 + y_obs**2]^(1/4)
-            # = v_sys - sqrt(GM)*sin(i)*[1 /sqrt((x_obs / (y_obs*cos(i)))**2 + 1)]/[(x_obs/cos(i))**2 + y_obs**2]^(1/4)
-            # NOTE: 1/sqrt((x_obs / (y_obs*cos(i)))**2 + 1) = y_obs/sqrt((x_obs/cos(i))**2 + y_obs**2) = y_obs / sqrt(R)
-            # v_obs = v_sys - sqrt(GM)*sin(i)*y_obs / [(x_obs / cos(i))**2 + y_obs**2]^(3/4)
-            v_los[x, y] = np.sqrt(constants.G_pc * mbh) * np.sin(inc) * y_disk / \
-                          ((x_disk / np.cos(inc)) ** 2 + y_disk ** 2) ** (3 / 4)
-
-            # SET LINE-OF-SIGHT VELOCITY AT THE BLACK HOLE CENTER TO BE 0, SUCH THAT IT DOES NOT BLOW UP
-            if x_obs[x] == x_bhctr and y_obs[y] == y_bhctr:
-                v_los[x, y] = 0.
-
-            # CALCULATE OBSERVED VELOCITY
-            v_obs[x, y] = v_sys - v_los[x, y]
-
-            # GAUSSIAN STEP
-            # get gaussian velocity for each subpixel, apply weights to gaussians as determined above
-
-            # CALCULATE WAVELENGTH AXIS
-            weight = subpix_deconvolved[x, y]
-            sigma = 50.  # * (1 + np.exp(-R[x, y])) # sig: const, c1+c2*e^(-r/r0), c1+exp[-(x-mu)^2 / (2*sig^2)]
-            for z in range(len(z_ax)):
-                obs3d[z, x, y] = weight * np.exp(-(z_ax[z] - v_obs[x, y]) ** 2 / (2 * sigma ** 2))
-                # if x == 97 and y == 238:  # corresponds to pixels 98 & 240, which are max
-                #     print(obs3d[z, x, y], x, y, z_ax[z], v_obs[x, y])
-    '''
     # RESAMPLE
     # RE-SAMPLE BACK TO CORRECT PIXEL SCALE (take average of sxs sub-pixels for real alma pixel) --> intrinsic data cube
-    x_real = 0
-    y_real = 0
+    intrinsic_cube = np.zeros(shape=(len(fluxes), len(fluxes[0]), len(z_ax)))  # shape = original data cube shape
+    for z2 in range(len(z_ax)):
+        print(z2)  # ~1s per iteration --> not great [still, cycling through all of these is <2 of convolution step]
+        splits = np.asarray(np.hsplit(obs3d[z2, :, :], 300))  # 300*s/300 = s
+        splits2 = np.asarray([np.vsplit(splits[i], 300) for i in range(len(splits))])
+        # print(splits2.shape)  # [300, 300, s, s]
+        for x_real in range(len(splits2)):
+            for y_real in range(len(splits2[0])):
+                intrinsic_cube[x_real, y_real, z2] = np.mean(splits2[x_real][y_real])
+
+    '''
+    # TAKES TOO LONG
     intrinsic_cube = np.zeros(shape=(len(fluxes), len(fluxes[0]), len(z_ax)))  # shape = original data cube shape
     for x_sub in range(len(fluxes) * s):
         for y_sub in range(len(fluxes[0]) * s):
             for z2 in range(len(z_ax)):
-                if x_sub >= s * (1+x_real):
-                    x_real += 1
-                if y_sub >= s * (1+y_real):
-                    y_real += 1
-                print(x_real, y_real, x_sub, y_sub)
-                intrinsic_cube[x_real, y_real, z2] += obs3d[z2, x_sub, y_sub] / s**2
+                x_real = int(x_sub / 10.)
+                y_real = int(y_sub / 10.)
+                intrinsic_cube[x_real, y_real, z2] += obs3d[z2, x_sub, y_sub] / s ** 2
+    '''
+    print('intrinsic', intrinsic_cube.shape)  # 300, 300, 62
 
     # CONVERT INTRINSIC TO OBSERVED
     # take velocity slice from intrinsic data cube, convolve with alma beam --> observed data cube
     beam_psf = make_beam_psf(grid_size=len(intrinsic_cube[:, :, 0]), x_std=0.319, y_std=0.233, rot=np.deg2rad(90-78.4))
+    print(beam_psf.shape)  # 300,300
     convolved_cube = []
     for z3 in range(len(z_ax)):
+        print(z3)
         # CONVOLVE intrinsic_cube[:, :, z3] with alma beam
         # alma_beam needs to have same dimensions as intrinsic_cube[:, :, z3]
-        convolved_cube.append(scipy.signal.convolve2d(intrinsic_cube[:, :, z3], beam_psf))
+        convolved_cube.append(signal.convolve2d(intrinsic_cube[:, :, z3], beam_psf, mode='same'))
+        print(z3)
+        # ISSUE: each signal.convolve2d step takes ~40s (takes ~16 seconds in terminal for same sized objects...)
+        # mode=same keeps output size same
+        # welp according to Barth+2016 this is the most time-consuming step of the modeling calculations
+    convolved_cube = np.asarray(convolved_cube)
+    print('convolved!')
 
     # WRITE OUT RESULTS TO FITS FILE
     if out_name is not None:
@@ -415,9 +384,9 @@ if __name__ == "__main__":
     psf = make_beam_psf(grid_size=100, x_std=0.319, y_std=0.233, rot=np.deg2rad(90-78.4))  # ,
     # fits_name='psf_out.fits')  # rot: start at +90, subtract 78.4 to get 78.4
 
-    v = model_grid(x_width=21., y_width=21., resolution=0.07, s=10, n_channels=60, spacing=20.1, x_off=0., y_off=0.,
+    v = model_grid(x_width=21., y_width=21., resolution=0.07, s=6, n_channels=60, spacing=20.1, x_off=0., y_off=0.,
                    mbh=6.*10**8, inc=np.deg2rad(83.), dist=17., theta=np.deg2rad(-207.5), data_cube=cube,
-                   lucy_output='lucy_out_n5.fits', out_name='howbadisthis.fits', incl_fig=False)
+                   lucy_output='lucy_out_n15.fits', out_name='howbadisthis_n15.fits', incl_fig=False)
     # NOTE: from Fig3 of Barth+2016, their theta=~117 deg appears to be measured from +x to redshifted side of disk
     #       since I want redshifted side of disk to +y (counterclockwise), I want -(117.5+90) = -207.5
     # beam_axes = [0.319, 0.233]  # arcsecs
