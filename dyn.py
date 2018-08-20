@@ -64,8 +64,9 @@ ALTERNATIVE: (what we think is done in Barth+2001 paper)
 
 S = same for all subsampled s pixels, sum these up and that's what I get at real pixel i,j
 P = do I define this myself? This is also the psf input into lucy (along with the regular image) right?
+S * p together are wrapped into the weights I do above
 v_p = what I've been calling v_obs
-v_d, x_c, M not relevant for me??
+v_d, x_c, M not relevant for me!
 sig_p = what is "bulk" vel dispersion? Is that just the difference btwn most + and most - velocities?
 sig_t = how do I get this?
 sig_LSF = I assume there's something equivalent I should use for radio beam spread function?
@@ -218,11 +219,20 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     subpix_deconvolved = np.zeros(shape=(len(lucy_out) * s, len(lucy_out[0]) * s))  # 300*s, 300*s
     for x_subpixel in range(len(subpix_deconvolved)):
         for y_subpixel in range(len(subpix_deconvolved[0])):
-            xpix = int(x_subpixel / 10.)
-            ypix = int(y_subpixel / 10.)
+            xpix = int(x_subpixel / s)
+            ypix = int(y_subpixel / s)
             subpix_deconvolved[x_subpixel, y_subpixel] = lucy_out[xpix, ypix] / s**2
     # print(subpix_deconvolved[0], subpix_deconvolved[0, 9])
-    print('deconvolution took {0} s'.format(time.time() - t0))
+    print('deconvolution took {0} s'.format(time.time() - t0))  # ~10.4 s
+
+    '''
+    # TEST
+    hdu = fits.PrimaryHDU(subpix_deconvolved)
+    hdul = fits.HDUList([hdu])
+    hdul.writeto('howisthe_deconvolved_n15_take2.fits')
+    print(oops)
+    # \END TEST
+    '''
 
     # GAUSSIAN STEP
     # get gaussian velocity for each subpixel, apply weights to gaussians (weights = subpix_deconvolved output)
@@ -361,10 +371,11 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
         hdu = fits.PrimaryHDU(convolved_cube)
         hdul = fits.HDUList([hdu])
         hdul.writeto(out_name)
+        print('written!')
 
     # PRINT 2D DISK ROTATION FIG
     if incl_fig:
-
+        # BUCKET: ISSUE: velocity map was split into top/bottom, rather than angled appropriately....
         fig = plt.figure(figsize=(12, 10))
         for x in range(len(x_obs)):
             xtemp = [x_obs[x]] * len(y_obs)
