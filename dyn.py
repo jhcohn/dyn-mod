@@ -5,8 +5,10 @@ import matplotlib.pyplot as plt
 import scipy
 from scipy import signal
 from astropy import modeling
+import time
 # from pyraf import iraf
 # from pyraf import irraffunctions
+
 """
 From Barth 2001 (eqn 4; pg 9): line profile in velocity units of a given slit position and CCD row is:
     f = S * P * np.exp( (v - v_p - v_d * M * (x-x_c))**2 / (-2 * (sig_p**2 + sig_t**2 + sig_LSF**2)) )
@@ -203,6 +205,7 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
 
     # DECONVOLVE FLUXES WITH BEAM PSF
     # currently done in iraf outside python. Output: lucy_output='lucy_out_n5.fits'
+    # NOTE: the data cube for NGC1332 has redshifted side at the bottom left
     hdu = fits.open(lucy_output)
     lucy_out = hdu[0].data
     hdu.close()
@@ -210,7 +213,8 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     # SUBPIXELS
     # take deconvolved flux map (output from lucy), take subpixels, assign each subpixel flux=(real pixel flux)/s**2
     # --> these are the weights to apply to gaussians
-    print('start')
+    print('start ')
+    t0 = time.time()
     subpix_deconvolved = np.zeros(shape=(len(lucy_out) * s, len(lucy_out[0]) * s))  # 300*s, 300*s
     for x_subpixel in range(len(subpix_deconvolved)):
         for y_subpixel in range(len(subpix_deconvolved[0])):
@@ -218,7 +222,7 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
             ypix = int(y_subpixel / 10.)
             subpix_deconvolved[x_subpixel, y_subpixel] = lucy_out[xpix, ypix] / s**2
     # print(subpix_deconvolved[0], subpix_deconvolved[0, 9])
-    print('deconvolved')
+    print('deconvolution took {0} s'.format(time.time() - t0))
 
     # GAUSSIAN STEP
     # get gaussian velocity for each subpixel, apply weights to gaussians (weights = subpix_deconvolved output)
@@ -323,18 +327,7 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
         for x_real in range(len(splits2)):
             for y_real in range(len(splits2[0])):
                 intrinsic_cube[x_real, y_real, z2] = np.mean(splits2[x_real][y_real])
-
-    '''
-    # TAKES TOO LONG
-    intrinsic_cube = np.zeros(shape=(len(fluxes), len(fluxes[0]), len(z_ax)))  # shape = original data cube shape
-    for x_sub in range(len(fluxes) * s):
-        for y_sub in range(len(fluxes[0]) * s):
-            for z2 in range(len(z_ax)):
-                x_real = int(x_sub / 10.)
-                y_real = int(y_sub / 10.)
-                intrinsic_cube[x_real, y_real, z2] += obs3d[z2, x_sub, y_sub] / s ** 2
-    '''
-    print('intrinsic', intrinsic_cube.shape)  # 300, 300, 62
+    # print('intrinsic', intrinsic_cube.shape)  # 300, 300, 62
 
     '''
     if out_name is not None:
@@ -342,20 +335,21 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
         hdul = fits.HDUList([hdu])
         hdul.writeto('okay_but_hows_this_n15.fits')
     '''
-    
+
     # CONVERT INTRINSIC TO OBSERVED
     # take velocity slice from intrinsic data cube, convolve with alma beam --> observed data cube
     beam_psf = make_beam_psf(grid_size=len(intrinsic_cube[:, :, 0]), x_std=0.319, y_std=0.233, rot=np.deg2rad(90-78.4))
-    print(beam_psf.shape)  # 300,300
+    # print(beam_psf.shape)  # 300, 300
     convolved_cube = []
     start_time = time.time()
     for z3 in range(len(z_ax)):
+        t1 = time.time()
         print(z3)
         # CONVOLVE intrinsic_cube[:, :, z3] with alma beam
         # alma_beam needs to have same dimensions as intrinsic_cube[:, :, z3]
         convolved_cube.append(signal.convolve2d(intrinsic_cube[:, :, z3], beam_psf, mode='same'))
         # print(z3)
-        print("Convolution loop " + str(z3) + " took {0} seconds".format(time.time() - start_time))
+        print("Convolution loop " + str(z3) + " took {0} seconds".format(time.time() - t1))
         # ISSUE: each signal.convolve2d step takes ~40s (takes ~16 seconds in terminal for same sized objects...)
         # mode=same keeps output size same
         # welp according to Barth+2016 this is the most time-consuming step of the modeling calculations
@@ -398,6 +392,31 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     return convolved_cube
 
 
+def spec(cube, x_pix, y_pix, print_it=False):
+    """
+    View the full spectrum across all velocity channels at the (x,y) pixel location of your choice in the cube
+
+    :param cube: output convolved cube from model_grid() function, with shape=(N_xpixels, N_ypixels, N_vel_channels)
+    :param x_pix: x_pixel location at which to view spectrum
+    :param y_pix: y_pixel location at which to view spectrum
+    :param print_it: plot and show the given spectrum
+
+    return spectrum: full spectrum across all velocity channels in cube, at spatial location (x_pixel, y_pixel)
+    """
+    spectrum = cube[x_pix, y_pix, :]
+
+    if print_it:
+        fig3 = plt.figure(figsize=(12, 10))
+        channels = np.arange(stop=len(spectrum), step=1.) + 1.
+        plt.scatter(channels, spectrum, 'bo', s=25)
+        plt.xlabel(r'Velocity channel', fontsize=30)
+        plt.ylabel(r'Flux per channel', fontsize=30)
+        plt.xlim(channels[0], channels[-1])
+        plt.ylim(0., max(spectrum))
+
+    return spectrum
+
+
 if __name__ == "__main__":
 
     cube = 'NGC_1332_CO21.pbcor.fits'
@@ -405,9 +424,13 @@ if __name__ == "__main__":
     psf = make_beam_psf(grid_size=100, x_std=0.319, y_std=0.233, rot=np.deg2rad(90-78.4))  # ,
     # fits_name='psf_out.fits')  # rot: start at +90, subtract 78.4 to get 78.4
 
-    v = model_grid(x_width=21., y_width=21., resolution=0.07, s=6, n_channels=60, spacing=20.1, x_off=0., y_off=0.,
-                   mbh=6.*10**8, inc=np.deg2rad(83.), dist=17., theta=np.deg2rad(-207.5), data_cube=cube,
-                   lucy_output='lucy_out_n15.fits', out_name='howbadisthis_n15.fits', incl_fig=True)
+    out_cube = model_grid(resolution=0.07, s=6, spacing=20.1, x_off=0., y_off=0., mbh=6.*10**8, inc=np.deg2rad(83.),
+                          dist=17., theta=np.deg2rad(-207.5-90.), data_cube=cube, lucy_output='lucy_out_n15.fits',
+                          out_name='howbadisthis_n15_take2.fits', incl_fig=True)
+
+    vel_slice = spec(out_cube, x_pix=149, y_pix=149, print_it=True)
+
+    # x_width=21., y_width=21., n_channels=60,
     # NOTE: from Fig3 of Barth+2016, their theta=~117 deg appears to be measured from +x to redshifted side of disk
     #       since I want redshifted side of disk to +y (counterclockwise), I want -(117.5+90) = -207.5
     # beam_axes = [0.319, 0.233]  # arcsecs
