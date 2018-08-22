@@ -6,8 +6,7 @@ import scipy
 from scipy import signal
 from astropy import modeling
 import time
-# from pyraf import iraf
-# from pyraf import irraffunctions
+from astropy import convolution
 
 """
 From Barth 2001 (eqn 4; pg 9): line profile in velocity units of a given slit position and CCD row is:
@@ -157,10 +156,15 @@ def get_fluxes(data_cube, write_name=None):
     :return: collapsed data cube (i.e. integrated line profiles i.e. area under curve i.e. flux), z_length (len(z_ax))
     """
     hdu = fits.open(data_cube)
+    print(hdu[0].header)
+    # CRVAL1 = 5.157217100000Ee+1
+    # CDELT1 = 1.944444444444E-5
+    # CRPIX = 1.510000000000E+2
+    # CUNIT1 = DEG
     # len(hdu[0].data[0]) = 61 (velocity!); len(hdu[0].data[0][1]) = 300 (x?), len(hdu[0].data[0][1][299]) = 300 (y?)
     data = hdu[0].data[0]  # header = hdu[0].header
     collapsed_fluxes = np.sum(data, axis=0)  # this sums over all velocity slices at each pixel
-    z_len = len(hdu[0].data[0])
+    z_len = len(hdu[0].data[0])  # store the number of velocity slices in the data cube
     hdu.close()
 
     if write_name is not None:
@@ -202,10 +206,10 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
 
     # COLLAPSE THE DATA CUBE
     fluxes, n_channels = get_fluxes(data_cube)  # , write=True, write_name='NGC1332_collapsed.fits')
-    # print(oops)
+    # print('n_channels: ', n_channels)  # 61 (paper says only 60?)
 
     # DECONVOLVE FLUXES WITH BEAM PSF
-    # currently done in iraf outside python. Output: lucy_output='lucy_out_n5.fits'
+    # currently done in iraf outside python. Output: lucy_output='lucy_out_n5.fits', for niter=5
     # NOTE: the data cube for NGC1332 has redshifted side at the bottom left
     hdu = fits.open(lucy_output)
     lucy_out = hdu[0].data
@@ -216,6 +220,7 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     # --> these are the weights to apply to gaussians
     print('start ')
     t0 = time.time()
+    # subpix_deconvolved is identical to lucy_out, just with sxs subpixels for each pixel and the total flux conserved
     subpix_deconvolved = np.zeros(shape=(len(lucy_out) * s, len(lucy_out[0]) * s))  # 300*s, 300*s
     for x_subpixel in range(len(subpix_deconvolved)):
         for y_subpixel in range(len(subpix_deconvolved[0])):
@@ -223,23 +228,29 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
             ypix = int(y_subpixel / s)
             subpix_deconvolved[x_subpixel, y_subpixel] = lucy_out[xpix, ypix] / s**2
     # print(subpix_deconvolved[0], subpix_deconvolved[0, 9])
-    print('deconvolution took {0} s'.format(time.time() - t0))  # ~10.4 s
+    print('deconvolution took {0} s'.format(time.time() - t0))  # ~10.3 s
+    # print(subpix_deconvolved.shape)  # (1800,1800)
 
-    '''
+    ''' #
     # TEST
     hdu = fits.PrimaryHDU(subpix_deconvolved)
     hdul = fits.HDUList([hdu])
-    hdul.writeto('howisthe_deconvolved_n15_take2.fits')
+    print(len(hdu.data[0]), len(hdu.data))  # 1800, 1800
+    hdul.writeto('howisthe_deconvolved_n15_s2.fits')
     print(oops)
+    # I *think* this looks fine?
     # \END TEST
-    '''
+    # '''
 
     # GAUSSIAN STEP
     # get gaussian velocity for each subpixel, apply weights to gaussians (weights = subpix_deconvolved output)
 
     # SET UP VELOCITY AXIS
     v_sys = -constants.H0 * dist
+    # z_ax = np.linspace(v_sys - n_channels * spacing / 2, v_sys + n_channels * spacing / 2, n_channels + 1)
     z_ax = np.linspace(v_sys - n_channels * spacing / 2, v_sys + n_channels * spacing / 2, n_channels + 1)
+    print(len(z_ax))  # 62 (should be just 60?)
+    # BUCKET: is this actually centered on systemic (in the data)??
 
     # SET UP OBSERVATION AXES
     # initialize all values along axes at 0., but with a length equal to axis length [arcsec] * oversampling factor /
@@ -253,29 +264,33 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     # print(x_width * s / resolution, 'is this float a round integer? hopefully!')
 
     # set center of the observed axes (find the central pixel number along each axis)
-    x_ctr = (len(x_obs) + 1) / 2  # +1 bc python starts counting at 0, and len is odd
-    y_ctr = (len(y_obs) + 1) / 2  # +1 bc python starts counting at 0, and len is odd
+    x_ctr = (len(x_obs) + 1.) / 2  # +1 bc python starts counting at 0
+    y_ctr = (len(y_obs) + 1.) / 2  # +1 bc python starts counting at 0
+    # print(x_ctr, y_ctr, len(lucy_out), len(x_obs))
 
     # now fill in the x,y observed axis values [arcsec], based on the axis length, oversampling size, and resolution
     for i in range(len(x_obs)):
-        x_obs[i] = resolution * ((i + 1) - x_ctr) / s
+        x_obs[i] = resolution * ((i + 1) - x_ctr) / s  # (arcsec/pix) * subpixels / (subpixels/pix) = arcsec
     for i in range(len(y_obs)):
         y_obs[i] = resolution * ((i + 1) - y_ctr) / s
 
     # SET BH POSITION [arcsec], based on the input offset values
-    x_bhctr = x_off * resolution / s
-    y_bhctr = y_off * resolution / s
+    x_bhctr = x_off * resolution  # / s  # DON'T divide by s, unless offset positions are in subpixels instead of pixels
+    y_bhctr = y_off * resolution  # / s
 
     # CONVERT FROM ARCSEC TO PHYSICAL UNITS (Mpc)
     # tan(angle) = x/d where d=dist and x=disk_radius --> x = d*tan(angle), where angle = arcsec / arcsec_per_rad
 
     # convert BH position from arcsec to pc
-    x_bhctr = dist * np.tan(x_bhctr / constants.arcsec_per_rad) * 10**6
-    y_bhctr = dist * np.tan(y_bhctr / constants.arcsec_per_rad) * 10**6
+    x_bhctr = dist * 10**6 * np.tan(x_bhctr / constants.arcsec_per_rad)
+    y_bhctr = dist * 10**6 * np.tan(y_bhctr / constants.arcsec_per_rad)
 
     # convert all x,y observed grid positions to pc
     x_obs = np.asarray([dist * 10**6 * np.tan(x / constants.arcsec_per_rad) for x in x_obs])  # 206265 arcsec/rad
     y_obs = np.asarray([dist * 10**6 * np.tan(y / constants.arcsec_per_rad) for y in y_obs])  # 206265 arcsec/rad
+
+    print(x_obs[0], x_obs[s])  #
+    print(oops)
 
     # at each x,y spot in grid, calculate what x_disk and y_disk are, then calculate R, v, etc.
     # R = np.zeros(shape=(len(x_obs), len(y_obs)))  # radius R of each point in the disk
@@ -290,7 +305,7 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     print('x, y disk')
 
     # CALCULATE THE RADIUS (R) OF EACH POINT (x_disk, y_disk) IN THE DISK (pc)
-    R = np.asarray([np.sqrt((x_disk[x] ** 2 / np.cos(inc) ** 2) + y_disk ** 2) for x in range(len(x_disk))])
+    R = np.asarray([np.sqrt((x_disk ** 2 / np.cos(inc) ** 2) + y_disk[y] ** 2) for y in range(len(y_disk))])
     print('R')
 
     # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
@@ -307,12 +322,29 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     # NOTE: 1/sqrt((x_obs / (y_obs*cos(i)))**2 + 1) = y_obs/sqrt((x_obs/cos(i))**2 + y_obs**2) = y_obs / sqrt(R)
     # v_obs = v_sys - sqrt(GM)*sin(i)*y_obs / [(x_obs / cos(i))**2 + y_obs**2]^(3/4)
     v_los = np.asarray([np.sqrt(constants.G_pc * mbh) * np.sin(inc) * y_disk /\
-                        ((x_disk[x] / np.cos(inc)) ** 2 + y_disk ** 2) ** (3 / 4) for x in range(len(x_disk))])
+                        ((x_disk / np.cos(inc)) ** 2 + y_disk[y] ** 2) ** (3 / 4) for y in range(len(y_disk))])
     print('los')
-    # print(v_los.shape)  # (3000,3000) yay!
+    # print(v_los.shape)  # (300*s,300*s) yay!
+    print(v_los[int((len(v_los) / 2) + x_off * s), int((len(v_los[0]) / 2) + y_off * s)],
+          v_los[int((len(v_los) / 2) + x_off * s + 100), int((len(v_los[0]) / 2) + y_off * s)],
+          v_los[int((len(v_los) / 2) + x_off * s + 100), int((len(v_los[0]) / 2) + y_off * s + 100)],
+          v_los[int((len(v_los) / 2) + x_off * s), int((len(v_los[0]) / 2) + y_off * s + 100)],
+          int((len(v_los) / 2) + x_off * s),
+          int((len(v_los) / 2) + x_off * s + 100),
+          v_los[30, 10],
+          v_los[-5, -5],
+          np.sqrt(constants.G_pc * mbh) * np.sin(inc) * y_disk[10] /
+          ((x_disk[30] / np.cos(inc)) ** 2 + y_disk[10] ** 2) ** (3 / 4),
+          v_sys)
+    # print(oops)
 
     # SET LINE-OF-SIGHT VELOCITY AT THE BLACK HOLE CENTER TO BE 0, SUCH THAT IT DOES NOT BLOW UP
-    v_los[int(x_off * s), int(y_off * s)] = 0.  # x_off and y_off are in pixels!! (need to multiply by s?)
+    # Only relevant if we have pixel located exactly at the center
+    # BUCKET this is still wrong, isn't it?
+    # if len(v_los) % 2. != 0 and len(v_los[0]) % 2. != 0:  # if len is even
+    v_los[int((len(v_los) / 2) + x_off * s), int((len(v_los[0]) / 2) + y_off * s)] = 0.
+    print(int((len(v_los) / 2) + x_off * s), int((len(v_los[0]) / 2) + y_off * s))
+    # x_off and y_off are in pixels!! (Also, need to multiply by s, because this is in subpixel territory)
 
     # CALCULATE OBSERVED VELOCITY
     v_obs = v_sys - v_los
@@ -328,17 +360,25 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
 
     # RESAMPLE
     # RE-SAMPLE BACK TO CORRECT PIXEL SCALE (take average of sxs sub-pixels for real alma pixel) --> intrinsic data cube
+    t_intrins = time.time()
     intrinsic_cube = np.zeros(shape=(len(fluxes), len(fluxes[0]), len(z_ax)))  # shape = original data cube shape
+    intrinsic_cube2 = np.zeros(shape=(len(z_ax), len(fluxes), len(fluxes[0])))  # shape = original data cube shape
     for z2 in range(len(z_ax)):
         print(z2)  # ~1s per iteration --> not great [still, cycling through all of these is <2 of convolution step]
         splits = np.asarray(np.hsplit(obs3d[z2, :, :], 300))  # 300*s/300 = s
         splits2 = np.asarray([np.vsplit(splits[i], 300) for i in range(len(splits))])
         # print(splits2.shape)  # [300, 300, s, s]
-        for x_real in range(len(splits2)):
-            for y_real in range(len(splits2[0])):
+        for x_real in range(len(splits2)):  # for each real pixel
+            for y_real in range(len(splits2[0])):  # for each real pixel
                 intrinsic_cube[x_real, y_real, z2] = np.mean(splits2[x_real][y_real])
+                intrinsic_cube2[z2, x_real, y_real] = np.mean(splits2[x_real][y_real])
+    print('Intrinsic cube done in {0} s'.format(time.time() - t_intrins))  # ~68 s
     # print('intrinsic', intrinsic_cube.shape)  # 300, 300, 62
 
+    hdu = fits.PrimaryHDU(intrinsic_cube2)
+    hdul = fits.HDUList([hdu])
+    hdul.writeto('hows_intrinsic_n15_theta90_take2.fits')
+    print('written!')
     '''
     if out_name is not None:
         hdu = fits.PrimaryHDU(intrinsic_cube)
@@ -357,14 +397,18 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
         print(z3)
         # CONVOLVE intrinsic_cube[:, :, z3] with alma beam
         # alma_beam needs to have same dimensions as intrinsic_cube[:, :, z3]
-        convolved_cube.append(signal.convolve2d(intrinsic_cube[:, :, z3], beam_psf, mode='same'))
-        # print(z3)
+        # BUCKET: MAYBE TRY signal.fftconvolve()?
+        convolved_step = signal.fftconvolve(intrinsic_cube[:, :, z3], beam_psf, mode='same')
+        # convolved_cube.append(signal.convolve2d(intrinsic_cube[:, :, z3], beam_psf, mode='same'))
+        convolved_cube.append(convolved_step)
+        # print(convolved_cube[z3].shape)  # 300, 300
         print("Convolution loop " + str(z3) + " took {0} seconds".format(time.time() - t1))
-        # ISSUE: each signal.convolve2d step takes ~40s (takes ~16 seconds in terminal for same sized objects...)
+        # ISSUE: each signal.convolve2d step takes ~43-56s (takes ~16 seconds in terminal for same sized objects...)
         # mode=same keeps output size same
         # welp according to Barth+2016 this is the most time-consuming step of the modeling calculations
     convolved_cube = np.asarray(convolved_cube)
     print('convolved! Total convolution loop took {0} seconds'.format(time.time() - start_time))
+    # BUCKET: HMMMM convolution maybe doesn't look great?
 
     # WRITE OUT RESULTS TO FITS FILE
     if out_name is not None:
@@ -388,6 +432,7 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
         plt.ylim(min(y_obs), max(y_obs))
         plt.show()
 
+        '''
         fig2 = plt.figure(figsize=(12, 10))
         for x in range(len(x_obs)):
             xtemp = [x_obs[x]] * len(y_obs)
@@ -399,6 +444,7 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
         plt.xlim(min(x_obs), max(x_obs))
         plt.ylim(min(y_obs), max(y_obs))
         plt.show()
+        '''
 
     return convolved_cube
 
@@ -414,7 +460,7 @@ def spec(cube, x_pix, y_pix, print_it=False):
 
     return spectrum: full spectrum across all velocity channels in cube, at spatial location (x_pixel, y_pixel)
     """
-    spectrum = cube[x_pix, y_pix, :]
+    spectrum = np.asarray([cube[z, x_pix, y_pix] for z in range(len(cube))])
 
     if print_it:
         fig3 = plt.figure(figsize=(12, 10))
@@ -435,9 +481,12 @@ if __name__ == "__main__":
     psf = make_beam_psf(grid_size=100, x_std=0.319, y_std=0.233, rot=np.deg2rad(90-78.4))  # ,
     # fits_name='psf_out.fits')  # rot: start at +90, subtract 78.4 to get 78.4
 
-    out_cube = model_grid(resolution=0.07, s=6, spacing=20.1, x_off=0., y_off=0., mbh=6.*10**8, inc=np.deg2rad(83.),
-                          dist=17., theta=np.deg2rad(-207.5-90.), data_cube=cube, lucy_output='lucy_out_n15.fits',
-                          out_name='howbadisthis_n15_take2.fits', incl_fig=True)
+    # NOTE: NGC 1332 center appears to be x=168, y=158 (out of (300,300)) --> expected at 149.5
+    # x_off = +18.5, y_off= +8.5
+
+    out_cube = model_grid(resolution=0.07, s=6, spacing=20.1, x_off=18.5, y_off=8.5, mbh=6.*10**8, inc=np.deg2rad(83.),
+                          dist=17., theta=np.deg2rad(90.), data_cube=cube, lucy_output='lucy_out_n15.fits',
+                          out_name='howbadisthis_n15_newchanges_fft_xyfixedmaybe.fits', incl_fig=True)
 
     vel_slice = spec(out_cube, x_pix=149, y_pix=149, print_it=True)
 
