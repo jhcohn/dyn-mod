@@ -156,15 +156,32 @@ def get_fluxes(data_cube, write_name=None):
     :return: collapsed data cube (i.e. integrated line profiles i.e. area under curve i.e. flux), z_length (len(z_ax))
     """
     hdu = fits.open(data_cube)
-    print(hdu[0].header)
-    # CRVAL1 = 5.157217100000Ee+1
-    # CDELT1 = 1.944444444444E-5
-    # CRPIX = 1.510000000000E+2
+    # print(hdu[0].header)
+    # CTYPE1: RA
+    # CRVAL1 = 5.157217100000Ee+1 [RA of reference pix]
+    # CDELT1 = 1.944444444444E-5 [increment at the reference pixel]
+    # CRPIX1 = 1.510000000000E+2 [coordinate of reference pixel]
     # CUNIT1 = DEG
+    # CTYPE2 = DEC
+    # CRVAL2 = -2.133536900000E+1
+    # CDELT2 = CDELT1
+    # CRPIX2 = CRPIS1
+    # CUNIT2 = DEG
+    # CTYPE3 = FREQ
+    # CRVAL3 = 2.297843878460E+11
+    # CDELT3 = -1.537983987576E+7  # 15.4 Mhz <-> 20.1 km/s
+    # CRPIX3 = 1.
+    # CUNIT3 = Hz
+
     # len(hdu[0].data[0]) = 61 (velocity!); len(hdu[0].data[0][1]) = 300 (x?), len(hdu[0].data[0][1][299]) = 300 (y?)
     data = hdu[0].data[0]  # header = hdu[0].header
+    # print(data[:,1,1])
     collapsed_fluxes = np.sum(data, axis=0)  # this sums over all velocity slices at each pixel
     z_len = len(hdu[0].data[0])  # store the number of velocity slices in the data cube
+    freq1 = float(hdu[0].header['CRVAL3'])
+    f_step = float(hdu[0].header['CDELT3'])
+    freq_axis = np.arange(freq1, freq1 + (z_len * f_step), f_step)
+    # BUCKET: this results in 62 frequency channels, not 61 (or 60) --> problem?
     hdu.close()
 
     if write_name is not None:
@@ -172,7 +189,7 @@ def get_fluxes(data_cube, write_name=None):
         hdul = fits.HDUList([hdu])
         hdul.writeto(write_name)
 
-    return collapsed_fluxes, z_len
+    return collapsed_fluxes, freq_axis
 
 
 def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=52, spacing=20.1, x_off=0., y_off=0.,
@@ -205,7 +222,8 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     constants = Constants()
 
     # COLLAPSE THE DATA CUBE
-    fluxes, n_channels = get_fluxes(data_cube)  # , write=True, write_name='NGC1332_collapsed.fits')
+    # fluxes, n_channels = get_fluxes(data_cube)  # , write=True, write_name='NGC1332_collapsed.fits')
+    fluxes, freq_ax = get_fluxes(data_cube)  # , write=True, write_name='NGC1332_collapsed.fits')
     # print('n_channels: ', n_channels)  # 61 (paper says only 60?)
 
     # DECONVOLVE FLUXES WITH BEAM PSF
@@ -221,12 +239,24 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     print('start ')
     t0 = time.time()
     # subpix_deconvolved is identical to lucy_out, just with sxs subpixels for each pixel and the total flux conserved
+
+    # BUCKET: maybe need to reshape subpix deconvolved to be lucy_out[0]*s, lucy_out*s?
+    # BUCKET: (ctd) then subpix_deconvolved[y_subpixel, x_subpixel] = lucy_out[xpix ypix] / s**2
+    '''
     subpix_deconvolved = np.zeros(shape=(len(lucy_out) * s, len(lucy_out[0]) * s))  # 300*s, 300*s
     for x_subpixel in range(len(subpix_deconvolved)):
         for y_subpixel in range(len(subpix_deconvolved[0])):
             xpix = int(x_subpixel / s)
             ypix = int(y_subpixel / s)
             subpix_deconvolved[x_subpixel, y_subpixel] = lucy_out[xpix, ypix] / s**2
+    '''
+    # RESHAPING
+    subpix_deconvolved = np.zeros(shape=(len(lucy_out[0]) * s, len(lucy_out) * s))  # 300*s, 300*s
+    for x_subpixel in range(len(subpix_deconvolved)):
+        for y_subpixel in range(len(subpix_deconvolved[0])):
+            xpix = int(x_subpixel / s)
+            ypix = int(y_subpixel / s)
+            subpix_deconvolved[y_subpixel, x_subpixel] = lucy_out[xpix, ypix] / s**2
     # print(subpix_deconvolved[0], subpix_deconvolved[0, 9])
     print('deconvolution took {0} s'.format(time.time() - t0))  # ~10.3 s
     # print(subpix_deconvolved.shape)  # (1800,1800)
@@ -248,9 +278,9 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     # SET UP VELOCITY AXIS
     v_sys = -constants.H0 * dist
     # z_ax = np.linspace(v_sys - n_channels * spacing / 2, v_sys + n_channels * spacing / 2, n_channels + 1)
-    z_ax = np.linspace(v_sys - n_channels * spacing / 2, v_sys + n_channels * spacing / 2, n_channels + 1)
-    print(len(z_ax))  # 62 (should be just 60?)
-    # BUCKET: is this actually centered on systemic (in the data)??
+    # 15.4 * 10^6 Hz = 20.1 km/s  # from Barth+2016
+    # convert from frequency (Hz) to velocity (km/s), with freq_ax in Hz
+    z_ax = np.asarray([freq * 20.1 / (1.54*10**7) for freq in freq_ax])
 
     # SET UP OBSERVATION AXES
     # initialize all values along axes at 0., but with a length equal to axis length [arcsec] * oversampling factor /
@@ -259,8 +289,10 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     x_obs = [0.] * int(x_width * s / resolution)
     y_obs = [0.] * int(y_width * s / resolution)
     '''
-    x_obs = [0.] * len(lucy_out) * s  # * s, right?
-    y_obs = [0.] * len(lucy_out[0]) * s
+
+    # NOTE: I JUST SWITCHED x, y TO WHAT I THINK THEY SHOULD BE
+    y_obs = [0.] * len(lucy_out[0]) * s  # * s, right?
+    x_obs = [0.] * len(lucy_out) * s
     # print(x_width * s / resolution, 'is this float a round integer? hopefully!')
 
     # set center of the observed axes (find the central pixel number along each axis)
@@ -275,7 +307,9 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
         y_obs[i] = resolution * ((i + 1) - y_ctr) / s
 
     # SET BH POSITION [arcsec], based on the input offset values
-    x_bhctr = x_off * resolution  # / s  # DON'T divide by s, unless offset positions are in subpixels instead of pixels
+    # DON'T divide offset positions by s, unless offset positions are in subpixels instead of pixels
+    # currentyl estimating offsets by pixels, not subpixels
+    x_bhctr = x_off * resolution  # / s
     y_bhctr = y_off * resolution  # / s
 
     # CONVERT FROM ARCSEC TO PHYSICAL UNITS (Mpc)
@@ -284,13 +318,15 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     # convert BH position from arcsec to pc
     x_bhctr = dist * 10**6 * np.tan(x_bhctr / constants.arcsec_per_rad)
     y_bhctr = dist * 10**6 * np.tan(y_bhctr / constants.arcsec_per_rad)
+    print(x_bhctr, y_bhctr)
 
     # convert all x,y observed grid positions to pc
+    # x_obs = np.asarray([dist * 10**6 * np.tan(x / constants.arcsec_per_rad) for x in x_obs])  # 206265 arcsec/rad
+    # y_obs = np.asarray([dist * 10**6 * np.tan(y / constants.arcsec_per_rad) for y in y_obs])  # 206265 arcsec/rad
     x_obs = np.asarray([dist * 10**6 * np.tan(x / constants.arcsec_per_rad) for x in x_obs])  # 206265 arcsec/rad
     y_obs = np.asarray([dist * 10**6 * np.tan(y / constants.arcsec_per_rad) for y in y_obs])  # 206265 arcsec/rad
-
-    print(x_obs[0], x_obs[s])  #
-    print(oops)
+    print((x_obs[1] - x_obs[0])*s)  # 7.56793447282
+    print(x_obs[0], x_obs[s])  # (-1134.5595077622734, -1126.9915732895627)
 
     # at each x,y spot in grid, calculate what x_disk and y_disk are, then calculate R, v, etc.
     # R = np.zeros(shape=(len(x_obs), len(y_obs)))  # radius R of each point in the disk
@@ -300,13 +336,32 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     # obs3d = np.zeros(shape=(len(z_ax), len(x_obs), len(y_obs)))  # data cube, v_obs but with a wavelength axis, too!
 
     # CONVERT FROM x_obs, y_obs TO x_disk, y_disk (still in pc)
-    x_disk = (x_obs - x_bhctr) * np.cos(theta) - (y_obs - y_bhctr) * np.sin(theta)
-    y_disk = (y_obs - y_bhctr) * np.cos(theta) + (x_obs - x_bhctr) * np.sin(theta)
-    print('x, y disk')
+    x_disk = (x_obs[:, None] - x_bhctr) * np.cos(theta) - (y_obs[None, :] - y_bhctr) * np.sin(theta)
+    y_disk = (y_obs[None, :] - y_bhctr) * np.cos(theta) + (x_obs[:, None] - x_bhctr) * np.sin(theta)
+    print('x, y disk', x_disk.shape, y_disk.shape)
+    # print(x_disk)
+    # print(y_disk)
 
     # CALCULATE THE RADIUS (R) OF EACH POINT (x_disk, y_disk) IN THE DISK (pc)
+    '''
+    # THIS R CORRECT!!!
+    R2 = np.zeros(shape=(len(x_obs), len(y_obs)))
+    for x in range(len(x_obs)):
+        for y in range(len(y_obs)):
+            x_disk2 = (x_obs[x] - x_bhctr) * np.cos(theta) - (y_obs[y] - y_bhctr) * np.sin(theta)
+            y_disk2 = (y_obs[y] - y_bhctr) * np.cos(theta) + (x_obs[x] - x_bhctr) * np.sin(theta)
+
+            # velocity depends on radius R of point in the disk
+            R2[x, y] = np.sqrt((x_disk2 ** 2 / np.cos(inc) ** 2) + y_disk2 ** 2)
+
+    # THIS R INCORRECT!!!
     R = np.asarray([np.sqrt((x_disk ** 2 / np.cos(inc) ** 2) + y_disk[y] ** 2) for y in range(len(y_disk))])
     print('R')
+    '''
+    R = np.sqrt((x_disk ** 2 / np.cos(inc) ** 2) + y_disk ** 2)
+    # print(R - R2)
+    # print(R.size, R2.size)
+    print(R.shape)
 
     # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
     vel = np.sqrt(constants.G_pc * mbh / R)
@@ -321,9 +376,38 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     # = v_sys - sqrt(GM)*sin(i)*[1 /sqrt((x_obs / (y_obs*cos(i)))**2 + 1)]/[(x_obs/cos(i))**2 + y_obs**2]^(1/4)
     # NOTE: 1/sqrt((x_obs / (y_obs*cos(i)))**2 + 1) = y_obs/sqrt((x_obs/cos(i))**2 + y_obs**2) = y_obs / sqrt(R)
     # v_obs = v_sys - sqrt(GM)*sin(i)*y_obs / [(x_obs / cos(i))**2 + y_obs**2]^(3/4)
+    '''
     v_los = np.asarray([np.sqrt(constants.G_pc * mbh) * np.sin(inc) * y_disk /\
-                        ((x_disk / np.cos(inc)) ** 2 + y_disk[y] ** 2) ** (3 / 4) for y in range(len(y_disk))])
+                        ((x_disk / np.cos(inc)) ** 2 + y_disk ** 2) ** (3 / 4)])
+    '''
+    v_los = np.sqrt(constants.G_pc * mbh) * np.sin(inc) * y_disk / ((x_disk / np.cos(inc)) ** 2 + y_disk ** 2) ** (3/4)
     print('los')
+
+    # BUCKET BEGIN
+    alpha = abs(np.arctan((y_disk * np.cos(inc)) / x_disk))  # alpha correct? NO! Can't be arctan
+    # if np.pi/2 < alpha < 3*np.pi/2:
+    sign = y_disk / abs(y_disk)
+    # alpha measured from +x (minor axis) toward +y (major axis)
+    v_los2 = sign * abs(vel * np.sin(alpha) * np.sin(inc))
+    print(v_los - v_los2)  # 0 YAY!
+    # BUCKET END
+
+    fig = plt.figure(figsize=(6, 5))
+    for x in range(len(x_obs)):
+        xtemp = [x_obs[x]] * len(y_obs)
+        plt.scatter(xtemp, y_obs, c=v_los2[x, :], vmin=np.amin(v_los2), vmax=np.amax(v_los2), s=25,
+                    cmap='RdBu_r')  # viridis, RdBu_r, inferno
+    print(theta)
+    # plt.plot([0., 1.*np.cos(np.deg2rad(theta))], [0., 1.*np.sin(np.deg2rad(theta))], color='k', lw=3)
+    plt.colorbar()
+    plt.xlabel(r'x [Mpc]', fontsize=30)
+    plt.ylabel(r'y [Mpc]', fontsize=30)
+    plt.xlim(min(x_obs), max(x_obs))
+    plt.ylim(min(y_obs), max(y_obs))
+    print('hey')
+    plt.show()
+    #print(oops)
+
     # print(v_los.shape)  # (300*s,300*s) yay!
     print(v_los[int((len(v_los) / 2) + x_off * s), int((len(v_los[0]) / 2) + y_off * s)],
           v_los[int((len(v_los) / 2) + x_off * s + 100), int((len(v_los[0]) / 2) + y_off * s)],
@@ -336,14 +420,14 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
           np.sqrt(constants.G_pc * mbh) * np.sin(inc) * y_disk[10] /
           ((x_disk[30] / np.cos(inc)) ** 2 + y_disk[10] ** 2) ** (3 / 4),
           v_sys)
-    # print(oops)
+    print(oops)
 
     # SET LINE-OF-SIGHT VELOCITY AT THE BLACK HOLE CENTER TO BE 0, SUCH THAT IT DOES NOT BLOW UP
     # Only relevant if we have pixel located exactly at the center
     # BUCKET this is still wrong, isn't it?
     # if len(v_los) % 2. != 0 and len(v_los[0]) % 2. != 0:  # if len is even
     v_los[int((len(v_los) / 2) + x_off * s), int((len(v_los[0]) / 2) + y_off * s)] = 0.
-    print(int((len(v_los) / 2) + x_off * s), int((len(v_los[0]) / 2) + y_off * s))
+    print(int((len(v_los) / 2) + x_off * s), int((len(v_los[0]) / 2) + y_off * s))  # (1011, 951)
     # x_off and y_off are in pixels!! (Also, need to multiply by s, because this is in subpixel territory)
 
     # CALCULATE OBSERVED VELOCITY
@@ -377,14 +461,14 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
 
     hdu = fits.PrimaryHDU(intrinsic_cube2)
     hdul = fits.HDUList([hdu])
-    hdul.writeto('hows_intrinsic_n15_theta90_take2.fits')
+    hdul.writeto('intrinsic_morefixes_n15_take3.fits')
     print('written!')
     '''
     if out_name is not None:
         hdu = fits.PrimaryHDU(intrinsic_cube)
         hdul = fits.HDUList([hdu])
-        hdul.writeto('okay_but_hows_this_n15.fits')
-    '''
+        hdul.writeto('name.fits')
+    # '''
 
     # CONVERT INTRINSIC TO OBSERVED
     # take velocity slice from intrinsic data cube, convolve with alma beam --> observed data cube
@@ -482,17 +566,19 @@ if __name__ == "__main__":
     # fits_name='psf_out.fits')  # rot: start at +90, subtract 78.4 to get 78.4
 
     # NOTE: NGC 1332 center appears to be x=168, y=158 (out of (300,300)) --> expected at 149.5
-    # x_off = +18.5, y_off= +8.5
+    # x_off = 18.5, y_off = 8.5
+    # EXCEPT: flip x, y to MY coords: y_off = -18.5, x_off = 8.5
 
-    out_cube = model_grid(resolution=0.07, s=6, spacing=20.1, x_off=18.5, y_off=8.5, mbh=6.*10**8, inc=np.deg2rad(83.),
-                          dist=17., theta=np.deg2rad(90.), data_cube=cube, lucy_output='lucy_out_n15.fits',
-                          out_name='howbadisthis_n15_newchanges_fft_xyfixedmaybe.fits', incl_fig=True)
+    out_cube = model_grid(resolution=0.07, s=2, spacing=20.1, x_off=8.5, y_off=-18.5, mbh=6.*10**8, inc=np.deg2rad(83.),
+                          dist=22.3, theta=np.deg2rad(-333.), data_cube=cube, lucy_output='lucy_out_n15.fits',
+                          out_name='morefixes_n15_take3.fits', incl_fig=True)
 
     vel_slice = spec(out_cube, x_pix=149, y_pix=149, print_it=True)
 
     # x_width=21., y_width=21., n_channels=60,
     # NOTE: from Fig3 of Barth+2016, their theta=~117 deg appears to be measured from +x to redshifted side of disk
-    #       since I want redshifted side of disk to +y (counterclockwise), I want -(117.5+90) = -207.5
+    #       since I want redshifted side of disk to +y (counterclockwise), and my +y is to the left in their image,
+    #       I want -(360 - (117-90)) = -333 deg
     # beam_axes = [0.319, 0.233]  # arcsecs
     # beam_major_axis_PA = 78.4  # degrees
     print(v)
