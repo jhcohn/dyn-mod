@@ -87,7 +87,7 @@ class Constants:
         self.M_sol = 2.*10**30  # kg
         self.H0 = 70  # km/s/Mpc
         self.arcsec_per_rad = 206265  # arcsec per radian
-        self.m_per_km = 10**3  # km per m
+        self.m_per_km = 10**3  # m per km
         self.G_pc = self.G * self.M_sol * (1 / self.pc) / self.m_per_km**2  # Msol^-1 * pc * km^2 * s^-2
 
 
@@ -278,9 +278,13 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     # SET UP VELOCITY AXIS
     v_sys = -constants.H0 * dist
     # z_ax = np.linspace(v_sys - n_channels * spacing / 2, v_sys + n_channels * spacing / 2, n_channels + 1)
-    # 15.4 * 10^6 Hz = 20.1 km/s  # from Barth+2016
+    # 15.4 * 10^6 Hz corresponds to 20.1 km/s  # from Barth+2016
     # convert from frequency (Hz) to velocity (km/s), with freq_ax in Hz
-    z_ax = np.asarray([freq * 20.1 / (1.54*10**7) for freq in freq_ax])
+    print(freq_ax)
+    # CO(2-1) lands in 2.2937*10^11 Hz
+    f_0 = 2.29369132e11
+    z_ax = np.asarray([v_sys - ((freq-f_0)/f_0) * (constants.c / constants.m_per_km) for freq in freq_ax])
+    print(z_ax, z_ax[1] - z_ax[0])  # 20.1 km/s yay!
 
     # SET UP OBSERVATION AXES
     # initialize all values along axes at 0., but with a length equal to axis length [arcsec] * oversampling factor /
@@ -348,12 +352,6 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     print(x_obs[0], x_obs[s])  # (-1134.5595077622734, -1126.9915732895627)
 
     # at each x,y spot in grid, calculate what x_disk and y_disk are, then calculate R, v, etc.
-    # R = np.zeros(shape=(len(x_obs), len(y_obs)))  # radius R of each point in the disk
-    # vel = np.zeros(shape=(len(x_obs), len(y_obs)))  # Keplerian velocity vel at each point in the disk
-    # v_los = np.zeros(shape=(len(x_obs), len(y_obs)))  # line-of-sight velocity v_los at each point in the disk
-    # v_obs = np.zeros(shape=(len(x_obs), len(y_obs)))  # observed velocity v_obs at each point in the disk
-    # obs3d = np.zeros(shape=(len(z_ax), len(x_obs), len(y_obs)))  # data cube, v_obs but with a wavelength axis, too!
-
     # CONVERT FROM x_obs, y_obs TO x_disk, y_disk (still in pc)
     x_disk = (x_obs[:, None] - x_bhctr) * np.cos(theta) - (y_obs[None, :] - y_bhctr) * np.sin(theta)
     y_disk = (y_obs[None, :] - y_bhctr) * np.cos(theta) + (x_obs[:, None] - x_bhctr) * np.sin(theta)
@@ -362,28 +360,11 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     # print(y_disk)
 
     # CALCULATE THE RADIUS (R) OF EACH POINT (x_disk, y_disk) IN THE DISK (pc)
-    '''
-    # THIS R CORRECT!!!
-    R2 = np.zeros(shape=(len(x_obs), len(y_obs)))
-    for x in range(len(x_obs)):
-        for y in range(len(y_obs)):
-            x_disk2 = (x_obs[x] - x_bhctr) * np.cos(theta) - (y_obs[y] - y_bhctr) * np.sin(theta)
-            y_disk2 = (y_obs[y] - y_bhctr) * np.cos(theta) + (x_obs[x] - x_bhctr) * np.sin(theta)
-
-            # velocity depends on radius R of point in the disk
-            R2[x, y] = np.sqrt((x_disk2 ** 2 / np.cos(inc) ** 2) + y_disk2 ** 2)
-
-    # THIS R INCORRECT!!!
-    R = np.asarray([np.sqrt((x_disk ** 2 / np.cos(inc) ** 2) + y_disk[y] ** 2) for y in range(len(y_disk))])
-    print('R')
-    '''
-    R = np.sqrt((x_disk ** 2 / np.cos(inc) ** 2) + y_disk ** 2)
-    # print(R - R2)
-    # print(R.size, R2.size)
+    R = np.sqrt((x_disk ** 2 / np.cos(inc) ** 2) + y_disk ** 2)  # radius R of each point in the disk
     print(R.shape)
 
     # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
-    vel = np.sqrt(constants.G_pc * mbh / R)
+    vel = np.sqrt(constants.G_pc * mbh / R)  # Keplerian velocity vel at each point in the disk
     print('vel')
 
     # CALCULATE LINE-OF-SIGHT VELOCITY AT EACH POINT (x_disk, y_disk) IN THE DISK (km/s)
@@ -395,84 +376,75 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     # = v_sys - sqrt(GM)*sin(i)*[1 /sqrt((x_obs / (y_obs*cos(i)))**2 + 1)]/[(x_obs/cos(i))**2 + y_obs**2]^(1/4)
     # NOTE: 1/sqrt((x_obs / (y_obs*cos(i)))**2 + 1) = y_obs/sqrt((x_obs/cos(i))**2 + y_obs**2) = y_obs / sqrt(R)
     # v_obs = v_sys - sqrt(GM)*sin(i)*y_obs / [(x_obs / cos(i))**2 + y_obs**2]^(3/4)
-    '''
-    v_los = np.asarray([np.sqrt(constants.G_pc * mbh) * np.sin(inc) * y_disk /\
-                        ((x_disk / np.cos(inc)) ** 2 + y_disk ** 2) ** (3 / 4)])
-    '''
     v_los = np.sqrt(constants.G_pc * mbh) * np.sin(inc) * y_disk / ((x_disk / np.cos(inc)) ** 2 + y_disk ** 2) ** (3/4)
+    # line-of-sight velocity v_los at each point in the disk
     print('los')
 
-    # BUCKET BEGIN
-    alpha = abs(np.arctan((y_disk * np.cos(inc)) / x_disk))  # alpha correct? NO! Can't be arctan
-    # if np.pi/2 < alpha < 3*np.pi/2:
-    sign = y_disk / abs(y_disk)
-    # alpha measured from +x (minor axis) toward +y (major axis)
+    # ALTERNATIVE CALCULATION FOR v_los
+    alpha = abs(np.arctan((y_disk * np.cos(inc)) / x_disk))  # alpha meas. from +x (minor axis) toward +y (major axis)
+    sign = y_disk / abs(y_disk)  # if np.pi/2 < alpha < 3*np.pi/2, alpha < 0.
     v_los2 = sign * abs(vel * np.sin(alpha) * np.sin(inc))
-    print(v_los - v_los2)  # 0 YAY!
-    # BUCKET END
+    # print(v_los - v_los2)  # 0 YAY!
     # print(v_los.shape)  # (300*s,300*s) yay!
 
+    # SET LINE-OF-SIGHT VELOCITY AT THE BLACK HOLE CENTER TO BE 0, SUCH THAT IT DOES NOT BLOW UP
     # if any point as at x_disk, y_disk = (0., 0.), set velocity there = 0.
+    # Only relevant if we have pixel located exactly at the center
     center = (R == 0.)
     v_los[center] = 0.
+    # print(center, v_los[center])
 
-    # ''' #
+    # CALCULATE OBSERVED VELOCITY
+    v_obs = v_sys - v_los  # observed velocity v_obs at each point in the disk
+    print('v_obs')
+    print(v_obs - v_los)
+
+    obs3d = []  # data cube, v_obs but with a wavelength axis, too!
+    weight = subpix_deconvolved
+    # print(weight, np.amax(weight), np.amin(weight))  # most ~0.003, max 0.066, min 1e-15
+    sigma = 50.  # * (1 + np.exp(-R[x, y])) # sig: const, c1+c2*e^(-r/r0), c1+exp[-(x-mu)^2 / (2*sig^2)]
+    for z in range(len(z_ax)):
+        print(np.mean(v_obs))
+        print(z_ax[z] - np.mean(v_obs))
+        obs3d.append(weight * np.exp(-(z_ax[z] - v_obs) ** 2 / (2 * sigma ** 2)))
+    obs3d = np.asarray(obs3d)  # has shape 61, 600, 600, which is good
+    print('obs3d')
+    print(obs3d[0])
+    print(oops)
+
+    ''' #
     t_fig = time.time()
     fig = plt.figure(figsize=(6, 5))
-    #plt.scatter(x_obs, y_obs, c=v_los, vmin=np.amin(v_los), vmax=np.amax(v_los), s=25,
-    #            cmap='RdBu_r')  # viridis, RdBu_r, inferno
-    print(v_los.shape)
-    plt.contourf(x_obs, y_obs, v_los, 600, cmap='RdBu_r')
-    '''
-    for x in range(len(x_obs)):
-        print(x)
-        for y in range(len(y_obs)):
-            plt.scatter(x_obs[x], y_obs[y], c=v_los[x, y], vmin=np.amin(v_los), vmax=np.amax(v_los), s=25,
-                        cmap='RdBu_r')  # viridis, RdBu_r, inferno
-        xtemp = [x_obs[x]] * len(y_obs)
-        plt.scatter(xtemp, y_obs, c=v_los[x, :], vmin=np.amin(v_los), vmax=np.amax(v_los), s=25,
-                    cmap='RdBu_r')  # viridis, RdBu_r, inferno
-        '''
+    print(v_obs.shape)
+    # plt.contourf(x_obs, y_obs, v_obs, 600, vmin=np.amin(v_obs), vmax=np.amax(v_obs), cmap='RdBu_r')
+    plt.contourf(-y_obs, x_obs, v_obs, 600, vmin=np.amin(v_obs), vmax=np.amax(v_obs), cmap='RdBu_r')
+    # viridis, RdBu_r, inferno
     print(theta)
 
-    hdu = fits.PrimaryHDU(v_los)
+    hdu = fits.PrimaryHDU(v_obs)
     hdul = fits.HDUList([hdu])
     print(len(hdu.data[0]), len(hdu.data))  # 1800, 1800
-    hdul.writeto('ngc1332_vlos_newctr2.fits')
-    print(oops)
+    hdul.writeto('ngc1332_vobs.fits')
+    # print(oops)
 
     # plt.plot([0., 1.*np.cos(np.deg2rad(theta))], [0., 1.*np.sin(np.deg2rad(theta))], color='k', lw=3)
     cbar = plt.colorbar()
-    plt.xlabel(r'x [pc]', fontsize=30)
-    plt.ylabel(r'y [pc]', fontsize=30)
-    plt.xlim(min(x_obs), max(x_obs))
-    plt.ylim(min(y_obs), max(y_obs))
+    '''
+    # plt.xlabel(r'x [pc]', fontsize=30)
+    # plt.ylabel(r'y [pc]', fontsize=30)
+    # plt.xlim(min(x_obs), max(x_obs))
+    # plt.ylim(min(y_obs), max(y_obs))
+    '''
+    plt.xlabel(r'y [pc]', fontsize=30)
+    plt.ylabel(r'x [pc]', fontsize=30)
+    plt.xlim(max(y_obs), min(y_obs))
+    plt.ylim(min(x_obs), max(x_obs))
     cbar.set_label(r'km/s', fontsize=30, rotation=0, labelpad=20)  # pc,  # km/s
     print('hey')
     plt.show()
     print('Image plotted in {0} s'.format(time.time() - t_fig))  # ~80 seconds for s=6
     print(oops)
     # '''
-
-    # SET LINE-OF-SIGHT VELOCITY AT THE BLACK HOLE CENTER TO BE 0, SUCH THAT IT DOES NOT BLOW UP
-    # Only relevant if we have pixel located exactly at the center
-    # BUCKET this is still wrong, isn't it?
-    # if len(v_los) % 2. != 0 and len(v_los[0]) % 2. != 0:  # if len is even
-    v_los[int((len(v_los) / 2) + x_off * s), int((len(v_los[0]) / 2) + y_off * s)] = 0.
-    print(int((len(v_los) / 2) + x_off * s), int((len(v_los[0]) / 2) + y_off * s))  # (1011, 951)
-    # x_off and y_off are in pixels!! (Also, need to multiply by s, because this is in subpixel territory)
-
-    # CALCULATE OBSERVED VELOCITY
-    v_obs = v_sys - v_los
-    print('v_obs')
-
-    obs3d = []
-    weight = subpix_deconvolved
-    sigma = 50.  # * (1 + np.exp(-R[x, y])) # sig: const, c1+c2*e^(-r/r0), c1+exp[-(x-mu)^2 / (2*sig^2)]
-    for z in range(len(z_ax)):
-        obs3d.append(weight * np.exp(-(z_ax[z] - v_obs) ** 2 / (2 * sigma ** 2)))
-    obs3d = np.asarray(obs3d)
-    print('obs3d')
 
     # RESAMPLE
     # RE-SAMPLE BACK TO CORRECT PIXEL SCALE (take average of sxs sub-pixels for real alma pixel) --> intrinsic data cube
@@ -605,7 +577,7 @@ if __name__ == "__main__":
 
     # 83 deg
     out_cube = model_grid(resolution=0.07, s=2, spacing=20.1, x_off=0., y_off=0., mbh=6.*10**8, inc=np.deg2rad(83.),
-                          dist=22.3, theta=np.deg2rad(180-333.), data_cube=cube, lucy_output='lucy_out_n15.fits',
+                          dist=22.3, theta=np.deg2rad(-333.), data_cube=cube, lucy_output='lucy_out_n15.fits',
                           out_name='fixedmaybe_n15_s2_take4.fits', incl_fig=True)
 
     vel_slice = spec(out_cube, x_pix=149, y_pix=149, print_it=True)
