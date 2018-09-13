@@ -296,15 +296,34 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     # print(x_width * s / resolution, 'is this float a round integer? hopefully!')
 
     # set center of the observed axes (find the central pixel number along each axis)
+    if len(x_obs) % 2. == 0:
+        x_ctr = (len(x_obs)) / 2
+        for i in range(len(x_obs)):
+            x_obs[i] = resolution * (i - x_ctr) / s  # (arcsec/pix) * subpixels / (subpixels/pix) = arcsec
+    else:
+        x_ctr = (len(x_obs) + 1.) / 2  # +1 bc python starts counting at 0
+        for i in range(len(x_obs)):
+            x_obs[i] = resolution * ((i + 1) - x_ctr) / s  # (arcsec/pix) * subpixels / (subpixels/pix) = arcsec
+    if len(y_obs) % 2. == 0:
+        y_ctr = (len(y_obs)) / 2
+        for i in range(len(y_obs)):
+            y_obs[i] = resolution * (i + - y_ctr) / s
+    else:
+        y_ctr = (len(y_obs) + 1.) / 2  # +1 bc python starts counting at 0
+        for i in range(len(y_obs)):
+            y_obs[i] = resolution * ((i + 1) - y_ctr) / s
+    # print(x_ctr, y_ctr, len(lucy_out), len(x_obs))
+
+    '''
     x_ctr = (len(x_obs) + 1.) / 2  # +1 bc python starts counting at 0
     y_ctr = (len(y_obs) + 1.) / 2  # +1 bc python starts counting at 0
-    # print(x_ctr, y_ctr, len(lucy_out), len(x_obs))
 
     # now fill in the x,y observed axis values [arcsec], based on the axis length, oversampling size, and resolution
     for i in range(len(x_obs)):
         x_obs[i] = resolution * ((i + 1) - x_ctr) / s  # (arcsec/pix) * subpixels / (subpixels/pix) = arcsec
     for i in range(len(y_obs)):
         y_obs[i] = resolution * ((i + 1) - y_ctr) / s
+    '''
 
     # SET BH POSITION [arcsec], based on the input offset values
     # DON'T divide offset positions by s, unless offset positions are in subpixels instead of pixels
@@ -391,36 +410,49 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     v_los2 = sign * abs(vel * np.sin(alpha) * np.sin(inc))
     print(v_los - v_los2)  # 0 YAY!
     # BUCKET END
+    # print(v_los.shape)  # (300*s,300*s) yay!
 
+    # if any point as at x_disk, y_disk = (0., 0.), set velocity there = 0.
+    center = (R == 0.)
+    v_los[center] = 0.
+
+    # ''' #
+    t_fig = time.time()
     fig = plt.figure(figsize=(6, 5))
+    #plt.scatter(x_obs, y_obs, c=v_los, vmin=np.amin(v_los), vmax=np.amax(v_los), s=25,
+    #            cmap='RdBu_r')  # viridis, RdBu_r, inferno
+    print(v_los.shape)
+    plt.contourf(x_obs, y_obs, v_los, 600, cmap='RdBu_r')
+    '''
     for x in range(len(x_obs)):
+        print(x)
+        for y in range(len(y_obs)):
+            plt.scatter(x_obs[x], y_obs[y], c=v_los[x, y], vmin=np.amin(v_los), vmax=np.amax(v_los), s=25,
+                        cmap='RdBu_r')  # viridis, RdBu_r, inferno
         xtemp = [x_obs[x]] * len(y_obs)
-        plt.scatter(xtemp, y_obs, c=v_los2[x, :], vmin=np.amin(v_los2), vmax=np.amax(v_los2), s=25,
+        plt.scatter(xtemp, y_obs, c=v_los[x, :], vmin=np.amin(v_los), vmax=np.amax(v_los), s=25,
                     cmap='RdBu_r')  # viridis, RdBu_r, inferno
+        '''
     print(theta)
+
+    hdu = fits.PrimaryHDU(v_los)
+    hdul = fits.HDUList([hdu])
+    print(len(hdu.data[0]), len(hdu.data))  # 1800, 1800
+    hdul.writeto('ngc1332_vlos_newctr2.fits')
+    print(oops)
+
     # plt.plot([0., 1.*np.cos(np.deg2rad(theta))], [0., 1.*np.sin(np.deg2rad(theta))], color='k', lw=3)
-    plt.colorbar()
-    plt.xlabel(r'x [Mpc]', fontsize=30)
-    plt.ylabel(r'y [Mpc]', fontsize=30)
+    cbar = plt.colorbar()
+    plt.xlabel(r'x [pc]', fontsize=30)
+    plt.ylabel(r'y [pc]', fontsize=30)
     plt.xlim(min(x_obs), max(x_obs))
     plt.ylim(min(y_obs), max(y_obs))
+    cbar.set_label(r'km/s', fontsize=30, rotation=0, labelpad=20)  # pc,  # km/s
     print('hey')
     plt.show()
-    #print(oops)
-
-    # print(v_los.shape)  # (300*s,300*s) yay!
-    print(v_los[int((len(v_los) / 2) + x_off * s), int((len(v_los[0]) / 2) + y_off * s)],
-          v_los[int((len(v_los) / 2) + x_off * s + 100), int((len(v_los[0]) / 2) + y_off * s)],
-          v_los[int((len(v_los) / 2) + x_off * s + 100), int((len(v_los[0]) / 2) + y_off * s + 100)],
-          v_los[int((len(v_los) / 2) + x_off * s), int((len(v_los[0]) / 2) + y_off * s + 100)],
-          int((len(v_los) / 2) + x_off * s),
-          int((len(v_los) / 2) + x_off * s + 100),
-          v_los[30, 10],
-          v_los[-5, -5],
-          np.sqrt(constants.G_pc * mbh) * np.sin(inc) * y_disk[10] /
-          ((x_disk[30] / np.cos(inc)) ** 2 + y_disk[10] ** 2) ** (3 / 4),
-          v_sys)
+    print('Image plotted in {0} s'.format(time.time() - t_fig))  # ~80 seconds for s=6
     print(oops)
+    # '''
 
     # SET LINE-OF-SIGHT VELOCITY AT THE BLACK HOLE CENTER TO BE 0, SUCH THAT IT DOES NOT BLOW UP
     # Only relevant if we have pixel located exactly at the center
@@ -461,8 +493,9 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
 
     hdu = fits.PrimaryHDU(intrinsic_cube2)
     hdul = fits.HDUList([hdu])
-    hdul.writeto('intrinsic_morefixes_n15_take3.fits')
+    hdul.writeto('intrinsic_fixedmaybe_n15_s2.fits')
     print('written!')
+    # NOTE: right now all 0s
     '''
     if out_name is not None:
         hdu = fits.PrimaryHDU(intrinsic_cube)
@@ -500,6 +533,7 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
         hdul = fits.HDUList([hdu])
         hdul.writeto(out_name)
         print('written!')
+        # NOTE: right now all 0s
 
     # PRINT 2D DISK ROTATION FIG
     if incl_fig:
@@ -569,9 +603,10 @@ if __name__ == "__main__":
     # x_off = 18.5, y_off = 8.5
     # EXCEPT: flip x, y to MY coords: y_off = -18.5, x_off = 8.5
 
-    out_cube = model_grid(resolution=0.07, s=2, spacing=20.1, x_off=8.5, y_off=-18.5, mbh=6.*10**8, inc=np.deg2rad(83.),
-                          dist=22.3, theta=np.deg2rad(-333.), data_cube=cube, lucy_output='lucy_out_n15.fits',
-                          out_name='morefixes_n15_take3.fits', incl_fig=True)
+    # 83 deg
+    out_cube = model_grid(resolution=0.07, s=2, spacing=20.1, x_off=0., y_off=0., mbh=6.*10**8, inc=np.deg2rad(83.),
+                          dist=22.3, theta=np.deg2rad(180-333.), data_cube=cube, lucy_output='lucy_out_n15.fits',
+                          out_name='fixedmaybe_n15_s2_take4.fits', incl_fig=True)
 
     vel_slice = spec(out_cube, x_pix=149, y_pix=149, print_it=True)
 
@@ -582,5 +617,3 @@ if __name__ == "__main__":
     # beam_axes = [0.319, 0.233]  # arcsecs
     # beam_major_axis_PA = 78.4  # degrees
     print(v)
-
-    # CHANGE THINGS to be for: 1332 (use beam size from 2016)
