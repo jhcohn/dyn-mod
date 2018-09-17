@@ -276,15 +276,15 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     # get gaussian velocity for each subpixel, apply weights to gaussians (weights = subpix_deconvolved output)
 
     # SET UP VELOCITY AXIS
-    v_sys = -constants.H0 * dist
+    v_sys = constants.H0 * dist
     # z_ax = np.linspace(v_sys - n_channels * spacing / 2, v_sys + n_channels * spacing / 2, n_channels + 1)
     # 15.4 * 10^6 Hz corresponds to 20.1 km/s  # from Barth+2016
     # convert from frequency (Hz) to velocity (km/s), with freq_ax in Hz
-    print(freq_ax)
+    # print(freq_ax)
     # CO(2-1) lands in 2.2937*10^11 Hz
     f_0 = 2.29369132e11
     z_ax = np.asarray([v_sys - ((freq-f_0)/f_0) * (constants.c / constants.m_per_km) for freq in freq_ax])
-    print(z_ax, z_ax[1] - z_ax[0])  # 20.1 km/s yay!
+    # print(z_ax[1] - z_ax[0])  # 20.1 km/s yay!
 
     # SET UP OBSERVATION AXES
     # initialize all values along axes at 0., but with a length equal to axis length [arcsec] * oversampling factor /
@@ -300,7 +300,7 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     # print(x_width * s / resolution, 'is this float a round integer? hopefully!')
 
     # set center of the observed axes (find the central pixel number along each axis)
-    if len(x_obs) % 2. == 0:
+    if len(x_obs) % 2. == 0:  # if even
         x_ctr = (len(x_obs)) / 2
         for i in range(len(x_obs)):
             x_obs[i] = resolution * (i - x_ctr) / s  # (arcsec/pix) * subpixels / (subpixels/pix) = arcsec
@@ -333,7 +333,7 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     # DON'T divide offset positions by s, unless offset positions are in subpixels instead of pixels
     # currentyl estimating offsets by pixels, not subpixels
     x_bhctr = x_off * resolution  # / s
-    y_bhctr = y_off * resolution  # / s
+    y_bhctr = -y_off * resolution  # / s  # BUCKET: note: use -y_off because I have to plot this in -y
 
     # CONVERT FROM ARCSEC TO PHYSICAL UNITS (Mpc)
     # tan(angle) = x/d where d=dist and x=disk_radius --> x = d*tan(angle), where angle = arcsec / arcsec_per_rad
@@ -392,54 +392,86 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     # Only relevant if we have pixel located exactly at the center
     center = (R == 0.)
     v_los[center] = 0.
+    v_los2[center] = 0.
     # print(center, v_los[center])
 
     # CALCULATE OBSERVED VELOCITY
-    v_obs = v_sys - v_los  # observed velocity v_obs at each point in the disk
+    v_obs = v_sys - v_los2  # observed velocity v_obs at each point in the disk
     print('v_obs')
-    print(v_obs - v_los)
+    # print(v_obs - v_los)
 
     obs3d = []  # data cube, v_obs but with a wavelength axis, too!
     weight = subpix_deconvolved
     # print(weight, np.amax(weight), np.amin(weight))  # most ~0.003, max 0.066, min 1e-15
-    sigma = 50.  # * (1 + np.exp(-R[x, y])) # sig: const, c1+c2*e^(-r/r0), c1+exp[-(x-mu)^2 / (2*sig^2)]
+    sigma = 10.  # * (1 + np.exp(-R[x, y])) # sig: const, c1+c2*e^(-r/r0), c1+exp[-(x-mu)^2 / (2*sig^2)]
     for z in range(len(z_ax)):
-        print(np.mean(v_obs))
-        print(z_ax[z] - np.mean(v_obs))
         obs3d.append(weight * np.exp(-(z_ax[z] - v_obs) ** 2 / (2 * sigma ** 2)))
     obs3d = np.asarray(obs3d)  # has shape 61, 600, 600, which is good
     print('obs3d')
-    print(obs3d[0])
-    print(oops)
 
-    ''' #
+    fig = plt.figure()
+    thing2 = obs3d[31, :, :]
+    print(np.amax(thing2))
+    plt.contourf(-y_obs, x_obs, thing2, 600, vmin=np.amin(thing2), vmax=np.amax(thing2), cmap='viridis')
+    plt.colorbar()
+    plt.show()
+    print(oops)
+    '''
+    central = obs3d[:,300,300]
+    central1 = obs3d[:,298,298]
+    central2 = obs3d[:,299,301]
+    central3 = obs3d[:,301,299]
+    nonctr = obs3d[:,0,0]
+    plt.plot(z_ax, central1, 'b--')
+    plt.plot(z_ax, central2, 'g--')
+    plt.plot(z_ax, central3, 'm--')
+    plt.plot(z_ax, central, 'k--')
+    plt.plot(z_ax, nonctr, 'k-')
+    plt.axvline(x=v_sys, color='r')
+    plt.show()
+    print(obs3d[:,300,300])
+    # '''
+    '''
+    for hm in range(250,350):
+        print(hm)
+        for hm2 in range(250,350):
+            plt.plot(z_ax, obs3d[:,hm,hm2], 'k--')
+    plt.axvline(x=v_sys, color='r')
+    plt.show()
+    
+    # '''
+    hdu = fits.PrimaryHDU(obs3d)
+    hdul = fits.HDUList([hdu])
+    hdul.writeto('obs3d_vlos2_s2.fits')
+    print(oops)
+    # ''' #
     t_fig = time.time()
     fig = plt.figure(figsize=(6, 5))
     print(v_obs.shape)
     # plt.contourf(x_obs, y_obs, v_obs, 600, vmin=np.amin(v_obs), vmax=np.amax(v_obs), cmap='RdBu_r')
-    plt.contourf(-y_obs, x_obs, v_obs, 600, vmin=np.amin(v_obs), vmax=np.amax(v_obs), cmap='RdBu_r')
+    thing = weight  # v_obs  # obs3d[24,:,:]  # v_obs, v_los, obs3d[30,:,:], R
+    plt.contourf(-y_obs, x_obs, thing, 600, vmin=np.amin(thing), vmax=np.amax(thing), cmap='RdBu_r')
     # viridis, RdBu_r, inferno
     print(theta)
 
-    hdu = fits.PrimaryHDU(v_obs)
-    hdul = fits.HDUList([hdu])
-    print(len(hdu.data[0]), len(hdu.data))  # 1800, 1800
-    hdul.writeto('ngc1332_vobs.fits')
-    # print(oops)
-
     # plt.plot([0., 1.*np.cos(np.deg2rad(theta))], [0., 1.*np.sin(np.deg2rad(theta))], color='k', lw=3)
     cbar = plt.colorbar()
-    '''
+    
+    # hdu = fits.PrimaryHDU(v_obs)
+    # hdul = fits.HDUList([hdu])
+    # print(len(hdu.data[0]), len(hdu.data))  # 1800, 1800
+    # hdul.writeto('ngc1332_vobs.fits')
+
     # plt.xlabel(r'x [pc]', fontsize=30)
     # plt.ylabel(r'y [pc]', fontsize=30)
     # plt.xlim(min(x_obs), max(x_obs))
     # plt.ylim(min(y_obs), max(y_obs))
-    '''
+    
     plt.xlabel(r'y [pc]', fontsize=30)
     plt.ylabel(r'x [pc]', fontsize=30)
     plt.xlim(max(y_obs), min(y_obs))
     plt.ylim(min(x_obs), max(x_obs))
-    cbar.set_label(r'km/s', fontsize=30, rotation=0, labelpad=20)  # pc,  # km/s
+    # cbar.set_label(r'km/s', fontsize=30, rotation=0, labelpad=20)  # pc,  # km/s
     print('hey')
     plt.show()
     print('Image plotted in {0} s'.format(time.time() - t_fig))  # ~80 seconds for s=6
@@ -448,11 +480,31 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
 
     # RESAMPLE
     # RE-SAMPLE BACK TO CORRECT PIXEL SCALE (take average of sxs sub-pixels for real alma pixel) --> intrinsic data cube
+    # RATE-DETERMINING STEP
+    # TRYING NEW THING
+    t_z = time.time()
+    intrinsic_cube = np.zeros(shape=(len(z_ax), len(fluxes), len(fluxes[0])))
+    for z2 in range(len(z_ax)):
+        startrow = 0
+        startcol = 0
+        for xreal in range(len(intrinsic_cube[z2,:,0])):
+            for yreal in range(len(intrinsic_cube[z2,0,:])):
+                if startrow == len(obs3d[z2, :, 0]) - s:
+                    startrow = 0
+                if startcol == len(obs3d[z2, :, 0]) - s:
+                    startcol = 0
+                intrinsic_cube[z2, xreal, yreal] = np.mean(obs3d[z2, startrow:startrow+s, startcol:startcol+s])
+                startrow += s
+                startcol += s
+    print("intrinsic cube done in {0} s".format(time.time() - t_z))  # ~37 s (better than ~68!)
+    # END TRYING NEW THING
+
+    '''
     t_intrins = time.time()
     intrinsic_cube = np.zeros(shape=(len(fluxes), len(fluxes[0]), len(z_ax)))  # shape = original data cube shape
     intrinsic_cube2 = np.zeros(shape=(len(z_ax), len(fluxes), len(fluxes[0])))  # shape = original data cube shape
     for z2 in range(len(z_ax)):
-        print(z2)  # ~1s per iteration --> not great [still, cycling through all of these is <2 of convolution step]
+        print(z2)  # ~1s per iteration --> not great
         splits = np.asarray(np.hsplit(obs3d[z2, :, :], 300))  # 300*s/300 = s
         splits2 = np.asarray([np.vsplit(splits[i], 300) for i in range(len(splits))])
         # print(splits2.shape)  # [300, 300, s, s]
@@ -462,15 +514,18 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
                 intrinsic_cube2[z2, x_real, y_real] = np.mean(splits2[x_real][y_real])
     print('Intrinsic cube done in {0} s'.format(time.time() - t_intrins))  # ~68 s
     # print('intrinsic', intrinsic_cube.shape)  # 300, 300, 62
+    print(oops)
+    '''
 
-    hdu = fits.PrimaryHDU(intrinsic_cube2)
+    hdu = fits.PrimaryHDU(intrinsic_cube)
     hdul = fits.HDUList([hdu])
-    hdul.writeto('intrinsic_fixedmaybe_n15_s2.fits')
+    hdul.writeto('1332_newintrinsic_better_n15_s2.fits')
     print('written!')
+    print(oops)
     # NOTE: right now all 0s
     '''
     if out_name is not None:
-        hdu = fits.PrimaryHDU(intrinsic_cube)
+        hdu = fits.PrimaryHDU(intrinsic_cube2)
         hdul = fits.HDUList([hdu])
         hdul.writeto('name.fits')
     # '''
@@ -511,15 +566,13 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     if incl_fig:
         # BUCKET: ISSUE: velocity map was split into top/bottom, rather than angled appropriately....
         fig = plt.figure(figsize=(12, 10))
-        for x in range(len(x_obs)):
-            xtemp = [x_obs[x]] * len(y_obs)
-            plt.scatter(xtemp, y_obs, c=v_obs[x, :], vmin=np.amin(v_obs), vmax=np.amax(v_obs), s=25,
-                        cmap='RdBu_r')  # viridis, RdBu_r, inferno
-        plt.colorbar()
-        plt.xlabel(r'x [Mpc]', fontsize=30)
-        plt.ylabel(r'y [Mpc]', fontsize=30)
-        plt.xlim(min(x_obs), max(x_obs))
-        plt.ylim(min(y_obs), max(y_obs))
+        plt.contourf(-y_obs, x_obs, v_obs, 600, vmin=np.amin(v_obs), vmax=np.amax(v_obs), cmap='RdBu_r')
+        cbar = plt.colorbar()
+        plt.xlabel(r'y [pc]', fontsize=30)
+        plt.ylabel(r'x [pc]', fontsize=30)
+        plt.xlim(max(y_obs), min(y_obs))
+        plt.ylim(min(x_obs), max(x_obs))
+        cbar.set_label(r'km/s', fontsize=30, rotation=0, labelpad=20)  # pc,  # km/s
         plt.show()
 
         '''
@@ -571,14 +624,14 @@ if __name__ == "__main__":
     psf = make_beam_psf(grid_size=100, x_std=0.319, y_std=0.233, rot=np.deg2rad(90-78.4))  # ,
     # fits_name='psf_out.fits')  # rot: start at +90, subtract 78.4 to get 78.4
 
-    # NOTE: NGC 1332 center appears to be x=168, y=158 (out of (300,300)) --> expected at 149.5
-    # x_off = 18.5, y_off = 8.5
-    # EXCEPT: flip x, y to MY coords: y_off = -18.5, x_off = 8.5
+    # NOTE: NGC 1332 center appears to be x=168, y=158 (out of (300,300), starting with 1) --> expected at 149.5
+    # My code would currently put it at 150,150 which is really the 151st pixel because python starts counting at 0
+    # ds9 x-axis is my -y axis: y_off = -(168-151) = -18
+    # ds9 y-axis is my +x axis: x_off = (158-151) = 8
 
-    # 83 deg
-    out_cube = model_grid(resolution=0.07, s=2, spacing=20.1, x_off=0., y_off=0., mbh=6.*10**8, inc=np.deg2rad(83.),
+    out_cube = model_grid(resolution=0.07, s=2, spacing=20.1, x_off=8., y_off=-18., mbh=6.*10**8, inc=np.deg2rad(83.),
                           dist=22.3, theta=np.deg2rad(-333.), data_cube=cube, lucy_output='lucy_out_n15.fits',
-                          out_name='fixedmaybe_n15_s2_take4.fits', incl_fig=True)
+                          out_name='1332_better_n15_s2.fits', incl_fig=True)
 
     vel_slice = spec(out_cube, x_pix=149, y_pix=149, print_it=True)
 
