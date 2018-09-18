@@ -250,13 +250,14 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
             ypix = int(y_subpixel / s)
             subpix_deconvolved[x_subpixel, y_subpixel] = lucy_out[xpix, ypix] / s**2
     '''
+
     # RESHAPING
-    subpix_deconvolved = np.zeros(shape=(len(lucy_out[0]) * s, len(lucy_out) * s))  # 300*s, 300*s
+    subpix_deconvolved = np.zeros(shape=(len(lucy_out) * s, len(lucy_out[0]) * s))  # 300*s, 300*s
     for x_subpixel in range(len(subpix_deconvolved)):
         for y_subpixel in range(len(subpix_deconvolved[0])):
             xpix = int(x_subpixel / s)
             ypix = int(y_subpixel / s)
-            subpix_deconvolved[y_subpixel, x_subpixel] = lucy_out[xpix, ypix] / s**2
+            subpix_deconvolved[x_subpixel, y_subpixel] = lucy_out[xpix, ypix] / s**2
     # print(subpix_deconvolved[0], subpix_deconvolved[0, 9])
     print('deconvolution took {0} s'.format(time.time() - t0))  # ~10.3 s
     # print(subpix_deconvolved.shape)  # (1800,1800)
@@ -295,8 +296,8 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     '''
 
     # NOTE: I JUST SWITCHED x, y TO WHAT I THINK THEY SHOULD BE
-    y_obs = [0.] * len(lucy_out[0]) * s
-    x_obs = [0.] * len(lucy_out) * s
+    y_obs = [0.] * len(lucy_out) * s
+    x_obs = [0.] * len(lucy_out[0]) * s
     # print(x_width * s / resolution, 'is this float a round integer? hopefully!')
 
     # set center of the observed axes (find the central pixel number along each axis)
@@ -451,6 +452,7 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     print(v_obs.shape)
     # plt.contourf(x_obs, y_obs, v_obs, 600, vmin=np.amin(v_obs), vmax=np.amax(v_obs), cmap='RdBu_r')
     thing = weight  # v_obs  # obs3d[24,:,:]  # v_obs, v_los, obs3d[30,:,:], R
+    print(thing[150,150])  # YES THIS NOW CORRECT
     plt.contourf(-y_obs, x_obs, thing, 600, vmin=np.amin(thing), vmax=np.amax(thing), cmap='RdBu_r')
     # viridis, RdBu_r, inferno
     print(theta)
@@ -623,7 +625,7 @@ if __name__ == "__main__":
     # ds9 x-axis is my -y axis: y_off = -(168-151) = -18
     # ds9 y-axis is my +x axis: x_off = (158-151) = 8
 
-    out_cube = model_grid(resolution=0.07, s=6, spacing=20.1, x_off=8., y_off=-18., mbh=6.*10**8, inc=np.deg2rad(83.),
+    out_cube = model_grid(resolution=0.07, s=1, spacing=20.1, x_off=8., y_off=-18., mbh=6.*10**8, inc=np.deg2rad(83.),
                           dist=22.3, theta=np.deg2rad(-333.), data_cube=cube, lucy_output='lucy_out_n15.fits',
                           out_name='1332_better_n15_s2.fits', incl_fig=True)
 
