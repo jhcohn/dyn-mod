@@ -295,7 +295,7 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     '''
 
     # NOTE: I JUST SWITCHED x, y TO WHAT I THINK THEY SHOULD BE
-    y_obs = [0.] * len(lucy_out[0]) * s  # * s, right?
+    y_obs = [0.] * len(lucy_out[0]) * s
     x_obs = [0.] * len(lucy_out) * s
     # print(x_width * s / resolution, 'is this float a round integer? hopefully!')
 
@@ -409,6 +409,7 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     obs3d = np.asarray(obs3d)  # has shape 61, 600, 600, which is good
     print('obs3d')
 
+    '''
     fig = plt.figure()
     thing2 = obs3d[31, :, :]
     print(np.amax(thing2))
@@ -416,7 +417,7 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     plt.colorbar()
     plt.show()
     print(oops)
-    '''
+    
     central = obs3d[:,300,300]
     central1 = obs3d[:,298,298]
     central2 = obs3d[:,299,301]
@@ -439,11 +440,11 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     plt.axvline(x=v_sys, color='r')
     plt.show()
     
-    # '''
     hdu = fits.PrimaryHDU(obs3d)
     hdul = fits.HDUList([hdu])
     hdul.writeto('obs3d_vlos2_s2.fits')
     print(oops)
+    # '''
     # ''' #
     t_fig = time.time()
     fig = plt.figure(figsize=(6, 5))
@@ -474,8 +475,8 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     # cbar.set_label(r'km/s', fontsize=30, rotation=0, labelpad=20)  # pc,  # km/s
     print('hey')
     plt.show()
-    print('Image plotted in {0} s'.format(time.time() - t_fig))  # ~80 seconds for s=6
-    print(oops)
+    print('Image plotted in {0} s'.format(time.time() - t_fig))  # ~255 seconds for s=6
+    # print(oops)
     # '''
 
     # RESAMPLE
@@ -485,18 +486,11 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     t_z = time.time()
     intrinsic_cube = np.zeros(shape=(len(z_ax), len(fluxes), len(fluxes[0])))
     for z2 in range(len(z_ax)):
-        startrow = 0
-        startcol = 0
-        for xreal in range(len(intrinsic_cube[z2,:,0])):
-            for yreal in range(len(intrinsic_cube[z2,0,:])):
-                if startrow == len(obs3d[z2, :, 0]) - s:
-                    startrow = 0
-                if startcol == len(obs3d[z2, :, 0]) - s:
-                    startcol = 0
-                intrinsic_cube[z2, xreal, yreal] = np.mean(obs3d[z2, startrow:startrow+s, startcol:startcol+s])
-                startrow += s
-                startcol += s
-    print("intrinsic cube done in {0} s".format(time.time() - t_z))  # ~37 s (better than ~68!)
+        for xreal in range(len(intrinsic_cube[z2, :, 0])):
+            for yreal in range(len(intrinsic_cube[z2, 0, :])):
+                intrinsic_cube[z2, xreal, yreal] =\
+                    np.mean(obs3d[z2, int(xreal * s):int((xreal + 1) * s), int(yreal * s):int((yreal + 1) * s)])
+    print("intrinsic cube done in {0} s".format(time.time() - t_z))  # ~38 s (better than ~68!)
     # END TRYING NEW THING
 
     '''
@@ -629,7 +623,7 @@ if __name__ == "__main__":
     # ds9 x-axis is my -y axis: y_off = -(168-151) = -18
     # ds9 y-axis is my +x axis: x_off = (158-151) = 8
 
-    out_cube = model_grid(resolution=0.07, s=2, spacing=20.1, x_off=8., y_off=-18., mbh=6.*10**8, inc=np.deg2rad(83.),
+    out_cube = model_grid(resolution=0.07, s=6, spacing=20.1, x_off=8., y_off=-18., mbh=6.*10**8, inc=np.deg2rad(83.),
                           dist=22.3, theta=np.deg2rad(-333.), data_cube=cube, lucy_output='lucy_out_n15.fits',
                           out_name='1332_better_n15_s2.fits', incl_fig=True)
 
