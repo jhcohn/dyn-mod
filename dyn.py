@@ -197,7 +197,7 @@ def get_fluxes(data_cube, write_name=None):
 
 def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=52, spacing=20.1, x_off=0., y_off=0.,
                mbh=4*10**8, inc=np.deg2rad(60.), dist=17., theta=np.deg2rad(-200.), data_cube=None, lucy_output=None,
-               out_name=None, incl_fig=False):
+               out_name=None, incl_fig=False, enclosed_mass=None, ml_const=1.):
     """
     Build grid for dynamical modeling!
 
@@ -218,6 +218,10 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     :param lucy_output: output from running lucy on data cube and beam PSF
     :param out_name: output name of the fits file to which to save the output v_los image (if None, don't save image)
     :param incl_fig: if True, print figure of 2d plane of observed line-of-sight velocity
+    :param enclosed_mass: file including data of the enclosed stellar mass of the galaxy (1st column should be radius
+        r in kpc and second column should be M_stars(<r))
+    :param ml_const: Constant by which to multiply the M/L ratio, in case the M/L ratio is not that which was used to
+        calculate the enclosed stellar masses in the enclosed_mass file
 
     :return: observed line-of-sight velocity [km/s]
     """
@@ -237,6 +241,16 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     hdu = fits.open(lucy_output)
     lucy_out = hdu[0].data
     hdu.close()
+
+    # NOW INCLUDE ENCLOSED STELLAR MASS
+    radii = []
+    m_stellar = []
+    with open(enclosed_mass) as em:
+        for line in em:
+            cols = line.split()
+            cols[1] = cols[1].replace('D', 'e')
+            radii.append(float(cols[0]) * 10**3)  # file lists radii in kpc; convert to pc
+            m_stellar.append(float(cols[1]))  # solar masses
 
     # SUBPIXELS
     # take deconvolved flux map (output from lucy), take subpixels, assign each subpixel flux=(real pixel flux)/s**2
@@ -347,8 +361,24 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     R = np.sqrt((x_disk ** 2 / np.cos(inc) ** 2) + y_disk ** 2)  # radius R of each point in the disk
     print(R.shape)
 
+    # CALCULATE ENCLOSED MASS BASED ON MBH AND ENCLOSED STELLAR MASS
+    # BUCKET THERE HAS TO BE A FASTER WAY
+    t_mass = time.time()
+    m_R = np.zeros(shape=(len(R), len(R[0])))  # mass as a function of R
+    for x in range(len(R)):
+        print(x)
+        for y in range(len(R[0])):
+            for rad in range(len(radii) - 1):
+                if radii[rad] <= R[x, y] < radii[rad+1]:
+                    m_R[x, y] = mbh + ml_const * m_stellar[rad]
+                elif R[x, y] > radii[-1]:
+                    m_R[x, y] = mbh + ml_const * m_stellar[-1]
+    print('Time elapsed in assigning enclosed masses is {0} s'.format(time.time() - t_mass))  # 12s w/ s=2; 118s w/ s=6
+    print(m_R)
+
     # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
-    vel = np.sqrt(constants.G_pc * mbh / R)  # Keplerian velocity vel at each point in the disk
+    vel = np.sqrt(constants.G_pc * m_R / R)  # Keplerian velocity vel at each point in the disk
+    # vel = np.sqrt(constants.G_pc * mbh / R)  # Keplerian velocity vel at each point in the disk
     print('vel')
 
     # CALCULATE LINE-OF-SIGHT VELOCITY AT EACH POINT (x_disk, y_disk) IN THE DISK (km/s)
@@ -360,7 +390,7 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     # = v_sys - sqrt(GM)*sin(i)*[1 /sqrt((x_obs / (y_obs*cos(i)))**2 + 1)]/[(x_obs/cos(i))**2 + y_obs**2]^(1/4)
     # NOTE: 1/sqrt((x_obs / (y_obs*cos(i)))**2 + 1) = y_obs/sqrt((x_obs/cos(i))**2 + y_obs**2) = y_obs / sqrt(R)
     # v_obs = v_sys - sqrt(GM)*sin(i)*y_obs / [(x_obs / cos(i))**2 + y_obs**2]^(3/4)
-    v_los = np.sqrt(constants.G_pc * mbh) * np.sin(inc) * y_disk / ((x_disk / np.cos(inc)) ** 2 + y_disk ** 2) ** (3/4)
+    v_los = np.sqrt(constants.G_pc * m_R) * np.sin(inc) * y_disk / ((x_disk / np.cos(inc)) ** 2 + y_disk ** 2) ** (3/4)
     # line-of-sight velocity v_los at each point in the disk
     print('los')
 
@@ -500,38 +530,20 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     plt.plot(z_ax, intrinsic_cube[:,158,168], 'k-')
     plt.plot(z_ax, intrinsic_cube[:,149,153], 'r-')
     plt.plot(z_ax, intrinsic_cube[:,165,178], 'b-')
-    plt.plot(z_ax, intrinsic_cube[:152,172], 'k--')  #
-    plt.plot(z_ax, intrinsic_cube[:,163,166], 'k--')
+    plt.plot(z_ax, intrinsic_cube[:152,172], 'm--')  #
+    plt.plot(z_ax, intrinsic_cube[:,163,166], 'g--')
     plt.axvline(x=v_sys, color='k')
     print(v_sys)
     # red solid, blue solid, dotted for along minor axis
     plt.show()
 
     '''
-    t_intrins = time.time()
-    intrinsic_cube = np.zeros(shape=(len(fluxes), len(fluxes[0]), len(z_ax)))  # shape = original data cube shape
-    intrinsic_cube2 = np.zeros(shape=(len(z_ax), len(fluxes), len(fluxes[0])))  # shape = original data cube shape
-    for z2 in range(len(z_ax)):
-        print(z2)  # ~1s per iteration --> not great
-        splits = np.asarray(np.hsplit(obs3d[z2, :, :], 300))  # 300*s/300 = s
-        splits2 = np.asarray([np.vsplit(splits[i], 300) for i in range(len(splits))])
-        # print(splits2.shape)  # [300, 300, s, s]
-        for x_real in range(len(splits2)):  # for each real pixel
-            for y_real in range(len(splits2[0])):  # for each real pixel
-                intrinsic_cube[x_real, y_real, z2] = np.mean(splits2[x_real][y_real])
-                intrinsic_cube2[z2, x_real, y_real] = np.mean(splits2[x_real][y_real])
-    print('Intrinsic cube done in {0} s'.format(time.time() - t_intrins))  # ~68 s
-    # print('intrinsic', intrinsic_cube.shape)  # 300, 300, 62
-    print(oops)
-    '''
-
-    '''
     hdu = fits.PrimaryHDU(intrinsic_cube)
     hdul = fits.HDUList([hdu])
-    hdul.writeto('1332_intrinsic_corrweight_n15_s2.fits')
+    hdul.writeto('1332_intrinsic_enclmass_n15_s2.fits')
     print('written!')
     print(oops)
-
+        
     if out_name is not None:
         hdu = fits.PrimaryHDU(intrinsic_cube2)
         hdul = fits.HDUList([hdu])
@@ -640,7 +652,8 @@ if __name__ == "__main__":
 
     out_cube = model_grid(resolution=0.07, s=2, spacing=20.1, x_off=8., y_off=-18., mbh=6.*10**8, inc=np.deg2rad(83.),
                           dist=22.3, theta=np.deg2rad(-333.), data_cube=cube, lucy_output='lucy_out_n15.fits',
-                          out_name='1332_convolved_corrweight_n15_s2.fits', incl_fig=True)
+                          out_name='1332_convolved_corrweight_n15_s2.fits', incl_fig=True,
+                          enclosed_mass='ngc1332_enclosed_stellar_mass')
 
     vel_slice = spec(out_cube, x_pix=149, y_pix=149, print_it=True)
 
