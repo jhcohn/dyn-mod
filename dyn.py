@@ -2,8 +2,7 @@ import numpy as np
 import astropy.io.fits as fits
 # from astropy.table import Table
 import matplotlib.pyplot as plt
-from scipy import integrate
-from scipy import signal
+from scipy import integrate, signal, interpolate
 # from astropy import modeling
 import time
 # from astropy import convolution
@@ -195,6 +194,11 @@ def get_fluxes(data_cube, write_name=None):
     return collapsed_fluxes, freq_axis
 
 
+def blockshaped(arr, nrow, ncol):
+    h,w = arr.shape
+    return (arr.reshape(h//nrow, nrow, -1, ncol).swapaxes(1,2).reshape(-1,nrow,ncol))
+
+
 def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=52, spacing=20.1, x_off=0., y_off=0.,
                mbh=4*10**8, inc=np.deg2rad(60.), dist=17., theta=np.deg2rad(-200.), data_cube=None, lucy_output=None,
                out_name=None, incl_fig=False, enclosed_mass=None, ml_const=1.):
@@ -243,6 +247,7 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     hdu.close()
 
     # NOW INCLUDE ENCLOSED STELLAR MASS
+    # BUCKET INTERPOLATE
     radii = []
     m_stellar = []
     with open(enclosed_mass) as em:
@@ -363,18 +368,16 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
 
     # CALCULATE ENCLOSED MASS BASED ON MBH AND ENCLOSED STELLAR MASS
     # BUCKET THERE HAS TO BE A FASTER WAY
+    # look up spline interpolation (eg interpol in idl: provide x,y of r array, masses array, then give it R)
     t_mass = time.time()
-    m_R = np.zeros(shape=(len(R), len(R[0])))  # mass as a function of R
-    for x in range(len(R)):
-        print(x)
-        for y in range(len(R[0])):
-            for rad in range(len(radii) - 1):
-                if radii[rad] <= R[x, y] < radii[rad+1]:
-                    m_R[x, y] = mbh + ml_const * m_stellar[rad]
-                elif R[x, y] > radii[-1]:
-                    m_R[x, y] = mbh + ml_const * m_stellar[-1]
+
+    # INTRODUCE MASS AS A FUNCTION OF RADIUS (INCLUDE ENCLOSED STELLAR MASS)
+    # CREATE A FUNCTION TO INTERPOLATE (AND EXTRAPOLATE) ENCLOSED STELLAR M(R)
+    m_star_r = interpolate.interp1d(radii, m_stellar, fill_value='extrapolate')
+    m_R = mbh + ml_const * m_star_r(R)
     print('Time elapsed in assigning enclosed masses is {0} s'.format(time.time() - t_mass))  # 12s w/ s=2; 118s w/ s=6
     print(m_R)
+    print(m_R.shape)
 
     # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
     vel = np.sqrt(constants.G_pc * m_R / R)  # Keplerian velocity vel at each point in the disk
@@ -414,11 +417,14 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     print('v_obs')
     # print(v_obs - v_los)
 
-    sigma = 10.  # * (1 + np.exp(-R[x, y])) # sig: const, c1+c2*e^(-r/r0), c1+exp[-(x-mu)^2 / (2*sig^2)]
+    sigma = 25.  # * (1 + np.exp(-R[x, y])) # sig: const, c1+c2*e^(-r/r0), c1+exp[-(x-mu)^2 / (2*sig^2)]
     sig1 = 0.  # km/s
-    sig0 = 268.  # km/s
+    sig0 = 50.  # 268.  # km/s
     r0 = 60.7  # pc
     sigma = sig0 * np.exp(-R / r0) + sig1
+    # sigma = sig0
+    # mu = (not discussed anywhere in paper?)
+    # sigma = sig0 * np.exp(-(R - r0)**2 / (2 * mu**2)) + sig1
     obs3d = []  # data cube, v_obs but with a wavelength axis, too!
     weight = subpix_deconvolved
     weight /= np.sqrt(2 * np.pi * sigma)
@@ -518,6 +524,24 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     # RE-SAMPLE BACK TO CORRECT PIXEL SCALE (take average of sxs sub-pixels for real alma pixel) --> intrinsic data cube
     # RATE-DETERMINING STEP
     t_z = time.time()
+    # TO SPEED UP: https://stackoverflow.com/questions/16856788/slice-2d-array-into-smaller-2d-arrays
+    int2 = []  # np.zeros(shape=(len(z_ax), len(fluxes), len(fluxes[0])))
+    for z2 in range(len(z_ax)):
+        print(z2)
+        # break each (s*len(realx), s*len(realy))-sized velocity slice of obs3d into an array comprised of sxs subarrays
+        subarrays = blockshaped(obs3d[z2, :, :], s, s)
+
+        # Take the mean along the first (s-length) axis of each subarray in subarrays, then take the mean along the
+        # other (s-length) axis, such that what remains is a 1d array of the means of the sxs subarrays. Then reshape
+        # into the correct real x_pixel by real y_pixel lengths
+        reshaped = np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((len(fluxes), len(fluxes[0])))
+        int2.append(reshaped)
+    print("intrinsic cube done in {0} s".format(time.time() - t_z))  # 0.34 s YAY!
+    intrinsic_cube = np.asarray(int2)
+    # print(intrinsic_cube.shape)  # 61, 300, 300
+
+    '''
+    t_z = time.time()
     intrinsic_cube = np.zeros(shape=(len(z_ax), len(fluxes), len(fluxes[0])))
     for z2 in range(len(z_ax)):
         print(z2)
@@ -526,24 +550,27 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
                 intrinsic_cube[z2, xreal, yreal] =\
                     np.mean(obs3d[z2, int(xreal * s):int((xreal + 1) * s), int(yreal * s):int((yreal + 1) * s)])
     print("intrinsic cube done in {0} s".format(time.time() - t_z))  # ~37-45 s (better than ~68!)
+    print(int2 - intrinsic_cube) # 0.0 array hooray!!!!!!! NEW WAY IS WORKING!
+    print(oops)
+    '''
 
     plt.plot(z_ax, intrinsic_cube[:,158,168], 'k-')
     plt.plot(z_ax, intrinsic_cube[:,149,153], 'r-')
     plt.plot(z_ax, intrinsic_cube[:,165,178], 'b-')
-    plt.plot(z_ax, intrinsic_cube[:152,172], 'm--')  #
-    plt.plot(z_ax, intrinsic_cube[:,163,166], 'g--')
+    plt.plot(z_ax, intrinsic_cube[:152,172], 'm--')
+    plt.plot(z_ax, intrinsic_cube[:,176,157], 'g--')  # 163,166
     plt.axvline(x=v_sys, color='k')
     print(v_sys)
     # red solid, blue solid, dotted for along minor axis
     plt.show()
 
-    '''
+    # '''
     hdu = fits.PrimaryHDU(intrinsic_cube)
     hdul = fits.HDUList([hdu])
-    hdul.writeto('1332_intrinsic_enclmass_n15_s2.fits')
+    hdul.writeto('1332_intrinsic_interpenclmass_n15_s2.fits')
     print('written!')
     print(oops)
-        
+
     if out_name is not None:
         hdu = fits.PrimaryHDU(intrinsic_cube2)
         hdul = fits.HDUList([hdu])
@@ -559,21 +586,20 @@ def model_grid(x_width=0.975, y_width=2.375, resolution=0.05, s=10, n_channels=5
     for z3 in range(len(z_ax)):
         t1 = time.time()
         print(z3)
-        # CONVOLVE intrinsic_cube[:, :, z3] with alma beam
+        # CONVOLVE intrinsic_cube[z3, :, :] with alma beam
         # alma_beam needs to have same dimensions as intrinsic_cube[:, :, z3]
         # BUCKET: MAYBE TRY signal.fftconvolve()?
         convolved_step = signal.fftconvolve(intrinsic_cube[z3, :, :], beam_psf, mode='same')
         # convolved_cube.append(signal.convolve2d(intrinsic_cube[:, :, z3], beam_psf, mode='same'))
-        print(convolved_step.shape)
+        # print(convolved_step.shape)
         convolved_cube.append(convolved_step)
-        print(convolved_cube[z3].shape)  # 300, 300  # now it's 61, 300 :(
+        # print(convolved_cube[z3].shape)  # 300, 300
         print("Convolution loop " + str(z3) + " took {0} seconds".format(time.time() - t1))
         # ISSUE: each signal.convolve2d step takes ~43-56s (takes ~16 seconds in terminal for same sized objects...)
         # mode=same keeps output size same
         # welp according to Barth+2016 this is the most time-consuming step of the modeling calculations
     convolved_cube = np.asarray(convolved_cube)
     print('convolved! Total convolution loop took {0} seconds'.format(time.time() - start_time))
-    # BUCKET: CURRENTLY 300 x 61 x 61 ????
 
     # WRITE OUT RESULTS TO FITS FILE
     if out_name is not None:
@@ -652,7 +678,7 @@ if __name__ == "__main__":
 
     out_cube = model_grid(resolution=0.07, s=2, spacing=20.1, x_off=8., y_off=-18., mbh=6.*10**8, inc=np.deg2rad(83.),
                           dist=22.3, theta=np.deg2rad(-333.), data_cube=cube, lucy_output='lucy_out_n15.fits',
-                          out_name='1332_convolved_corrweight_n15_s2.fits', incl_fig=True,
+                          out_name='1332_convolved_enclosedmstar_n15_s2.fits', incl_fig=True,
                           enclosed_mass='ngc1332_enclosed_stellar_mass')
 
     vel_slice = spec(out_cube, x_pix=149, y_pix=149, print_it=True)
