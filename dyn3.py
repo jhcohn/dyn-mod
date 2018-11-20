@@ -444,7 +444,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     # print(m_R)
     # print(m_R.shape)
 
-    # DRAW 50pc ELLIPSE
+    # DRAW ELLIPSE
     from matplotlib import patches
     # USE 50pc FOR MODEL FITTING
     # USE 4.3" x 0.7" FOR FIG 2 REPLICATION
@@ -525,18 +525,44 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     print(oops)
     # '''  #
 
-    '''  #
+    # '''  #
+    # MAKE MODEL VERSION OF FIG2
+    hdu = fits.open(data_cube)
+    data_vs3 = hdu[0].data[0]  # header = hdu[0].header
+
     obs_vels = []
+    mask2 = []
+    major = dist * 10 ** 6 * np.tan(4.3 / 0.01 / constants.arcsec_per_rad)
+    minor = dist * 10 ** 6 * np.tan(0.7 / 0.01 / constants.arcsec_per_rad)
     for x in range(len(x_obs)):
         print(x)
         for y in range(len(y_obs)):
-            major = dist * 10 ** 6 * np.tan(4.3 / constants.arcsec_per_rad)
-            minor = dist * 10 ** 6 * np.tan(0.7 / constants.arcsec_per_rad)
             test_pt = ((np.cos(theta_rot)*(x - x_bhctr) + np.sin(theta_rot)*(y - y_bhctr))/major)**2\
                 + ((np.sin(theta_rot)*(x - x_bhctr) - np.cos(theta_rot)*(y-y_bhctr))/minor)**2
             if test_pt <= 1:
                 obs_vels.append(v_obs[x, y])
-    plt.hist(v_obs[R <= 300], len(z_ax), edgecolor='k', facecolor=None)
+            mask2.append(test_pt)
+    print(obs_vels)
+    obs_vels = np.asarray(obs_vels)
+    mask2 = np.asarray(mask2)
+    print(obs_vels.shape)
+    import numpy.ma as ma
+    data_vs2 = []
+    for k in range(len(data_vs3)):
+        data_vs2.append(ma.masked_where(mask2 > 1., data_vs3[k]))
+    # data_vs2 = np.asarray(data_vs2)
+    # data_vs2 = ma.masked_where(mask > 1., data_vs[30])
+    print(np.asarray(data_vs2).shape)
+    data_vs2 = np.asarray(data_vs2)
+    o_vels = []
+    for i in range(len(data_vs2)):  # for each velocity slice
+        print(i)
+        # add = np.sum(data_vs[i, inds])  # sum up the data corresponding to indices that fall within ellipse
+        add = np.sum(data_vs2[i])
+        # data_vs[i, inds].shape = 640, 640
+        o_vels.append(add)
+    # plt.hist(v_obs[R <= 300], len(z_ax), edgecolor='k', facecolor=None)  # points within radius rather than ellipse
+    plt.bar(z_ax, o_vels, width=(z_ax[1] - z_ax[0]), edgecolor='k')  # data_vs[:, R < 50]
     # plt.hist(vels_f, len(z_ax), edgecolor='k')  # data_vs[:, R < 50]
     plt.axvline(x=v_sys, color='k')
     plt.xlabel(r'Observed velocity [km/s]')
@@ -545,12 +571,13 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     # '''  #
 
     # RECREATE BARTH+2016 FIG2, CO(2-1) LINE PROFILE INTEGRATED OVER ELLIPSE
-    '''  #
+    # '''  #
     hdu = fits.open(data_cube)
     data_vs = hdu[0].data[0]  # header = hdu[0].header
     print(data_vs.shape)  # (75, 640, 640)
     # for xo, yo in [[6., 0.], [8., 0.], [4., 0.], [6., -2.], [8., -2.], [4., -2.], [6., 2.], [8., 2.], [4., 2.]]:
-    for xo, yo in [[3., 20.], [5., 20.], [7, 20.], [3., 17.], [5., 17.], [7., 17.], [3., 15.], [5., 15.], [7., 15.]]:
+    # [3., 20.], [5., 20.], [7, 20.], [3., 17.], [5., 17.], [7., 17.], [3., 15.], [5., 15.], [7., 15.]]:
+    for xo, yo in [[0., 0.,]]:
         vels = []
         acceptable_pixels = []
         inds = np.zeros(shape=(len(data_vs[0]), len(data_vs[0][0])))  # array of indices, corresponding to x,y data
@@ -559,7 +586,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
         mask = np.zeros(shape=(len(data_vs[0]), len(data_vs[0][0])))  # array of indices, corresponding to x,y data
         for i in range(len(data_vs[0][0])):  # 640 (x axis)
             for j in range(len(data_vs[0])):  # 640 (y axis)
-                res = 0.05  # arcsec/pix  # should be 0.1, use 0.01 while finding things
+                res = 0.01  # arcsec/pix  # 0.01 now, but need to bin to 4x4 pixels
                 maj = 4.3 / res  # ellipse major axis
                 mi = 0.7 / res  # ellipse minor axis
                 theta_rot = theta + np.pi/4.
@@ -574,6 +601,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
                     inds[i, j] = False  # int(0)  # set index = False
         # inds = inds.astype(int)  # make sure each entry is an int, bc apparently setting each int(entry) isn't good enough
         # print(inds)
+
         import numpy.ma as ma
         data_vs2 = []
         for k in range(len(data_vs)):
@@ -598,6 +626,16 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
         ax.set_aspect('equal')
         plt.colorbar(orientation='vertical')
         plt.show()
+
+        # for pixset in acceptable_pixels:
+        #     print(pixset[0], pixset[1])
+        #     # pixset = [293, 271]  # 293, 271 is pretty good
+        #     profile = []
+        #     for k in range(len(data_vs)):
+        #         profile.append(data_vs[k][pixset[0]][pixset[1]])
+        #     plt.plot(z_ax, profile)
+        #     plt.axvline(x=v_sys, color='k')
+        #     plt.show()
 
         # print(data_vs[0, inds])centers
         # print(data_vs[0, inds].shape)
@@ -834,14 +872,14 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
         print("Convolution loop " + str(z) + " took {0} seconds".format(time.time() - tl))
     print('convolved! Total convolution loop took {0} seconds'.format(time.time() - ts))
 
-    # '''  #
+    '''  #
     # COMPARE LINE PROFILES!!!
     # inds_to_try = np.asarray([[645, 628], [651, 631], [655, 633]])  # 670, 640; 625, 640
     # inds_to_try = np.asarray([[320, 312], [326, 316], [332, 320]])  # 670, 640; 625, 640
     # inds_to_try = np.asarray([[320, 313], [326, 316], [332, 319]])  # 670, 640; 625, 640
-    inds_to_try = np.asarray([[340, 310], [337, 315], [334, 320]])
+    inds_to_try = np.asarray([[340, 310], [337, 315], [334, 320], [10, 450]])
     # from above, data center should be around data[:, 320+5, 320+17]
-    colors = ['g', 'k', 'm']
+    colors = ['g', 'k', 'm', 'b']
 
     # fluxes, freq_ax
     fig = plt.figure(figsize=(12, 10))
@@ -864,8 +902,11 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     for i in range(len(inds_to_try)):
         print(data[0, :, :].shape)
         # plt.plot(z_ax, data[:, inds_to_try[i][0], inds_to_try[i][1]], 'k--')  # 670, 640; 722, 614; 625, 640
-        plt.plot(z_ax, data[:, 640-inds_to_try[i][1], inds_to_try[i][0]], 'k--')  # 670, 640; 722, 614; 625, 640
-        plt.plot(z_ax, convolved_cube[:, inds_to_try[i][0], inds_to_try[i][1]],
+        # 293, 271
+        # plt.plot(z_ax, data[:, 640-inds_to_try[i][1], inds_to_try[i][0]], 'k--')  # 670, 640; 722, 614; 625, 640
+        plt.plot(z_ax, data[:, 293, 271], 'k--')  # 670, 640; 722, 614; 625, 640
+        # plt.plot(z_ax, convolved_cube[:, inds_to_try[i][0], inds_to_try[i][1]],
+        plt.plot(z_ax, convolved_cube[:, 293, 271],
                  colors[i] + '-')  # 670, 640; 722, 614; 625, 640
         plt.axvline(x=v_sys, color='k')
         plt.show()
@@ -885,6 +926,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
         plt.axvline(x=v_sys, color='k')
         plt.show()
         # print(oops)
+    # '''  #
 
     # ROTATE convolved_cube TO MATCH ORIGINAL DATA CUBE
     # convolved_cube = np.swapaxes(convolved_cube, 1, 2)  # still not right...
@@ -892,6 +934,93 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     # print(np.swapaxes(convolved_cube, 1, 2).shape)
 
     # '''  #
+    # TRY THINGS AGAIN
+    hdu = fits.open(data_cube)
+    data_vs = hdu[0].data[0]  # header = hdu[0].header
+    print(data_vs.shape)  # (75, 640, 640)
+    # for xo, yo in [[6., 0.], [8., 0.], [4., 0.], [6., -2.], [8., -2.], [4., -2.], [6., 2.], [8., 2.], [4., 2.]]:
+    # , [3., 20.], [5., 20.], [7, 20.], [3., 17.], [5., 17.], [7., 17.], [3., 15.], [5., 15.], [7., 15.]
+    for xo, yo in [[0., 0.]]:
+        vels = []
+        acceptable_pixels = []
+        inds = np.zeros(shape=(len(data_vs[0]), len(data_vs[0][0])))  # array of indices, corresponding to x,y data
+        # TEST each x,y point: is it within ellipse?
+        tests = []
+        mask1 = np.zeros(shape=(len(data_vs[0]), len(data_vs[0][0])))  # array of indices, corresponding to x,y data
+        for i in range(len(data_vs[0][0])):  # 640 (x axis)
+            for j in range(len(data_vs[0])):  # 640 (y axis)
+                res = 0.01  # arcsec/pix  # should be 0.1, use 0.01 while finding things
+                maj = 4.3 / res  # ellipse major axis
+                mi = 0.7 / res  # ellipse minor axis
+                theta_rot = theta + np.pi/4.
+                test_pt = ((np.cos(theta_rot) * (i - (320 + xo)) + np.sin(theta_rot) * (j - (320 + yo))) / maj) ** 2 \
+                          + ((np.sin(theta_rot) * (i - (320 + xo)) - np.cos(theta_rot) * (j - (320 + yo))) / mi) ** 2
+                tests.append(test_pt)
+                mask1[i, j] = test_pt
+                if test_pt <= 1:  # if point within ellipse
+                    inds[i, j] = True  # int(1)  # set index = True
+                    acceptable_pixels.append([i, j])  # list of acceptable pixels (not using anymore)
+                else:  # if point NOT within ellipse
+                    inds[i, j] = False  # int(0)  # set index = False
+        # inds = inds.astype(int)
+        # print(inds)
+
+        import numpy.ma as ma
+        data_vs2 = []
+        conv2 = []
+        for k in range(len(data_vs)):
+            data_vs2.append(ma.masked_where(mask1 > 1., data_vs[k]))
+            conv2.append(ma.masked_where(mask1 > 1., convolved_cube[k]))
+        data_vs2 = np.asarray(data_vs2)
+        conv2 = np.asarray(conv2)
+        # data_vs2 = ma.masked_where(mask > 1., data_vs[30])
+        print(np.asarray(data_vs2).shape)
+        # print(tests)
+        c = 0
+        for t in tests:
+            if t < 1:
+                c += 1
+        print(inds)
+        # print(data_vs[0][inds].shape)
+        print(inds.shape)
+
+        inds_to_try2 = np.asarray([[315, 337], [337, 325], [340, 340], [350, 325], [350, 350],
+                                   [325, 350], [320, 360], [315, 315], [337, 315], [270, 411],
+                                   [339, 329], [10, 450]])  # [411, 370]->[270,411]; [329, 301], [346, 405]
+        # systemic with red and blue bumps, very red (no data/slight systemic), very slight red, quite red, very slight red,
+        # systemic, blue/systemic, red/systemic, slight red, slight blue!, quite red again wtf
+        # NOT DUE TO CONVOLUTION! NOT DUE TO INTRINSIC_CUBE STEP EITHER!
+        colors2 = ['r', 'm', 'k', 'g', 'b', 'r', 'm', 'k', 'g', 'b', 'r', 'm']
+        for i in range(len(inds_to_try2)):
+            print(i)
+            print(inds_to_try2[i][0], inds_to_try2[i][1])
+            # plt.plot(z_ax, data[:, inds_to_try[i][0], inds_to_try[i][1]], 'k--')  # 670, 640; 722, 614; 625, 640
+            plt.plot(z_ax, data_vs2[:, inds_to_try2[i][0], inds_to_try2[i][1]], 'k--')  # 670, 640; 722, 614; 625, 640
+            plt.plot(z_ax, conv2[:, inds_to_try2[i][0], inds_to_try2[i][1]], colors2[i] + '-')
+            plt.axvline(x=v_sys, color='k')
+            plt.title('no x,y offset')
+            plt.show()
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.set_title('data ' + str(xo) + ', ' + str(yo))
+        plt.imshow(data_vs2[20])  # (data_vs[45])  # (data_vs[30])
+        plt.gca().invert_yaxis()
+        ax.set_aspect('equal')
+        plt.colorbar(orientation='vertical')
+        plt.show()
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.set_title('conv ' + str(xo) + ', ' + str(yo))
+        plt.imshow(conv2[20])  # (data_vs[45])  # (data_vs[30])
+        plt.gca().invert_yaxis()
+        ax.set_aspect('equal')
+        plt.colorbar(orientation='vertical')
+        plt.show()
+    # END TRY THINGS AGAIN
+    # '''  #
+
     # WRITE OUT RESULTS TO FITS FILE
     if out_name is not None:
         hdu = fits.PrimaryHDU(convolved_cube)
@@ -1000,7 +1129,7 @@ if __name__ == "__main__":
     '''
     cube = '/Users/jonathancohn/Documents/dyn_mod/NGC1332_01_calibrated_source_coline.pbcor.fits'
     lucy = '/Users/jonathancohn/Documents/dyn_mod/newdata01_beam77_lucy_n15.fits'
-    out = '1332_newdata01_apconv_rot90-12_n15_gsize35_stateofthingsafterchanges.fits'
+    out = '1332_newdata01_apconv_rot90-12_n15_gsize35_tryagain.fits'
 
     # BLACK HOLE MASS (M_sol), RESOLUTION (ARCSEC), VELOCITY SPACING (KM/S)
     mbh = 6.86 * 10 ** 8  # , 20.1 (v_spacing no longer necessary)
@@ -1008,7 +1137,7 @@ if __name__ == "__main__":
 
     # X, Y OFFSETS (PIXELS)
     # NEW DATA 01: CALL IT: 326, 316 (observed pixel coords) (out of 640, 640) --> x_off = +7, y_off = -4
-    x_off, y_off = 5., 17.  # +6., -4.  # 631. - 1280./2., 1280/2. - 651  # pixels  0., 0.
+    x_off, y_off = 0., 0.  # 5., 17.  # +6., -4.  # 631. - 1280./2., 1280/2. - 651  # pixels  0., 0.
 
     # VELOCITY DISPERSION PARAMETERS
     sig0 = 32.1  # 22.2  # km/s
