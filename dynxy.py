@@ -9,6 +9,8 @@ from scipy.ndimage import filters, interpolation
 import time
 from astropy import convolution
 from plotbin import display_pixels as dp
+from regions import read_crtf, CRTFParser, DS9Parser, read_ds9, PolygonPixelRegion, PixCoord
+
 
 
 # constants
@@ -159,7 +161,7 @@ def pvd(data_cube, theta, z_ax, x_arcsec, R, v_sys):  # BUCKET UNCONFIRMED
     return data_masked, pvd_fill
 
 
-def get_fluxes(data_cube, int_slice1=14, int_slice2=63, write_name=None):  # CONFIRMED
+def get_fluxes(data_cube, int_slice1=14, int_slice2=63, x_off=0., y_off=0., resolution=0., write_name=None):  # CONFIRMED
     """
     Use to integrate line profiles to get fluxes from data cube!
 
@@ -168,7 +170,8 @@ def get_fluxes(data_cube, int_slice1=14, int_slice2=63, write_name=None):  # CON
 
     :return: collapsed data cube (i.e. integrated line profiles i.e. area under curve i.e. flux), z_length (len(z_ax))
     """
-    hdu = fits.open(data_cube)
+    # hdu = fits.open(data_cube)
+    hdu = fits.open('/Users/jonathancohn/Documents/dyn_mod/NGC_1332_newfiles/NGC1332_CO21_C3_MS_bri_20kms.pbcor.fits')
     # print(hdu[0].header)  # header
     # CTYPE1: RA (x_obs)
     # CRVAL1 = 5.157217100000Ee+1 [RA of reference pix]
@@ -192,15 +195,20 @@ def get_fluxes(data_cube, int_slice1=14, int_slice2=63, write_name=None):  # CON
     # plt.show()
     # print(oops)
 
+    hdu_m = fits.open('/Users/jonathancohn/Documents/dyn_mod/NGC_1332_newfiles/NGC1332_CO21_C3_MS_bri_20kms_strictmask.mask.fits')
+    mask = hdu_m[0].data[0]
+
     # data1 = data[:, ::-1, :]
     # print(data1[60][-250-1][200], 'flipped')
     # print(data[60][250][200], 'orig')
 
     # REBIN IN GROUPS OF 4x4 PIXELS
     rebinned = []  # np.zeros(shape=(len(z_ax), len(fluxes), len(fluxes[0])))
+    rebinned_m = []
     t_rebin = time.time()
     for z in range(len(hdu[0].data[0])):
         subarrays = blockshaped(data[z, :, :], 4, 4)  # bin the data in groups of 4x4 pixels
+        subarrays_m = blockshaped(mask[z, :, :], 4, 4)
         # data[z, ::-1, :] flips the y-axis, which is stored in python in the reverse order (problem.png)
 
         # Take the mean along the first axis of each subarray in subarrays, then take the mean along the
@@ -208,26 +216,151 @@ def get_fluxes(data_cube, int_slice1=14, int_slice2=63, write_name=None):  # CON
         # into the correct lengths
         reshaped = np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data[0])/4.),
                                                                           int(len(data[0][0])/4.)))
+        reshaped_m = np.mean(np.mean(subarrays_m, axis=-1), axis=-1).reshape((int(len(mask[0])/4.),
+                                                                              int(len(mask[0][0])/4.)))
         rebinned.append(reshaped)
+        rebinned_m.append(reshaped_m)
     print("Rebinning the cube done in {0} s".format(time.time() - t_rebin))  # 0.5 s
     data = np.asarray(rebinned)
+    mask = np.asarray(rebinned_m)
     # print(data.shape)
     # plt.imshow(data[20, :, :])
     # plt.show()
     # LOOKS GOOD!
 
+    combined = []
+    for zi in range(len(data)):
+        combined.append(data[zi] * mask[zi])
+    combined = np.asarray(combined)
+    # plt.imshow(combined[35], origin='lower')
+    # plt.show()
+    # LOOKS GOOD!
+
+
+    '''
+    ### BUCKET ADDING IN R
+    constants = Constants()
+
+    y_obs = [0.] * len(data[0])
+    x_obs = [0.] * len(data[0][0])
+
+    # set center of the observed axes (find the central pixel number along each axis)
+    if len(x_obs) % 2. == 0:  # if even
+        x_ctr = (len(x_obs)) / 2.  # set the center of the axes (in pixel number)
+        for i in range(len(x_obs)):
+            x_obs[i] = resolution * (i - x_ctr)  # (arcsec/pix) * N_pixels = arcsec
+    else:  # elif odd
+        x_ctr = (len(x_obs) + 1.) / 2.  # +1 bc python starts counting at 0
+        for i in range(len(x_obs)):
+            x_obs[i] = resolution * ((i + 1) - x_ctr)  # (arcsec/pix) * N_pixels = arcsec
+    # repeat for y-axis
+    if len(y_obs) % 2. == 0:
+        y_ctr = (len(y_obs)) / 2.
+        for i in range(len(y_obs)):
+            y_obs[i] = resolution * (i - y_ctr)
+            # y_obs[i] = resolution * (y_ctr - i)
+    else:
+        y_ctr = (len(y_obs) + 1.) / 2.
+        for i in range(len(y_obs)):
+            y_obs[i] = resolution * ((i + 1) - y_ctr)
+            # y_obs[i] = resolution * (y_ctr - (i + 1))
+
+    # SET BH POSITION [in arcsec], based on the input offset values
+    # DON'T divide offset positions by s, unless offset positions are in subpixels instead of pixels
+    x_bhctr = x_off * resolution
+    y_bhctr = y_off * resolution
+
+    # CONVERT FROM ARCSEC TO PHYSICAL UNITS (pc)
+    # tan(angle) = x/d where d=dist and x=disk_radius --> x = d*tan(angle), where angle = arcsec / arcsec_per_rad
+    # convert BH position from arcsec to pc
+    x_bhctr = dist * 10 ** 6 * np.tan(x_bhctr / constants.arcsec_per_rad)
+    y_bhctr = dist * 10 ** 6 * np.tan(y_bhctr / constants.arcsec_per_rad)
+    print('BH is at [pc]: ', x_bhctr, y_bhctr)
+
+    # convert all x,y observed grid positions to pc
+    x_obs = np.asarray([dist * 10 ** 6 * np.tan(x / constants.arcsec_per_rad) for x in x_obs])  # 206265 arcsec/rad
+    y_obs = np.asarray([dist * 10 ** 6 * np.tan(y / constants.arcsec_per_rad) for y in y_obs])  # 206265 arcsec/rad
+    # print((x_obs[1] - x_obs[0])*s)  # 7.56793447282
+    # print(x_obs[0], x_obs[s])  # (-1134.5595077622734, -1126.9915732895627)
+
+    # at each x,y spot in grid, calculate what x_disk and y_disk are, then calculate R, v, etc.
+    # CONVERT FROM x_obs, y_obs TO x_disk, y_disk (still in pc)
+    x_disk = (x_obs[None, :] - x_bhctr) * np.cos(theta) + (y_obs[:, None] - y_bhctr) * np.sin(theta)  # 2d array
+    y_disk = (y_obs[:, None] - y_bhctr) * np.cos(theta) - (x_obs[None, :] - x_bhctr) * np.sin(theta)  # 2d array
+    print('x, y disk', x_disk.shape, y_disk.shape)
+
+    # CALCULATE THE RADIUS (R) OF EACH POINT (x_disk, y_disk) IN THE DISK (pc)
+    R = np.sqrt((y_disk ** 2 / np.cos(inc) ** 2) + x_disk ** 2)  # radius R of each point in the disk (2d array)
+
+    for i in range(len(data)):
+        data[i, R > 50] = 0.
+    ### BUCKET END ADDING IN R
+    '''
+
     collapsed_fluxes = integrate.simps(data[int_slice1:int_slice2], axis=0)  # according to my python terminal tests
     # CORRECT ORIENTATION FOR PYTHON
     # NOTE: SLICES ALONE NOT GOOD ENOUGH!
-    # Open CASA window, then:
+    # Open CASA window (in terminal, type): /Applications/CASA.app/Contents/MacOS/casapy
+    # THEN type:
     # viewer('/Users/jonathancohn/Documents/dyn_mod/NGC1332_01_casacopy.fits')
+    # VIEWER/VISUALIZATION INFO:
+    # https://casa.nrao.edu/casadocs/casa-5.1.1/image-cube-visualization/viewing-images-and-cubes
+    # https://casa.nrao.edu/docs/UserMan/casa_cookbook008.html
+    # IMPORT FITS INFO:
+    # https://casa.nrao.edu/Release3.3.0/docs/UserMan/UserMansu302.html
+    # REGIONS INFO:
+    # https://casa.nrao.edu/Release4.1.0/doc/UserMan/UserMansu347.html
+    # https://casa.nrao.edu/docs/UserMan/casa_cookbook008.html (cmd+f "Regions and the Region Manager")
+    # https://casa.nrao.edu/casadocs/casa-5.1.0/image-cube-visualization/regions-in-the-viewer
+    # READING REGIONS FILES INTO PYTHON:
+    # https://media.readthedocs.org/pdf/astropy-regions/latest/astropy-regions.pdf (Chapter 9, pg 39)
+    regions = read_ds9('/Users/jonathancohn/Documents/dyn_mod/regions/NGC1332_01_casacopy_slice14_take2.reg')
+    print(regions)
+    regions = regions[0]
+    print(regions)
+    artist = regions.as_artist()
+    axes = plt.gca()
+    axes.set_aspect('equal')
+    axes.add_artist(artist)
+    plt.show()
+    print(oops)
 
+    '''  #
+    # #CRTFv0 CASA Region Text Format version 0
+    # poly [[51.57178622deg, -21.33521372deg], [51.57172392deg, -21.33516360deg], [51.57170693deg, -21.33517679deg], [51.57177206deg, -21.33523086deg]] coord=ICRS, corr=[I], linewidth=1, linestyle=-, symsize=1, symthick=1, color=magenta, font=Helvetica, fontsize=11, fontstyle=normal, usetex=false
 
+    # TO READ IN: cut all extra words, kill space after poly,
+
+    # BUCKET HAVING ISSUES READING IN CRTF FILE
+    with open('/Users/jonathancohn/Documents/dyn_mod/regions/NGC1332_01_casacopy_slice14_take2.crtf', 'r') as crtf_file:
+        for line in crtf_file:
+            if line.startswith('#'):
+                pass
+            else:
+                reg = CRTFParser(line)  # still get error: "Not a valid CRTF line: '{0}'.".format(line))"
+    print(reg)
+    # reg_string = 'circle[[42deg, 43deg], 3deg], coord=J2000, color=green '
+    # print(CRTFParser(reg_string))
+    # print(oops)
+    reg = read_crtf('/Users/jonathancohn/Documents/dyn_mod/regions/NGC1332_01_casacopy_slice14_take2.crtf')
+    artist = reg.as_artist()
+    axes = plt.gca()
+    axes.set_aspect('equal')
+    axes.add_artist(artist)
+    plt.show()
+    # '''  #
+
+    '''
+    # BUCKET: checking adding in R
     # collapsed_fluxes = integrate.simps(data, axis=0)
-    print(collapsed_fluxes.shape)
-    # plt.imshow(collapsed_fluxes)
-    # plt.plot(len(collapsed_fluxes)/2., len(collapsed_fluxes[0])/2., 'w*')  # this is centered yay!
-    # plt.show()
+    if R is not None:
+        print(collapsed_fluxes.shape)
+        plt.imshow(collapsed_fluxes, origin='lower')
+        # plt.plot(len(collapsed_fluxes)/2., len(collapsed_fluxes[0])/2., 'w*')  # this is centered yay!
+        plt.colorbar()
+        plt.show()
+        # print(oops)
+    '''
 
     z_len = len(hdu[0].data[0])  # store the number of velocity slices in the data cube
     freq1 = float(hdu[0].header['CRVAL3'])
@@ -288,7 +421,8 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
 
     # COLLAPSE THE DATA CUBE
     # fluxes, freq_ax, data_rebinned = get_fluxes(data_cube, write_name='NGC1332_newdata_c1463_collapsed_xy.fits')
-    fluxes, freq_ax, data_rebinned = get_fluxes(data_cube)  # rebins data in 4x4 pixels
+    fluxes, freq_ax, data_rebinned = get_fluxes(data_cube, x_off=x_off, y_off=y_off, resolution=resolution)
+    # ^rebins data in 4x4 pixels
 
     # DECONVOLVE FLUXES WITH BEAM PSF
     # source activate iraf27; in /Users/jonathancohn/iraf/, type xgterm; in xgterm, load stsdas, analysis, restore
@@ -324,7 +458,6 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     print('deconvolution took {0} s'.format(time.time() - t0))  # ~0.3 s (7.5s for 1280x1280 array)
     # plt.imshow(subpix_deconvolved, origin='lower')  # looks good!
     # plt.show()
-
 
     # GAUSSIAN STEP
     # get gaussian velocity profile for each subpixel, apply weights to gaussians (weights = subpix_deconvolved output)
@@ -719,7 +852,20 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     print(sigma)
     obs3d = []  # data cube, v_obs but with a wavelength axis, too!
     weight = subpix_deconvolved
-    weight[R>100] = 0.
+    # BUCKET TRYING ELLIPSE HERE
+    major_ax = 50  # pc (see paragraph 3 of S4.2 of Barth+2016 letter)
+    minor_ax = 50*np.cos(inc)  # pc (see paragraph 3 of S4.2 of Barth+2016 letter)
+    theta_rot = theta + np.pi/4
+    for x in range(len(x_obs)):
+        print(x)
+        for y in range(len(y_obs)):
+            test_pt = ((np.cos(theta_rot)*x_obs[x] + np.sin(theta_rot)*y_obs[y])/major_ax)**2\
+                + ((np.sin(theta_rot)*x_obs[x] - np.cos(theta_rot)*y_obs[y])/minor_ax)**2
+            if test_pt >= 1:  # IF POINT IS OUTSIDE ELLIPSE, IGNORE THIS REGION
+                weight[x, y] = 0.
+            # NOTE: MAYBE BETTER, BUT REALLY HARD TO SAY
+    # END BUCKET
+    # weight[R>100] = 0.
     # weight[weight < 1.5e-3] = 0.  # trying something! Right idea but too fluctuate-y still
     plt.imshow(weight, origin='lower')
     plt.show()
@@ -736,7 +882,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     obs3d = np.asarray(obs3d)  # has shape 61, 600, 600, which is good
     print('obs3d took {0} s'.format(time.time() - tz1))  # ~3.7 s; 14s for s=2 1280x1280
     print(obs3d.shape)
-    for ind in [20, 24, 27, 30, 36, 40]:  # BUCKET SUPER GROSS BAD OKAY DEFINITELY NEED TO RE-DO WEIGHT MAP
+    for ind in [20, 27, 30, 36, 37, 40]:  # BUCKET SUPER GROSS BAD OKAY DEFINITELY NEED TO RE-DO WEIGHT MAP
         plt.imshow(obs3d[ind], origin='lower')
         plt.show()
     print(oops)
@@ -995,7 +1141,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
 
     # ROTATE convolved_cube TO MATCH ORIGINAL DATA CUBE
     # convolved_cube = np.swapaxes(convolved_cube, 1, 2)  # still not right...
-    convolved_cube = np.rot90(convolved_cube, axes=(1, 2))
+    # convolved_cube = np.rot90(convolved_cube, axes=(1, 2))
     # print(np.swapaxes(convolved_cube, 1, 2).shape)
 
     # '''  #
@@ -1018,7 +1164,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
                 res = 0.04  # arcsec/pix  # inherently 0.01; using 0.04 because binned the data
                 maj = 4.3 / res  # ellipse major axis
                 mi = 0.7 / res  # ellipse minor axis
-                theta_rot = theta + np.pi/4.
+                theta_rot = theta  # + np.pi/4.
                 test_pt = ((np.cos(theta_rot) * (i - (len(data_vs[0][0])/2. + xo)) + np.sin(theta_rot) *
                             (j - (len(data_vs[0])/2. + yo))) / maj) ** 2 \
                     + ((np.sin(theta_rot) * (i - (len(data_vs[0][0])/2. + xo)) - np.cos(theta_rot) *
@@ -1202,7 +1348,7 @@ if __name__ == "__main__":
     # lucy = '/Users/jonathancohn/Documents/dyn_mod/newdata01_binnedandclipped_beam77_lucy_n15.fits'
     lucy = '/Users/jonathancohn/Documents/dyn_mod/newdata01_binnedandclipped_beam77_lucy_n15_xy.fits'
     # newdata01_beam77_lucy_n15.fits'
-    out = '1332_newdata01_apconv_rot90-12_n15_gsize35_4x4bin.fits'
+    out = '1332_newdata01_apconv_n15_gsize35_4x4bin_xy_50pccollapse.fits'
 
     # BLACK HOLE MASS (M_sol), RESOLUTION (ARCSEC), VELOCITY SPACING (KM/S)
     mbh = 6.64 * 10 ** 8  # 6.86 * 10 ** 8  # , 20.1 (v_spacing no longer necessary)
