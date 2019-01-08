@@ -297,9 +297,13 @@ def get_fluxes(data_cube, int_slice1=14, int_slice2=63, x_off=0., y_off=0., reso
     ### BUCKET END ADDING IN R
     '''
 
-    collapsed_fluxes = integrate.simps(data[int_slice1:int_slice2], axis=0)  # according to my python terminal tests
+    # collapsed_fluxes = integrate.simps(data[int_slice1:int_slice2], axis=0)  # according to my python terminal tests
+    collapsed_fluxes = integrate.simps(combined, axis=0)
+    plt.imshow(collapsed_fluxes, origin='lower')
+    plt.show()
     # CORRECT ORIENTATION FOR PYTHON
     # NOTE: SLICES ALONE NOT GOOD ENOUGH!
+    '''  #
     # Open CASA window (in terminal, type): /Applications/CASA.app/Contents/MacOS/casapy
     # THEN type:
     # viewer('/Users/jonathancohn/Documents/dyn_mod/NGC1332_01_casacopy.fits')
@@ -324,6 +328,7 @@ def get_fluxes(data_cube, int_slice1=14, int_slice2=63, x_off=0., y_off=0., reso
     axes.add_artist(artist)
     plt.show()
     print(oops)
+    # '''  #
 
     '''  #
     # #CRTFv0 CASA Region Text Format version 0
