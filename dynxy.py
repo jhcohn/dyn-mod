@@ -39,11 +39,12 @@ def check_beam(beam_name):  # BUCKET UNCONFIRMED (may need to flip y like I did 
     plt.show()
 
 
-def make_beam(grid_size=100, amp=1., x0=0., y0=0., x_std=1., y_std=1., rot=0., fits_name=None):  # BUCKET UNCONFIRMED
+def make_beam(grid_size=99, res=1., amp=1., x0=0., y0=0., x_std=1., y_std=1., rot=0., fits_name=None):  # BUCKET UNCONFIRMED
     """
     Use to generate a beam psf (and to create a beam fits file to use in lucy
 
-    :param grid_size: size
+    :param grid_size: size of grid (must be odd!)
+    :param res: resolution of the grid (arcsec/pixel)
     :param amp: amplitude of the 2d gaussian
     :param x0: mean of x axis of 2d gaussian
     :param y0: mean of y axis of 2d gaussian
@@ -55,9 +56,21 @@ def make_beam(grid_size=100, amp=1., x0=0., y0=0., x_std=1., y_std=1., rot=0., f
     return the synthesized beam
     """
 
+    # BUCKET!!!!! SET RESOLUTION OF BEAM GRID THE SAME AS FLUXES GRID
+    x_beam = [0.] * grid_size
+    y_beam = [0.] * grid_size
+
+    # set center of the beam grid axes (find the central pixel number along each axis: same for x_beam and y_beam)
+    ctr = (len(x_beam) + 1.) / 2.  # +1 bc python starts counting at 0, grid_size is odd
+
+    # grid_size must be odd, so fill in the axes with resolution * ((i+1) - ctr)!
+    for i in range(len(x_beam)):
+        x_beam[i] = resolution * ((i + 1) - ctr)  # (arcsec/pix) * N_pixels = arcsec
+        y_beam[i] = resolution * ((i + 1) - ctr)  # (arcsec/pix) * N_pixels = arcsec
+
     # SET UP MESHGRID
-    x_beam = np.linspace(-1., 1., grid_size)
-    y_beam = np.linspace(-1., 1., grid_size)
+    # x_beam = np.linspace(-1., 1., grid_size)
+    # y_beam = np.linspace(-1., 1., grid_size)
     xx, yy = np.meshgrid(x_beam, y_beam)
 
     # SET UP PSF 2D GAUSSIAN VARIABLES
@@ -236,147 +249,36 @@ def get_fluxes(data_cube, int_slice1=14, int_slice2=63, x_off=0., y_off=0., reso
     # plt.show()
     # LOOKS GOOD!
 
-
-    '''
-    ### BUCKET ADDING IN R
-    constants = Constants()
-
-    y_obs = [0.] * len(data[0])
-    x_obs = [0.] * len(data[0][0])
-
-    # set center of the observed axes (find the central pixel number along each axis)
-    if len(x_obs) % 2. == 0:  # if even
-        x_ctr = (len(x_obs)) / 2.  # set the center of the axes (in pixel number)
-        for i in range(len(x_obs)):
-            x_obs[i] = resolution * (i - x_ctr)  # (arcsec/pix) * N_pixels = arcsec
-    else:  # elif odd
-        x_ctr = (len(x_obs) + 1.) / 2.  # +1 bc python starts counting at 0
-        for i in range(len(x_obs)):
-            x_obs[i] = resolution * ((i + 1) - x_ctr)  # (arcsec/pix) * N_pixels = arcsec
-    # repeat for y-axis
-    if len(y_obs) % 2. == 0:
-        y_ctr = (len(y_obs)) / 2.
-        for i in range(len(y_obs)):
-            y_obs[i] = resolution * (i - y_ctr)
-            # y_obs[i] = resolution * (y_ctr - i)
-    else:
-        y_ctr = (len(y_obs) + 1.) / 2.
-        for i in range(len(y_obs)):
-            y_obs[i] = resolution * ((i + 1) - y_ctr)
-            # y_obs[i] = resolution * (y_ctr - (i + 1))
-
-    # SET BH POSITION [in arcsec], based on the input offset values
-    # DON'T divide offset positions by s, unless offset positions are in subpixels instead of pixels
-    x_bhctr = x_off * resolution
-    y_bhctr = y_off * resolution
-
-    # CONVERT FROM ARCSEC TO PHYSICAL UNITS (pc)
-    # tan(angle) = x/d where d=dist and x=disk_radius --> x = d*tan(angle), where angle = arcsec / arcsec_per_rad
-    # convert BH position from arcsec to pc
-    x_bhctr = dist * 10 ** 6 * np.tan(x_bhctr / constants.arcsec_per_rad)
-    y_bhctr = dist * 10 ** 6 * np.tan(y_bhctr / constants.arcsec_per_rad)
-    print('BH is at [pc]: ', x_bhctr, y_bhctr)
-
-    # convert all x,y observed grid positions to pc
-    x_obs = np.asarray([dist * 10 ** 6 * np.tan(x / constants.arcsec_per_rad) for x in x_obs])  # 206265 arcsec/rad
-    y_obs = np.asarray([dist * 10 ** 6 * np.tan(y / constants.arcsec_per_rad) for y in y_obs])  # 206265 arcsec/rad
-    # print((x_obs[1] - x_obs[0])*s)  # 7.56793447282
-    # print(x_obs[0], x_obs[s])  # (-1134.5595077622734, -1126.9915732895627)
-
-    # at each x,y spot in grid, calculate what x_disk and y_disk are, then calculate R, v, etc.
-    # CONVERT FROM x_obs, y_obs TO x_disk, y_disk (still in pc)
-    x_disk = (x_obs[None, :] - x_bhctr) * np.cos(theta) + (y_obs[:, None] - y_bhctr) * np.sin(theta)  # 2d array
-    y_disk = (y_obs[:, None] - y_bhctr) * np.cos(theta) - (x_obs[None, :] - x_bhctr) * np.sin(theta)  # 2d array
-    print('x, y disk', x_disk.shape, y_disk.shape)
-
-    # CALCULATE THE RADIUS (R) OF EACH POINT (x_disk, y_disk) IN THE DISK (pc)
-    R = np.sqrt((y_disk ** 2 / np.cos(inc) ** 2) + x_disk ** 2)  # radius R of each point in the disk (2d array)
-
-    for i in range(len(data)):
-        data[i, R > 50] = 0.
-    ### BUCKET END ADDING IN R
-    '''
-
     # collapsed_fluxes = integrate.simps(data[int_slice1:int_slice2], axis=0)  # according to my python terminal tests
     collapsed_fluxes = integrate.simps(combined, axis=0)
-    plt.imshow(collapsed_fluxes, origin='lower')
-    plt.show()
-    # CORRECT ORIENTATION FOR PYTHON
-    # NOTE: SLICES ALONE NOT GOOD ENOUGH!
-    '''  #
-    # Open CASA window (in terminal, type): /Applications/CASA.app/Contents/MacOS/casapy
-    # THEN type:
-    # viewer('/Users/jonathancohn/Documents/dyn_mod/NGC1332_01_casacopy.fits')
-    # VIEWER/VISUALIZATION INFO:
-    # https://casa.nrao.edu/casadocs/casa-5.1.1/image-cube-visualization/viewing-images-and-cubes
-    # https://casa.nrao.edu/docs/UserMan/casa_cookbook008.html
-    # IMPORT FITS INFO:
-    # https://casa.nrao.edu/Release3.3.0/docs/UserMan/UserMansu302.html
-    # REGIONS INFO:
-    # https://casa.nrao.edu/Release4.1.0/doc/UserMan/UserMansu347.html
-    # https://casa.nrao.edu/docs/UserMan/casa_cookbook008.html (cmd+f "Regions and the Region Manager")
-    # https://casa.nrao.edu/casadocs/casa-5.1.0/image-cube-visualization/regions-in-the-viewer
-    # READING REGIONS FILES INTO PYTHON:
-    # https://media.readthedocs.org/pdf/astropy-regions/latest/astropy-regions.pdf (Chapter 9, pg 39)
-    regions = read_ds9('/Users/jonathancohn/Documents/dyn_mod/regions/NGC1332_01_casacopy_slice14_take2.reg')
-    print(regions)
-    regions = regions[0]
-    print(regions)
-    artist = regions.as_artist()
-    axes = plt.gca()
-    axes.set_aspect('equal')
-    axes.add_artist(artist)
-    plt.show()
-    print(oops)
-    # '''  #
-
-    '''  #
-    # #CRTFv0 CASA Region Text Format version 0
-    # poly [[51.57178622deg, -21.33521372deg], [51.57172392deg, -21.33516360deg], [51.57170693deg, -21.33517679deg], [51.57177206deg, -21.33523086deg]] coord=ICRS, corr=[I], linewidth=1, linestyle=-, symsize=1, symthick=1, color=magenta, font=Helvetica, fontsize=11, fontstyle=normal, usetex=false
-
-    # TO READ IN: cut all extra words, kill space after poly,
-
-    # BUCKET HAVING ISSUES READING IN CRTF FILE
-    with open('/Users/jonathancohn/Documents/dyn_mod/regions/NGC1332_01_casacopy_slice14_take2.crtf', 'r') as crtf_file:
-        for line in crtf_file:
-            if line.startswith('#'):
-                pass
-            else:
-                reg = CRTFParser(line)  # still get error: "Not a valid CRTF line: '{0}'.".format(line))"
-    print(reg)
-    # reg_string = 'circle[[42deg, 43deg], 3deg], coord=J2000, color=green '
-    # print(CRTFParser(reg_string))
-    # print(oops)
-    reg = read_crtf('/Users/jonathancohn/Documents/dyn_mod/regions/NGC1332_01_casacopy_slice14_take2.crtf')
-    artist = reg.as_artist()
-    axes = plt.gca()
-    axes.set_aspect('equal')
-    axes.add_artist(artist)
-    plt.show()
-    # '''  #
-
-    '''
-    # BUCKET: checking adding in R
-    # collapsed_fluxes = integrate.simps(data, axis=0)
-    if R is not None:
-        print(collapsed_fluxes.shape)
-        plt.imshow(collapsed_fluxes, origin='lower')
-        # plt.plot(len(collapsed_fluxes)/2., len(collapsed_fluxes[0])/2., 'w*')  # this is centered yay!
-        plt.colorbar()
-        plt.show()
-        # print(oops)
-    '''
+    # plt.imshow(collapsed_fluxes, origin='lower')
+    # plt.show()
+    # CORRECT ORIENTATION!
 
     z_len = len(hdu[0].data[0])  # store the number of velocity slices in the data cube
     freq1 = float(hdu[0].header['CRVAL3'])
     f_step = float(hdu[0].header['CDELT3'])
     freq_axis = np.arange(freq1, freq1 + (z_len * f_step), f_step)  # [bluest, less blue, ..., reddest]
-    print(freq1)
+    # NOTE: something is forcing the inclusion of the endpoint, which arange normally doesn't include
+    # However, when cutting the endpoint one f_step sooner, arange doesn't include the endpoint...
+    # So, I'm including the extra point above, then cutting it off, so that it gives the right array
+    freq_axis = freq_axis[:-1]
+    # print(freq1)
     hdu.close()
+    print(freq_axis[0], freq_axis[-1], len(freq_axis))
 
     if write_name is not None:
+        '''  #
+        print(np.amin(collapsed_fluxes))
+        for xi in range(len(collapsed_fluxes)):
+            for yi in range(len(collapsed_fluxes[0])):
+                if collapsed_fluxes[xi, yi] <= 0.:
+                    collapsed_fluxes[xi, yi] = 1e-10
+        # '''  #
+        print(np.median(collapsed_fluxes))  # = 0.0
+        collapsed_fluxes *= 1000.
+        print(np.amin(collapsed_fluxes), 'hi')
         hdu = fits.PrimaryHDU(collapsed_fluxes)
-        # [::-1,:])  # HAVE TO FLIP THE ORIENTATION FOR FITS BC I HATE EVERYTHING, EXCEPT MAYBE NOT?
         hdul = fits.HDUList([hdu])
         hdul.writeto(write_name)
 
@@ -395,7 +297,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     """
     Build grid for dynamical modeling!
 
-    :param resolution: resolution of observations [arcsec]
+    :param resolution: resolution of observations [arcsec/pixel]
     :param s: oversampling factor
     :param x_off: the location of the BH, offset from the center in the +x direction [pixels] (taken directly from data)
     :param y_off: the location of the BH, offset from the center in the +y direction [pixels] (taken directly from data)
@@ -425,15 +327,20 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     constants = Constants()
 
     # COLLAPSE THE DATA CUBE
-    # fluxes, freq_ax, data_rebinned = get_fluxes(data_cube, write_name='NGC1332_newdata_c1463_collapsed_xy.fits')
+    # fluxes, freq_ax, data_rebinned = get_fluxes(data_cube, write_name='NGC1332_newfiles_masked_collapsed_xy_no0_1000.fits')
     fluxes, freq_ax, data_rebinned = get_fluxes(data_cube, x_off=x_off, y_off=y_off, resolution=resolution)
     # ^rebins data in 4x4 pixels
 
+    # plt.imshow(fluxes, origin='lower')
+    # plt.colorbar()
+    # plt.show()
+
     # DECONVOLVE FLUXES WITH BEAM PSF
-    # source activate iraf27; in /Users/jonathancohn/iraf/, type xgterm; in xgterm, load stsdas, analysis, restore
-    # then: lucy input_image.fits psf.fits output_image.fits niter=15 [defaults for both adu and noise, play with niter]
-    # currently done in iraf outside python. Output: lucy_output='lucy_out_n5.fits', for niter=5
+    # source activate iraf27; in /Users/jonathancohn/iraf/, type xgterm; in xgterm, type cl, then type stsdas, then
+    # analysis, then restore. Then: lucy input_image.fits psf.fits output_image.fits niter=15 [defaults for both adu and
+    # noise, play with niter] currently done in iraf outside python. Output: lucy_output='lucy_out_n5.fits', for niter=5
     # NOTE: the data cube for NGC1332 has redshifted side at the bottom left
+    # e.g.: lucy /Users/jonathancohn/Documents/dyn_mod/NGC1332_newfiles_masked_collapsed_xy_no0_1000.fits /Users/jonathancohn/Documents/dyn_mod/newfiles_beam80.fits /Users/jonathancohn/Documents/dyn_mod/newfiles_masked_xy_beam80_1000_lucy_n15.fits[0] niter=15 maskin=/Users/jonathancohn/Documents/dyn_mod/NGC1332_newfiles_masked_collapsed_xy_no0_1000.fits goodpixval=1
     hdu = fits.open(lucy_output)
     lucy_out = hdu[0].data
     hdu.close()
@@ -475,10 +382,21 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
 
     # convert from frequency (Hz) to velocity (km/s), with freq_ax in Hz
     # CO(2-1) lands in 2.2937*10^11 Hz (15.4 * 10^6 Hz corresponds to 20.1 km/s  # from Barth+2016)
-    f_0 = 2.29369132e11  # intrinsic frequency of CO(2-1) line
-    z_ax = np.asarray([v_sys - ((freq - f_0)/f_0) * (constants.c / constants.m_per_km) for freq in freq_ax])
-    # z_ax = np.asarray([v_sys - ((f_0 - freq) / freq) * (constants.c / constants.m_per_km) for freq in freq_ax])
-    print(z_ax[1] - z_ax[0])  # 20.1 km/s yay!
+    # print(freq_ax)
+    print(freq_ax[0], freq_ax[-1])  # good (last one maybe not?)
+    f_0 = 2.29354e11  # 2.29369132e11  # intrinsic frequency of CO(2-1) line  # 2.30538e11
+    # z_ax = np.asarray([v_sys - ((f_0 - freq)/f_0) * (constants.c / constants.m_per_km) for freq in freq_ax])  # v_rad
+    z_ax = np.asarray([v_sys - ((f_0 - freq) / freq) * (constants.c / constants.m_per_km) for freq in freq_ax])  # v_opt
+    print(z_ax[1] - z_ax[0])  # 20.1 km/s yay! (newfiles --> 20km/s [19.9917398153] --> okay good I think?)
+    z_ax = z_ax[::-1]
+    print(z_ax[34:38])
+    print(v_sys)
+    # take v_obs grad and turn to freq using optical veloc
+    # delta_sig = delta_freq / freq0 = sigma_los / c
+    # divide both maps by (1+z)
+    # compare lucy deconvolved weight to Ben's
+    # lucy step: try much larger n_iter to see if it does become more noisy
+
 
     # SET UP OBSERVATION AXES
     # initialize all values along axes at 0., but with a length equal to axis length [arcsec] * oversampling factor /
@@ -646,7 +564,8 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     # ALTERNATIVE CALCULATION FOR v_los
     alpha = abs(np.arctan(y_disk / (np.cos(inc) * x_disk)))  # alpha meas. from +x (minor axis) toward +y (major axis)
     sign = y_disk / abs(y_disk)  # if np.pi/2 < alpha < 3*np.pi/2, alpha < 0.
-    v_los2 = sign * abs(vel * np.sin(alpha) * np.sin(inc))  # print(v_los - v_los2)  # 0 YAY!
+    v_los2 = sign * abs(vel * np.sin(alpha) * np.sin(inc))  # THIS IS CURRENTLY WRONG
+    # print(v_los - v_los2)
 
     # SET LINE-OF-SIGHT VELOCITY AT THE BLACK HOLE CENTER TO BE 0, SUCH THAT IT DOES NOT BLOW UP
     # if any point as at x_disk, y_disk = (0., 0.), set velocity there = 0.
@@ -659,6 +578,11 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     # CALCULATE OBSERVED VELOCITY
     v_obs = v_sys - v_los  # observed velocity v_obs at each point in the disk
     print('v_obs')
+
+    plt.imshow(v_obs, origin='lower')
+    plt.colorbar()
+    plt.show()
+    #print(oops)
 
     '''  #
     # PLOT USING MICHELE CAPPELLARI'S display_pixels.py CODE
@@ -857,6 +781,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     print(sigma)
     obs3d = []  # data cube, v_obs but with a wavelength axis, too!
     weight = subpix_deconvolved
+    '''  #
     # BUCKET TRYING ELLIPSE HERE
     major_ax = 50  # pc (see paragraph 3 of S4.2 of Barth+2016 letter)
     minor_ax = 50*np.cos(inc)  # pc (see paragraph 3 of S4.2 of Barth+2016 letter)
@@ -870,15 +795,27 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
                 weight[x, y] = 0.
             # NOTE: MAYBE BETTER, BUT REALLY HARD TO SAY
     # END BUCKET
+    # '''  #
     # weight[R>100] = 0.
     # weight[weight < 1.5e-3] = 0.  # trying something! Right idea but too fluctuate-y still
-    plt.imshow(weight, origin='lower')
-    plt.show()
+
+    # plt.imshow(weight, origin='lower')
+    # plt.colorbar()
+    # plt.show()
+
     # weight /= np.sqrt(2 * np.pi * sigma)
     # NOTE: BUCKET: weight = weight / (sqrt(2*pi)*sigma) ??
     # print(weight, np.amax(weight), np.amin(weight))
     tz1 = time.time()
     for z in range(len(z_ax)):
+        if 34 < z < 38:
+            # plt.imshow(np.exp(-(z_ax[z] - v_obs)**2 / (2*sigma**2)), origin='lower')
+            # plt.colorbar()
+            # plt.show()
+            plt.imshow(weight * np.exp(-(z_ax[z] - v_obs)**2 / (2 * sigma ** 2)), origin='lower')
+            plt.title('Slice ' + str(z) + ' (starting index at 0)')
+            plt.colorbar()
+            plt.show()
         print(z)
         # print(z_ax[z] - v_obs[int(len(v_obs)-1),int(len(v_obs)-1)])  #, z_ax[z], v_obs)
         obs3d.append(weight * np.exp(-(z_ax[z] - v_obs) ** 2 / (2 * sigma ** 2)))
@@ -887,10 +824,12 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     obs3d = np.asarray(obs3d)  # has shape 61, 600, 600, which is good
     print('obs3d took {0} s'.format(time.time() - tz1))  # ~3.7 s; 14s for s=2 1280x1280
     print(obs3d.shape)
-    for ind in [20, 27, 30, 36, 37, 40]:  # BUCKET SUPER GROSS BAD OKAY DEFINITELY NEED TO RE-DO WEIGHT MAP
+    '''
+    for ind in [20, 27, 30, 36, 37, 40]:  # BUCKET okay better range, but maybe something wrong with freq axis?
         plt.imshow(obs3d[ind], origin='lower')
         plt.show()
     print(oops)
+    '''
 
     '''  #
     # OBS3D Profiles
@@ -1023,6 +962,12 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     print("intrinsic cube done in {0} s".format(time.time() - t_z))  # 0.34 s YAY! (1.3 s for s=6)
     print("start to intrinsic done in {0} s".format(time.time() - t0))  # 6.2s for s=6
     intrinsic_cube = np.asarray(intrinsic_cube)
+
+    plt.imshow(intrinsic_cube[37], origin='lower')
+    plt.colorbar()
+    plt.title('Slice ' + str(37) + ' (starting index at 0)')
+    plt.show()
+
     # print(oops)
     # print(intrinsic_cube.shape)  # 61, 300, 300
 
@@ -1087,6 +1032,11 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
         # convolved_cube[z,:,:] = filters.convolve(intrinsic_cube[z,:,:], beam, mode='same')
         print("Convolution loop " + str(z) + " took {0} seconds".format(time.time() - tl))
     print('convolved! Total convolution loop took {0} seconds'.format(time.time() - ts))
+
+    plt.imshow(convolved_cube[37], origin='lower')
+    plt.colorbar()
+    plt.show()
+    print(oops)
 
     '''  #
     # COMPARE LINE PROFILES!!!
@@ -1349,15 +1299,18 @@ if __name__ == "__main__":
     lucy = '/Users/jonathancohn/Documents/dyn_mod/newdata_lucy_n15.fits'
     out = '1332_newdata_apconv_n15_size35_s2_fixes3.fits'
     '''
-    cube = '/Users/jonathancohn/Documents/dyn_mod/NGC1332_01_calibrated_source_coline.pbcor.fits'
+    cube = '/Users/jonathancohn/Documents/dyn_mod/newfiles/NGC1332_CO21_C3_MS_bri_20kms.pbcor.fits'
+    # cube = '/Users/jonathancohn/Documents/dyn_mod/NGC1332_01_calibrated_source_coline.pbcor.fits'
     # lucy = '/Users/jonathancohn/Documents/dyn_mod/newdata01_binnedandclipped_beam77_lucy_n15.fits'
-    lucy = '/Users/jonathancohn/Documents/dyn_mod/newdata01_binnedandclipped_beam77_lucy_n15_xy.fits'
+    # lucy = '/Users/jonathancohn/Documents/dyn_mod/newdata01_binnedandclipped_beam77_lucy_n15_xy.fits'
+    lucy = '/Users/jonathancohn/Documents/dyn_mod/newfiles_masked_xy_beam80_1000_lucy_n15.fits'
     # newdata01_beam77_lucy_n15.fits'
-    out = '1332_newdata01_apconv_n15_gsize35_4x4bin_xy_50pccollapse.fits'
+    out = '1332_newfiles_apconv_n15_gsize80_4x4bin_xy_newfilescollapse.fits'
 
     # BLACK HOLE MASS (M_sol), RESOLUTION (ARCSEC), VELOCITY SPACING (KM/S)
     mbh = 6.64 * 10 ** 8  # 6.86 * 10 ** 8  # , 20.1 (v_spacing no longer necessary)
     resolution = 0.04  # was 0.01, now 0.04 because we're binning the data  # 0.05  # 0.044
+    # DOUBLE CHECK THE ABOVE: 0.04 or 0.044
 
     # X, Y OFFSETS (PIXELS)
     # NEW DATA 01: CALL IT: 326, 316 (observed pixel coords) (out of 640, 640) --> x_off = +7, y_off = -4
@@ -1371,7 +1324,7 @@ if __name__ == "__main__":
     # DISTANCE (Mpc), INCLINATION (rad), POSITION ANGLE (rad)
     dist = 22.3  # Mpc
     inc = np.deg2rad(85.2)  # 83.
-    theta = np.deg2rad(26.7)# + 180.)  # (180. + 116.7)  # -333 (-333.3 from 116.7: -(360 - (116.7-90)) = -333.3
+    theta = np.deg2rad(26.7)  # + 180.)  # (180. + 116.7)  # 116.7 - 90.
     vsys = 1562.2  # km/s
     # Note: 22.3 * 10**6 * tan(640 * 0.01 / 206265) = 692 pc (3460 pc if use 0.05?)
     # 692 pc / 640 pix =~ 1.1 pc/pix
@@ -1381,17 +1334,20 @@ if __name__ == "__main__":
 
     # ENCLOSED MASS FILE, CONSTANT BY WHICH TO MULTIPLY THE M/L RATIO
     enc_mass = 'ngc1332_enclosed_stellar_mass'
-    ml_const = 1.065  # 7.83 / 7.35 # 1.024  # 7.53 / 7.35
+    ml_const = 1.065  # 7.83 / 7.35 # 7.53 / 7.35 (1.024)
 
     # BEAM PARAMS
-    gsize = 35  # size of grid
+    gsize = 101  # 35  # size of grid
     x_fwhm = 0.052  # arcsec
     y_fwhm = 0.037  # arcsec
     pos = 64.  # deg
 
     # MAKE ALMA BEAM  # grid_size anything (must = collapsed datacube size for lucy); x_std=major; y_std=minor; rot=PA
-    beam = make_beam(grid_size=gsize, x_std=x_fwhm, y_std=y_fwhm, rot=np.deg2rad(90. - pos))
-    # , fits_name='newbeam77.fits')
+    # beam = make_beam(grid_size=gsize, res=resolution, x_std=x_fwhm, y_std=y_fwhm, rot=np.deg2rad(90. - pos))
+    beam = make_beam(grid_size=gsize, res=resolution, x_std=x_fwhm, y_std=y_fwhm, rot=np.deg2rad(90. - pos),
+                     fits_name='newfiles_beam' + str(gsize) + 'res.fits')
+    print(oops)
+    # , fits_name='newfiles_beam80.fits')  # with gsize=80
     # newbeam = make_beam(grid_size=1280, x_std=0.052, y_std=0.037, rot=np.deg2rad(90-64.),
     # fits_name='newdata_beam.fits')
     # '''
