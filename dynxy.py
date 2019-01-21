@@ -39,7 +39,7 @@ def check_beam(beam_name):  # BUCKET UNCONFIRMED (may need to flip y like I did 
     plt.show()
 
 
-def make_beam(grid_size=99, res=1., amp=1., x0=0., y0=0., x_std=1., y_std=1., rot=0., fits_name=None):  # BUCKET UNCONFIRMED
+def make_beam(grid_size=99, res=1., amp=1., x0=0., y0=0., x_std=1., y_std=1., rot=0., fits_name=None):  # CONFIRMED
     """
     Use to generate a beam psf (and to create a beam fits file to use in lucy
 
@@ -56,7 +56,7 @@ def make_beam(grid_size=99, res=1., amp=1., x0=0., y0=0., x_std=1., y_std=1., ro
     return the synthesized beam
     """
 
-    # BUCKET!!!!! SET RESOLUTION OF BEAM GRID THE SAME AS FLUXES GRID
+    # SET RESOLUTION OF BEAM GRID THE SAME AS FLUXES GRID
     x_beam = [0.] * grid_size
     y_beam = [0.] * grid_size
 
@@ -65,8 +65,8 @@ def make_beam(grid_size=99, res=1., amp=1., x0=0., y0=0., x_std=1., y_std=1., ro
 
     # grid_size must be odd, so fill in the axes with resolution * ((i+1) - ctr)!
     for i in range(len(x_beam)):
-        x_beam[i] = resolution * ((i + 1) - ctr)  # (arcsec/pix) * N_pixels = arcsec
-        y_beam[i] = resolution * ((i + 1) - ctr)  # (arcsec/pix) * N_pixels = arcsec
+        x_beam[i] = res * ((i + 1) - ctr)  # (arcsec/pix) * N_pixels = arcsec
+        y_beam[i] = res * ((i + 1) - ctr)  # (arcsec/pix) * N_pixels = arcsec
 
     # SET UP MESHGRID
     # x_beam = np.linspace(-1., 1., grid_size)
@@ -174,17 +174,18 @@ def pvd(data_cube, theta, z_ax, x_arcsec, R, v_sys):  # BUCKET UNCONFIRMED
     return data_masked, pvd_fill
 
 
-def get_fluxes(data_cube, int_slice1=14, int_slice2=63, x_off=0., y_off=0., resolution=0., write_name=None):  # CONFIRMED
+def get_fluxes(data_cube, data_mask, int_slice1=14, int_slice2=63, x_off=0., y_off=0., rebinned_dat=None, write_name=None):  # CONFIRMED
     """
     Use to integrate line profiles to get fluxes from data cube!
 
     :param data_cube: input data cube of observations
+    :param data_mask: mask for each slice of data, for construction of the weight map
     :param write_name: name of fits file to which to write collapsed cube (if None, write no file)
 
     :return: collapsed data cube (i.e. integrated line profiles i.e. area under curve i.e. flux), z_length (len(z_ax))
     """
-    # hdu = fits.open(data_cube)
-    hdu = fits.open('/Users/jonathancohn/Documents/dyn_mod/NGC_1332_newfiles/NGC1332_CO21_C3_MS_bri_20kms.pbcor.fits')
+    hdu = fits.open(data_cube)
+    # hdu = fits.open('/Users/jonathancohn/Documents/dyn_mod/NGC_1332_newfiles/NGC1332_CO21_C3_MS_bri_20kms.pbcor.fits')
     # print(hdu[0].header)  # header
     # CTYPE1: RA (x_obs)
     # CRVAL1 = 5.157217100000Ee+1 [RA of reference pix]
@@ -208,7 +209,7 @@ def get_fluxes(data_cube, int_slice1=14, int_slice2=63, x_off=0., y_off=0., reso
     # plt.show()
     # print(oops)
 
-    hdu_m = fits.open('/Users/jonathancohn/Documents/dyn_mod/NGC_1332_newfiles/NGC1332_CO21_C3_MS_bri_20kms_strictmask.mask.fits')
+    hdu_m = fits.open(data_mask)
     mask = hdu_m[0].data[0]
 
     # data1 = data[:, ::-1, :]
@@ -241,6 +242,12 @@ def get_fluxes(data_cube, int_slice1=14, int_slice2=63, x_off=0., y_off=0., reso
     # plt.show()
     # LOOKS GOOD!
 
+    # rebinned_dat = 'NGC1332_CO21_C3_MS_bri_20kms_4x4binned.pbcor.fits'
+    if rebinned_dat is not None:
+        hdu1 = fits.PrimaryHDU(data)
+        hdul1 = fits.HDUList([hdu1])
+        hdul1.writeto(rebinned_dat)
+
     combined = []
     for zi in range(len(data)):
         combined.append(data[zi] * mask[zi])
@@ -265,7 +272,7 @@ def get_fluxes(data_cube, int_slice1=14, int_slice2=63, x_off=0., y_off=0., reso
     freq_axis = freq_axis[:-1]
     # print(freq1)
     hdu.close()
-    print(freq_axis[0], freq_axis[-1], len(freq_axis))
+    # print(freq_axis[0], freq_axis[-1], len(freq_axis))
 
     if write_name is not None:
         '''  #
@@ -292,7 +299,7 @@ def blockshaped(arr, nrow, ncol):  # CONFIRMED
 
 # BUCKET UNCONFIRMED: (*ALSO* NEED TO REDEFINE PARAMS)
 def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=np.deg2rad(60.), vsys=None, dist=17.,
-               theta=np.deg2rad(-200.), data_cube=None, lucy_output=None, out_name=None, incl_fig=False,
+               theta=np.deg2rad(-200.), data_cube=None, data_mask=None, lucy_output=None, out_name=None, incl_fig=False,
                enclosed_mass=None, ml_const=1., sig_type='flat', beam=None, sig_params=[1., 1., 1., 1.]):
     """
     Build grid for dynamical modeling!
@@ -310,6 +317,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
         :param theta: NOW: angle from the the +y_obs axis counterclockwise to the redshifted side of the disk (+y_disk)
         [radians] (angle input must be negative to go counterclockwise)
     :param data_cube: input data cube of observations
+    :param data_mask: input mask cube of each slice of the data, for constructing the weight map
     :param lucy_output: output from running lucy on data cube and beam PSF
     :param out_name: output name of the fits file to which to save the output v_los image (if None, don't save image)
     :param incl_fig: if True, print figure of 2d plane of observed line-of-sight velocity
@@ -328,7 +336,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
 
     # COLLAPSE THE DATA CUBE
     # fluxes, freq_ax, data_rebinned = get_fluxes(data_cube, write_name='NGC1332_newfiles_masked_collapsed_xy_no0_1000.fits')
-    fluxes, freq_ax, data_rebinned = get_fluxes(data_cube, x_off=x_off, y_off=y_off, resolution=resolution)
+    fluxes, freq_ax, data_rebinned = get_fluxes(data_cube, data_mask, x_off=x_off, y_off=y_off)
     # ^rebins data in 4x4 pixels
 
     # plt.imshow(fluxes, origin='lower')
@@ -340,12 +348,61 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     # analysis, then restore. Then: lucy input_image.fits psf.fits output_image.fits niter=15 [defaults for both adu and
     # noise, play with niter] currently done in iraf outside python. Output: lucy_output='lucy_out_n5.fits', for niter=5
     # NOTE: the data cube for NGC1332 has redshifted side at the bottom left
-    # e.g.: lucy /Users/jonathancohn/Documents/dyn_mod/NGC1332_newfiles_masked_collapsed_xy_no0_1000.fits /Users/jonathancohn/Documents/dyn_mod/newfiles_beam80.fits /Users/jonathancohn/Documents/dyn_mod/newfiles_masked_xy_beam80_1000_lucy_n15.fits[0] niter=15 maskin=/Users/jonathancohn/Documents/dyn_mod/NGC1332_newfiles_masked_collapsed_xy_no0_1000.fits goodpixval=1
+    # e.g.: lucy /Users/jonathancohn/Documents/dyn_mod/NGC1332_newfiles_masked_collapsed_xy_no0.fits /Users/jonathancohn/Documents/dyn_mod/newfiles_beam31res.fits /Users/jonathancohn/Documents/dyn_mod/newfiles_masked_xy_beam31res_limchi1e-9lucy_n15.fits[0] niter=15 maskin=/Users/jonathancohn/Documents/dyn_mod/NGC1332_newfiles_masked_collapsed_xy_no0_1000.fits goodpixval=1 limchisq=1E-9
     hdu = fits.open(lucy_output)
     lucy_out = hdu[0].data
     hdu.close()
-    # plt.imshow(lucy_out, origin='lower')  # looks correct
-    # plt.show()
+
+    '''  # BUCKET BEGIN TESTING
+    # TESTING
+    plt.imshow(lucy_out, origin='lower')  # looks correct
+    plt.colorbar()
+    plt.show()
+
+    plt.imshow(fluxes, origin='lower')  # looks correct
+    plt.colorbar()
+    plt.show()
+
+    # TEMPORARY: test lucy convolution
+    # convolved_flux = np.zeros(shape=fluxes.shape)  # 61, 300, 300
+    # I think the problem is I need to set origin?
+    convolved_flux = convolution.convolve(lucy_out, beam)
+    # convolved_flux = filters.convolve(lucy_out, beam, mode='same', origin=lucy_out)
+    plt.imshow(convolved_flux, origin='lower')
+    plt.colorbar()
+    plt.show()
+    print(oops)
+
+    # TEMPORARY: test manual convolution
+    # A = lucy_output, and K = beam
+    R = np.zeros(shape=lucy_out.shape)
+    S = 1.  # scale factor (what should this be?)
+    for t in range(len(lucy_out)):
+        print(t)
+        for u in range(len(lucy_out[0])):
+            for k in range(len(beam)):
+                if t >= k-1 and u >= k-1:
+                    for ii in range(k-1):
+                        for jj in range(k-1):
+                            # print(t, ii, k)
+                            # print(u, jj)
+                            # print(t+ii-k/2, u+jj-k/2)
+                            if t + ii - np.ceil(k / 2) <= 319 and u + jj - np.ceil(k / 2) <= 319:
+                                R[t, u] += (1./S) * lucy_out[t+ii-int(np.ceil(k/2)),
+                                                             u+jj-int(np.ceil(k/2))] * beam[ii, jj]
+                            # = (1/S)[SUM from i=0 to k-1][SUM from j=0 to k-1] A[t+i-k/2, u+j-k/2]*K[i,j]
+                            # where the value k/2 is determined by integer division. This means that the result of the
+                            # division is the largest integer value less than or equal to the fractional number.
+                else:
+                    R[t, u] = 0.
+    print(np.amax(R), np.amin(R))  # 0.527980098064 0.0
+    plt.imshow(R, origin='lower')
+    plt.colorbar()
+    plt.show()
+    print(oop)
+
+    # BUCKET END TESTING
+    # '''  #
 
     # NOW INCLUDE ENCLOSED STELLAR MASS (interpolated below, after R is defined)
     radii = []
@@ -386,16 +443,24 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     print(freq_ax[0], freq_ax[-1])  # good (last one maybe not?)
     f_0 = 2.29354e11  # 2.29369132e11  # intrinsic frequency of CO(2-1) line  # 2.30538e11
     # z_ax = np.asarray([v_sys - ((f_0 - freq)/f_0) * (constants.c / constants.m_per_km) for freq in freq_ax])  # v_rad
-    z_ax = np.asarray([v_sys - ((f_0 - freq) / freq) * (constants.c / constants.m_per_km) for freq in freq_ax])  # v_opt
-    print(z_ax[1] - z_ax[0])  # 20.1 km/s yay! (newfiles --> 20km/s [19.9917398153] --> okay good I think?)
-    z_ax = z_ax[::-1]
-    print(z_ax[34:38])
+    # z_ax = np.asarray([v_sys - ((f_0 - freq) / freq) * (constants.c / constants.m_per_km) for freq in freq_ax])  # v_opt
+    z_ax = np.asarray([v_sys + ((f_0 - freq) / freq) * (constants.c / constants.m_per_km) for freq in freq_ax])  # v_opt
+    '''  #
+    print(z_ax[1] - z_ax[0])  # 20.1 km/s yay! (newfiles --> 20km/s [19.9917398153], [19.8979441208] --> okay good?)
+    print(z_ax[34:44])  # blue --> red (only if v_sys + v; if v_sys - v, then this is red --> blue)
+    # z_ax = z_ax[::-1]
+    print(freq_ax[34:44], 'hi')  # blue -> red
+    print([((f_0 - freq) / freq) * (constants.c / constants.m_per_km) for freq in freq_ax][34:44])  # neg to pos
+    print(z_ax[34:44])  # blue --> red
     print(v_sys)
-    # take v_obs grad and turn to freq using optical veloc
+    print(oops)
+    # '''  #
+    # ****************************** BUCKET NEED TO CONVERT TO FREQ GRID!!!!!! ******************************
+    # take v_obs grid and turn to freq using v_obs
     # delta_sig = delta_freq / freq0 = sigma_los / c
     # divide both maps by (1+z)
-    # compare lucy deconvolved weight to Ben's
-    # lucy step: try much larger n_iter to see if it does become more noisy
+    # compare lucy deconvolved weight to Ben's: Done.
+    # lucy step: try much larger n_iter to see if it does become more noisy: Done?
 
 
     # SET UP OBSERVATION AXES
@@ -808,7 +873,8 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     # print(weight, np.amax(weight), np.amin(weight))
     tz1 = time.time()
     for z in range(len(z_ax)):
-        if 34 < z < 38:
+        '''
+        if 34 < z < 40:
             # plt.imshow(np.exp(-(z_ax[z] - v_obs)**2 / (2*sigma**2)), origin='lower')
             # plt.colorbar()
             # plt.show()
@@ -816,6 +882,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
             plt.title('Slice ' + str(z) + ' (starting index at 0)')
             plt.colorbar()
             plt.show()
+        '''
         print(z)
         # print(z_ax[z] - v_obs[int(len(v_obs)-1),int(len(v_obs)-1)])  #, z_ax[z], v_obs)
         obs3d.append(weight * np.exp(-(z_ax[z] - v_obs) ** 2 / (2 * sigma ** 2)))
@@ -824,9 +891,11 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     obs3d = np.asarray(obs3d)  # has shape 61, 600, 600, which is good
     print('obs3d took {0} s'.format(time.time() - tz1))  # ~3.7 s; 14s for s=2 1280x1280
     print(obs3d.shape)
+    # print(oops)
     '''
     for ind in [20, 27, 30, 36, 37, 40]:  # BUCKET okay better range, but maybe something wrong with freq axis?
         plt.imshow(obs3d[ind], origin='lower')
+        plt.colorbar()
         plt.show()
     print(oops)
     '''
@@ -963,10 +1032,12 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     print("start to intrinsic done in {0} s".format(time.time() - t0))  # 6.2s for s=6
     intrinsic_cube = np.asarray(intrinsic_cube)
 
+    '''
     plt.imshow(intrinsic_cube[37], origin='lower')
     plt.colorbar()
     plt.title('Slice ' + str(37) + ' (starting index at 0)')
     plt.show()
+    '''
 
     # print(oops)
     # print(intrinsic_cube.shape)  # 61, 300, 300
@@ -1019,6 +1090,19 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     print('convolved! Total convolution loop took {0} seconds'.format(time.time() - start_time))
     '''
 
+    '''
+    # IDL's CONVOL: https://www.harrisgeospatial.com/docs/CONVOL.html
+    See the case where A is an m-by-n-element array, and K is the k-by-k element kernel
+    The centered case is similar, except the t-i and u-j subscripts are replaced by t+i-k/2 and u+j-k/2.
+    for t in range(len(A)):
+        for u in range(len(A[0])):
+            for k in range(len(K)):
+                if t>=k-1 and u >= k-1:
+                    R[t, u] = (1/S)[SUM from i=0 to k-1][SUM from j=0 to k-1] A[t+i-k/2, u+j-k/2]*K[i,j]
+                else:
+                    R[t, u] = 0
+    '''
+
     convolved_cube = np.zeros(shape=intrinsic_cube.shape)  # 61, 300, 300
     # beam = make_beam(grid_size=35, x_std=0.319, y_std=0.233, rot=np.deg2rad(90-78.4))  # 29
     # beam = make_beam(grid_size=35, x_std=0.044, y_std=0.039, rot=np.deg2rad(90-64.))
@@ -1033,10 +1117,12 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
         print("Convolution loop " + str(z) + " took {0} seconds".format(time.time() - tl))
     print('convolved! Total convolution loop took {0} seconds'.format(time.time() - ts))
 
+    '''
     plt.imshow(convolved_cube[37], origin='lower')
     plt.colorbar()
     plt.show()
-    print(oops)
+    # print(oops)
+    '''
 
     '''  #
     # COMPARE LINE PROFILES!!!
@@ -1104,7 +1190,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     # hdu = fits.open(data_cube)
     # data_vs = hdu[0].data[0]  # header = hdu[0].header
     data_vs = data_rebinned
-    print(data_vs.shape)  # (75, 640, 640)
+    print(data_vs.shape)  # (75, 320, 320)
     # for xo, yo in [[6., 0.], [8., 0.], [4., 0.], [6., -2.], [8., -2.], [4., -2.], [6., 2.], [8., 2.], [4., 2.]]:
     # , [3., 20.], [5., 20.], [7, 20.], [3., 17.], [5., 17.], [7., 17.], [3., 15.], [5., 15.], [7., 15.]
     for xo, yo in [[0., 0.]]:
@@ -1114,9 +1200,9 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
         # TEST each x,y point: is it within ellipse?
         tests = []
         mask1 = np.zeros(shape=(len(data_vs[0]), len(data_vs[0][0])))  # array of indices, corresponding to x,y data
-        for i in range(len(data_vs[0][0])):  # 640 (x axis)
-            for j in range(len(data_vs[0])):  # 640 (y axis)
-                res = 0.04  # arcsec/pix  # inherently 0.01; using 0.04 because binned the data
+        for i in range(len(data_vs[0][0])):  # 320 (x axis)
+            for j in range(len(data_vs[0])):  # 320 (y axis)
+                res = 0.04  # arcsec/pix  # inherently 0.01 (1280x1280 grid); using 0.04 because binned the data (4x4)
                 maj = 4.3 / res  # ellipse major axis
                 mi = 0.7 / res  # ellipse minor axis
                 theta_rot = theta  # + np.pi/4.
@@ -1143,7 +1229,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
         data_vs2 = np.asarray(data_vs2)
         conv2 = np.asarray(conv2)
         # data_vs2 = ma.masked_where(mask > 1., data_vs[30])
-        print(np.asarray(data_vs2).shape)
+        print(np.asarray(data_vs2).shape)  # 75, 320, 320
         # print(tests)
         c = 0
         for t in tests:
@@ -1151,28 +1237,45 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
                 c += 1
         print(inds)
         # print(data_vs[0][inds].shape)
-        print(inds.shape)
+        print(inds.shape)  # 320, 320. Good!
 
         '''
         inds_to_try2 = np.asarray([[315, 337], [337, 325], [340, 340], [350, 325], [350, 350],
                                    [325, 350], [320, 360], [315, 315], [337, 315], [270, 411],
                                    [339, 329], [10, 450]])  # [411, 370]->[270,411]; [329, 301], [346, 405]
         '''
-        inds_to_try2 = np.asarray([[83, 83], [85, 84], [77, 76], [78, 74], [90, 88], [90, 65]])
+        # inds_to_try2 = np.asarray([[83, 83], [85, 84], [77, 76], [78, 74], [90, 88], [90, 65]])
+        inds_to_try2 = np.asarray([[159, 159], [165, 155], [155, 165], [160, 160], [170, 170], [150, 150], [155, 155], [165, 165]])
         # systemic with red and blue bumps, very red (no data/slight systemic), very slight red, quite red, very slight red,
         # systemic, blue/systemic, red/systemic, slight red, slight blue!, quite red again wtf
         # NOT DUE TO CONVOLUTION! NOT DUE TO INTRINSIC_CUBE STEP EITHER!
-        colors2 = ['r', 'm', 'k', 'g', 'b', 'r', 'm', 'k', 'g', 'b', 'r', 'm']
+        # colors2 = ['r', 'm', 'k', 'g', 'b', 'r', 'm', 'k', 'g', 'b', 'r', 'm']
+
+        '''  #  COMPARE MODEL TO DATA SLICES
+        slices_to_try = np.asarray([20, 30, 35, 36, 37, 38, 39, 40])
+        for slice in slices_to_try:
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+            ax.set_title('(model - data)/data, slice' + str(slice))
+            plt.imshow((conv2[slice] - data_vs2[slice]) / data_vs2[slice])  # (data_vs[45])  # (data_vs[30])
+            plt.gca().invert_yaxis()
+            ax.set_aspect('equal')
+            plt.colorbar(orientation='vertical')
+            plt.show()
+        # '''  #
+
         for i in range(len(inds_to_try2)):
             print(i)
             print(inds_to_try2[i][0], inds_to_try2[i][1])
             # plt.plot(z_ax, data[:, inds_to_try[i][0], inds_to_try[i][1]], 'k--')  # 670, 640; 722, 614; 625, 640
-            plt.plot(z_ax, data_vs2[:, inds_to_try2[i][0], inds_to_try2[i][1]], 'k--')  # 670, 640; 722, 614; 625, 640
-            plt.plot(z_ax, conv2[:, inds_to_try2[i][0], inds_to_try2[i][1]], colors2[i] + '-')
+            plt.plot(z_ax, data_vs2[:, inds_to_try2[i][0], inds_to_try2[i][1]], 'k--', label=r'Data')  # 670, 640; 722, 614; 625, 640
+            plt.plot(z_ax, conv2[:, inds_to_try2[i][0], inds_to_try2[i][1]], 'r-', label=r'Model')  # colors2[i] + '-')
             plt.axvline(x=v_sys, color='k')
-            plt.title('no x,y offset')
+            plt.title(str(inds_to_try2[i][0]) + ', ' + str(inds_to_try2[i][1]))  # ('no x,y offset')
+            plt.legend()
             plt.show()
 
+        '''  # NOW DONE ABOVE, SEVERAL AT ONCE
         fig = plt.figure()
         ax = fig.add_subplot(111)
         ax.set_title('data ' + str(xo) + ', ' + str(yo))
@@ -1190,6 +1293,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
         ax.set_aspect('equal')
         plt.colorbar(orientation='vertical')
         plt.show()
+        # '''  #
     # END TRY THINGS AGAIN
     # '''  #
 
@@ -1299,13 +1403,6 @@ if __name__ == "__main__":
     lucy = '/Users/jonathancohn/Documents/dyn_mod/newdata_lucy_n15.fits'
     out = '1332_newdata_apconv_n15_size35_s2_fixes3.fits'
     '''
-    cube = '/Users/jonathancohn/Documents/dyn_mod/newfiles/NGC1332_CO21_C3_MS_bri_20kms.pbcor.fits'
-    # cube = '/Users/jonathancohn/Documents/dyn_mod/NGC1332_01_calibrated_source_coline.pbcor.fits'
-    # lucy = '/Users/jonathancohn/Documents/dyn_mod/newdata01_binnedandclipped_beam77_lucy_n15.fits'
-    # lucy = '/Users/jonathancohn/Documents/dyn_mod/newdata01_binnedandclipped_beam77_lucy_n15_xy.fits'
-    lucy = '/Users/jonathancohn/Documents/dyn_mod/newfiles_masked_xy_beam80_1000_lucy_n15.fits'
-    # newdata01_beam77_lucy_n15.fits'
-    out = '1332_newfiles_apconv_n15_gsize80_4x4bin_xy_newfilescollapse.fits'
 
     # BLACK HOLE MASS (M_sol), RESOLUTION (ARCSEC), VELOCITY SPACING (KM/S)
     mbh = 6.64 * 10 ** 8  # 6.86 * 10 ** 8  # , 20.1 (v_spacing no longer necessary)
@@ -1313,7 +1410,6 @@ if __name__ == "__main__":
     # DOUBLE CHECK THE ABOVE: 0.04 or 0.044
 
     # X, Y OFFSETS (PIXELS)
-    # NEW DATA 01: CALL IT: 326, 316 (observed pixel coords) (out of 640, 640) --> x_off = +7, y_off = -4
     x_off, y_off = 0., 0.  # 5., 17.  # +6., -4.  # 631. - 1280./2., 1280/2. - 651  # pixels  0., 0.
 
     # VELOCITY DISPERSION PARAMETERS
@@ -1330,35 +1426,43 @@ if __name__ == "__main__":
     # 692 pc / 640 pix =~ 1.1 pc/pix
 
     # OVERSAMPLING FACTOR
-    s = 2
+    s = 6
 
     # ENCLOSED MASS FILE, CONSTANT BY WHICH TO MULTIPLY THE M/L RATIO
     enc_mass = 'ngc1332_enclosed_stellar_mass'
-    ml_const = 1.065  # 7.83 / 7.35 # 7.53 / 7.35 (1.024)
+    ml_ratio = 7.83
+    ml_const = ml_ratio / 7.35  # because enc_mass file assumes a ml_ratio of 7.35
+    # ml_const = 1.065  # 7.83 / 7.35 # 7.53 / 7.35 (1.024)
 
-    # BEAM PARAMS
-    gsize = 101  # 35  # size of grid
+    # ALMA BEAM PARAMS
+    gsize = 31  # size of grid (must be odd)
     x_fwhm = 0.052  # arcsec
     y_fwhm = 0.037  # arcsec
-    pos = 64.  # deg
+    pos = 64.  # position angle (deg)
 
     # MAKE ALMA BEAM  # grid_size anything (must = collapsed datacube size for lucy); x_std=major; y_std=minor; rot=PA
-    # beam = make_beam(grid_size=gsize, res=resolution, x_std=x_fwhm, y_std=y_fwhm, rot=np.deg2rad(90. - pos))
-    beam = make_beam(grid_size=gsize, res=resolution, x_std=x_fwhm, y_std=y_fwhm, rot=np.deg2rad(90. - pos),
-                     fits_name='newfiles_beam' + str(gsize) + 'res.fits')
-    print(oops)
+    beam = make_beam(grid_size=gsize, res=resolution, x_std=x_fwhm, y_std=y_fwhm, rot=np.deg2rad(90. - pos))
+    # beam = make_beam(grid_size=gsize, res=resolution, x_std=x_fwhm, y_std=y_fwhm, rot=np.deg2rad(90. - pos),
+    #                  fits_name='newfiles_beam' + str(gsize) + 'res.fits')
     # , fits_name='newfiles_beam80.fits')  # with gsize=80
-    # newbeam = make_beam(grid_size=1280, x_std=0.052, y_std=0.037, rot=np.deg2rad(90-64.),
-    # fits_name='newdata_beam.fits')
     # '''
 
     # Make nice plot fonts
     rc('font', **{'family': 'serif', 'serif': ['Times']})
     rc('text', usetex=True)
 
+    cube = '/Users/jonathancohn/Documents/dyn_mod/newfiles/NGC1332_CO21_C3_MS_bri_20kms.pbcor.fits'
+    # cube = '/Users/jonathancohn/Documents/dyn_mod/NGC_1332_newfiles/NGC1332_CO21_C3_MS_bri_20kms.pbcor.fits'
+    # cube = '/Users/jonathancohn/Documents/dyn_mod/NGC1332_01_calibrated_source_coline.pbcor.fits'
+    d_mask = '/Users/jonathancohn/Documents/dyn_mod/NGC_1332_newfiles/NGC1332_CO21_C3_MS_bri_20kms_strictmask.mask.fits'
+    lucy = '/Users/jonathancohn/Documents/dyn_mod/newfiles_masked_xy_beam' + str(gsize) + 'res_limchi1e-9lucy_n5.fits'
+    # beam = newdfiles_beam31res.fits'
+    out = '1332_newfiles_apconv_n5_gsize' + str(gsize) + 'res_4x4bin_xy_newfilescollapse_s' + str(s) + '.fits'
+
     # CREATE GRID!
     out_cube = model_grid(resolution=resolution, s=s, x_off=x_off, y_off=y_off, mbh=mbh, inc=inc, dist=dist, vsys=vsys,
-                          theta=theta, data_cube=cube, lucy_output=lucy, out_name=out, incl_fig=0, ml_const=ml_const,
-                          enclosed_mass=enc_mass, sig_type=s_type, beam=beam, sig_params=[sig0, r0, mu, sig1])
+                          theta=theta, data_cube=cube, data_mask=d_mask, lucy_output=lucy, out_name=out, incl_fig=0,
+                          ml_const=ml_const, enclosed_mass=enc_mass, sig_type=s_type, beam=beam,
+                          sig_params=[sig0, r0, mu, sig1])
 
     # vel_slice = spec(out_cube, x_pix=149, y_pix=149, print_it=True)
