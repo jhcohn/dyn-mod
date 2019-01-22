@@ -237,16 +237,24 @@ def get_fluxes(data_cube, data_mask, int_slice1=14, int_slice2=63, x_off=0., y_o
     print("Rebinning the cube done in {0} s".format(time.time() - t_rebin))  # 0.5 s
     data = np.asarray(rebinned)
     mask = np.asarray(rebinned_m)
+
     # print(data.shape)
     # plt.imshow(data[20, :, :])
     # plt.show()
     # LOOKS GOOD!
 
     # rebinned_dat = 'NGC1332_CO21_C3_MS_bri_20kms_4x4binned.pbcor.fits'
+    # c_mask = 'NGC_1332_newfiles/collapsed_mask.fits'
     if rebinned_dat is not None:
-        hdu1 = fits.PrimaryHDU(data)
+        collapsed_mask = integrate.simps(mask, axis=0)
+        for i in range(len(collapsed_mask)):
+            for j in range(len(collapsed_mask[0])):
+                if collapsed_mask[i, j] != 0.:
+                    collapsed_mask[i, j] = 1.
+
+        hdu1 = fits.PrimaryHDU(data)  #  collapsed_mask
         hdul1 = fits.HDUList([hdu1])
-        hdul1.writeto(rebinned_dat)
+        hdul1.writeto(rebinned_dat)  # c_mask
 
     combined = []
     for zi in range(len(data)):
@@ -845,7 +853,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     sigma = get_sig(r=R, sig0=sig_params[0], r0=sig_params[1], mu=sig_params[2], sig1=sig_params[3])[sig_type]
     print(sigma)
     obs3d = []  # data cube, v_obs but with a wavelength axis, too!
-    weight = subpix_deconvolved
+    weight = subpix_deconvolved / 1000.  # dividing by 1000 bc multiplying map by 1000 earlier
     '''  #
     # BUCKET TRYING ELLIPSE HERE
     major_ax = 50  # pc (see paragraph 3 of S4.2 of Barth+2016 letter)
@@ -1451,13 +1459,13 @@ if __name__ == "__main__":
     rc('font', **{'family': 'serif', 'serif': ['Times']})
     rc('text', usetex=True)
 
-    cube = '/Users/jonathancohn/Documents/dyn_mod/newfiles/NGC1332_CO21_C3_MS_bri_20kms.pbcor.fits'
+    cube = '/Users/jonathancohn/Documents/dyn_mod/NGC_1332_newfiles/NGC1332_CO21_C3_MS_bri_20kms.pbcor.fits'
     # cube = '/Users/jonathancohn/Documents/dyn_mod/NGC_1332_newfiles/NGC1332_CO21_C3_MS_bri_20kms.pbcor.fits'
     # cube = '/Users/jonathancohn/Documents/dyn_mod/NGC1332_01_calibrated_source_coline.pbcor.fits'
     d_mask = '/Users/jonathancohn/Documents/dyn_mod/NGC_1332_newfiles/NGC1332_CO21_C3_MS_bri_20kms_strictmask.mask.fits'
-    lucy = '/Users/jonathancohn/Documents/dyn_mod/newfiles_masked_xy_beam' + str(gsize) + 'res_limchi1e-9lucy_n5.fits'
+    lucy = '/Users/jonathancohn/Documents/dyn_mod/newfiles_masked_xy_beam31res_1000_limchi1e-9lucy_collapsedmask_n5.fits'
     # beam = newdfiles_beam31res.fits'
-    out = '1332_newfiles_apconv_n5_gsize' + str(gsize) + 'res_4x4bin_xy_newfilescollapse_s' + str(s) + '.fits'
+    out = '1332_newfiles_apconv_n5_gsize' + str(gsize) + 'res_4x4bin_xy_newfilescollapsemask_s' + str(s) + '.fits'
 
     # CREATE GRID!
     out_cube = model_grid(resolution=resolution, s=s, x_off=x_off, y_off=y_off, mbh=mbh, inc=inc, dist=dist, vsys=vsys,
