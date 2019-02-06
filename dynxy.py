@@ -74,9 +74,18 @@ def make_beam(grid_size=99, res=1., amp=1., x0=0., y0=0., x_std=1., y_std=1., ro
     xx, yy = np.meshgrid(x_beam, y_beam)
 
     # SET UP PSF 2D GAUSSIAN VARIABLES
+    n = 2.35482
+    x_std /= n
+    y_std /= n
     a = np.cos(rot) ** 2 / (2 * x_std ** 2) + np.sin(rot) ** 2 / (2 * y_std ** 2)
     b = -np.sin(2 * rot) / (4 * x_std ** 2) + np.sin(2 * rot) / (4 * y_std ** 2)
     c = np.sin(rot) ** 2 / (2 * x_std ** 2) + np.cos(rot) ** 2 / (2 * y_std ** 2)
+
+    # BUCKET: note A_beam = 1.1331*BMAJ*BMIN (in FWHM units) --> need to convert B_maj and B_min to pixel units,
+    # from arcsec
+    # other note: data cube is in Jy/beam (to get to these units, will need to divide by velocity width of channels [20 km/s])
+    # flux map will be: Jy km/s: -- multply by 1/(Delta v) * (N_pix / Beam), where N_pix / Beam is Area of beam
+    # --> multiply by A_beam / delta_v, where delta_v is ~20 km/s
 
     # CALCULATE PSF, NORMALIZE IT TO AMPLITUDE
     synth_beam = np.exp(-(a * (xx - x0) ** 2 + 2 * b * (xx - x0) * (yy - y0) + c * (yy - y0) ** 2))
@@ -311,7 +320,8 @@ def blockshaped(arr, nrow, ncol):  # CONFIRMED
 # BUCKET UNCONFIRMED: (*ALSO* NEED TO REDEFINE PARAMS)
 def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=np.deg2rad(60.), vsys=None, dist=17.,
                theta=np.deg2rad(-200.), data_cube=None, data_mask=None, lucy_output=None, out_name=None, incl_fig=False,
-               enclosed_mass=None, ml_const=1., sig_type='flat', beam=None, sig_params=[1., 1., 1., 1.], f_w=1.):
+               enclosed_mass=None, ml_const=1., sig_type='flat', beam=None, sig_params=[1., 1., 1., 1.], f_w=1.,
+               x_std=0.052, y_std=0.037):
     """
     Build grid for dynamical modeling!
 
@@ -340,6 +350,8 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     :param beam: the alma beam with which the data were observed, as output by the make_beam() function
     :param sig_params: list of parameters to be plugged into the get_sig() function. Number needed varies by sig_type
     :param f_w: multiplicative weight factor for the line profiles
+    :param x_std: FWHM in the x-direction of the ALMA beam (arcsec)
+    :param y_std: FWHM in the y-direction of the ALMA beam (arcsec)
 
     :return: observed line-of-sight velocity [km/s]
     """
@@ -434,9 +446,6 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
 
     # BUCKET END TESTING
     # '''  #
-    # BUCKET BUCKET
-    # undo 4x4 binning until right after the convolution step
-    # send Jonelle convolved cube (not 4x4 binned)
 
     # NOW INCLUDE ENCLOSED STELLAR MASS (interpolated below, after R is defined)
     radii = []
@@ -493,8 +502,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     # take v_obs grid and turn to freq using v_obs
     # delta_sig = delta_freq / freq0 = sigma_los / c
     # divide both maps by (1+z)
-    # compare lucy deconvolved weight to Ben's: Done.
-    # lucy step: try much larger n_iter to see if it does become more noisy: Done?
+    # BUCKET BUCKET: use new map from Ben, and divide by sqrt(2*pi*sigma). Do 4x4 binning before compare lps. THEN v_obs->freq
 
 
     # SET UP OBSERVATION AXES
@@ -662,9 +670,23 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
 
     # ALTERNATIVE CALCULATION FOR v_los
     alpha = abs(np.arctan(y_disk / (np.cos(inc) * x_disk)))  # alpha meas. from +x (minor axis) toward +y (major axis)
-    sign = y_disk / abs(y_disk)  # if np.pi/2 < alpha < 3*np.pi/2, alpha < 0.
-    v_los2 = sign * abs(vel * np.sin(alpha) * np.sin(inc))  # THIS IS CURRENTLY WRONG
-    # print(v_los - v_los2)
+    sign = x_disk / abs(x_disk)  # if np.pi/2 < alpha < 3*np.pi/2, alpha < 0.
+    v_los2 = sign * abs(vel * np.cos(alpha) * np.sin(inc))  # THIS IS CURRENTLY CORRECT
+    print(v_los)
+    print('2', v_los2)
+
+    plt.imshow(v_los, origin='lower')
+    plt.colorbar()
+    plt.show()
+
+    plt.imshow(v_los2, origin='lower')
+    plt.colorbar()
+    plt.show()
+
+    plt.imshow(v_los2 - v_los, origin='lower')
+    plt.colorbar()
+    plt.show()
+    print(oop)
 
     # SET LINE-OF-SIGHT VELOCITY AT THE BLACK HOLE CENTER TO BE 0, SUCH THAT IT DOES NOT BLOW UP
     # if any point as at x_disk, y_disk = (0., 0.), set velocity there = 0.
@@ -675,7 +697,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     # print(center, v_los[center])
 
     # CALCULATE OBSERVED VELOCITY
-    v_obs = v_sys - v_los  # observed velocity v_obs at each point in the disk
+    v_obs = v_sys - v_los2  # observed velocity v_obs at each point in the disk
     print('v_obs')
 
     plt.imshow(v_obs, origin='lower')
@@ -881,6 +903,17 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     obs3d = []  # data cube, v_obs but with a wavelength axis, too!
     weight = subpix_deconvolved / 1000.  # dividing by 1000 bc multiplying map by 1000 earlier
 
+    # BUCKET: note A_beam = 1.1331*BMAJ*BMIN (in FWHM units) --> need to convert B_maj and B_min to pixel units,
+    # from arcsec
+    # other note: data cube is in Jy/beam (to get to these units, will need to divide by velocity width of channels [20 km/s])
+    # flux map will be: Jy km/s: -- multply by 1/(Delta v) * (N_pix / Beam), where N_pix / Beam is Area of beam
+    # --> multiply flux map by A_beam / delta_v, where delta_v is ~20 km/s
+    bmaj = max(x_std, y_std) / resolution
+    bmin = min(x_std, y_std) / resolution
+    A_beam = 1.1331 * bmaj * bmin  # area of beam
+    delta_v = (z_ax[-1] - z_ax[0]) / (len(z_ax) - 1.)
+    weight *= A_beam / delta_v
+
     # plt.imshow(weight, origin='lower')
     # plt.colorbar()
     # plt.show()
@@ -1075,7 +1108,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     plt.show()
     # '''
 
-    # '''  #
+    '''  #
     hdu = fits.PrimaryHDU(intrinsic_cube)
     hdul = fits.HDUList([hdu])
     hdul.writeto('NGC_1332_fullsize_intrinsic_n5_beam31_s1.fits')
@@ -1138,8 +1171,8 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
         print(z)
         tl = time.time()
         # I think the problem is I need to set origin?
-        # convolved_cube[z, :, :] = convolution.convolve(intrinsic_cube[z, :, :], beam)
-        convolved_cube[z,:,:] = filters.convolve(intrinsic_cube[z,:,:], beam, mode='constant', cval=0.0)
+        convolved_cube[z, :, :] = convolution.convolve(intrinsic_cube[z, :, :], beam)
+        # convolved_cube[z,:,:] = filters.convolve(intrinsic_cube[z,:,:], beam, mode='constant', cval=0.0)
                                                  # cval=0.0)  # , origin=orig)
         print("Convolution loop " + str(z) + " took {0} seconds".format(time.time() - tl))
     print('convolved! Total convolution loop took {0} seconds'.format(time.time() - ts))
@@ -1276,7 +1309,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
                                    [339, 329], [10, 450]])  # [411, 370]->[270,411]; [329, 301], [346, 405]
         '''
         # inds_to_try2 = np.asarray([[83, 83], [85, 84], [77, 76], [78, 74], [90, 88], [90, 65]])
-        inds_to_try2 = int(4)*np.asarray([[159, 159], [165, 155], [155, 165], [160, 160], [170, 170], [150, 150], [155, 155], [165, 165]])
+        inds_to_try2 = np.asarray([[159, 159], [165, 155], [155, 165], [160, 160], [170, 170], [150, 150], [155, 155], [165, 165]])
         # cent_x = int(len(convolved_cube[0][0])/2)
         # cent_y = int(len(convolved_cube[0])/2)
         # inds_to_try2 = np.asarray([[cent_x, cent_y], [cent_x+1, cent_y+1], [cent_x-1, cent_y-1]])
@@ -1338,10 +1371,9 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
 
     # WRITE OUT RESULTS TO FITS FILE
     if out_name is not None:
-        cube_base = '/Users/jonathancohn/Documents/dyn_mod/'
         hdu = fits.PrimaryHDU(convolved_cube)
         hdul = fits.HDUList([hdu])
-        hdul.writeto(cube_base + out_name)
+        hdul.writeto(out_name)
         print('written!')
         # NOTE: right now all 0s
 
@@ -1484,8 +1516,7 @@ if __name__ == "__main__":
     # MAKE ALMA BEAM  # grid_size anything (must = collapsed datacube size for lucy); x_std=major; y_std=minor; rot=PA
     beam = make_beam(grid_size=gsize, res=resolution, x_std=x_fwhm, y_std=y_fwhm, rot=np.deg2rad(90. - pos))
     # beam = make_beam(grid_size=gsize, res=resolution, x_std=x_fwhm, y_std=y_fwhm, rot=np.deg2rad(90. - pos),
-    #                  fits_name='newfiles_fullsize_beam' + str(gsize) + 'res.fits')
-    # print(oop)
+    #                  fits_name='newfiles_fullsize_beam' + str(gsize) + 'res_fwhm.fits')
     # , fits_name='newfiles_beam80.fits')  # with gsize=80
     # '''
 
@@ -1498,10 +1529,11 @@ if __name__ == "__main__":
     # cube = '/Users/jonathancohn/Documents/dyn_mod/NGC1332_01_calibrated_source_coline.pbcor.fits'
     d_mask = '/Users/jonathancohn/Documents/dyn_mod/NGC_1332_newfiles/NGC1332_CO21_C3_MS_bri_20kms_strictmask.mask.fits'
     # lucy = '/Users/jonathancohn/Documents/dyn_mod/newfiles_masked_xy_beam31res_1000_limchi1e-9lucy_collapsedmask_n5.fits'
-    lucy = '/Users/jonathancohn/Documents/dyn_mod/newfiles_fullsize_masked_xy_beam31res_1000_limchi1e-3lucy_collapsedmask_n5.fits'
-    # beam = newdfiles_beam31res.fits'
+    # lucy = '/Users/jonathancohn/Documents/dyn_mod/newfiles_fullsize_masked_xy_beam31res_1000_limchi1e-3lucy_collapsedmask_n5.fits'
+    lucy = '/Users/jonathancohn/Documents/dyn_mod/newfiles_fullsize_masked_xy_beam31resfwhm_1000_limchi1e-3lucy_collapsedmask_n5.fits'
+    # beam = newfiles_beam31res_fwhm.fits'
     # out = '1332_newfiles_fullsize_filtconv_n5_gsize' + str(gsize) + 'res_xy_newfilescollapsemask_s' + str(s) + '.fits'
-    out = 'NGC_1332_fullsize_filtconv_n5_beam' + str(gsize) + '_s' + str(s) + '.fits'
+    out = '/Users/jonathancohn/Documents/dyn_mod/NGC_1332_fullsize_apconv_n5_beam' + str(gsize) + 'fwhm_s' + str(s) + '.fits'
 
     # CREATE GRID!
     out_cube = model_grid(resolution=resolution, s=s, x_off=x_off, y_off=y_off, mbh=mbh, inc=inc, dist=dist, vsys=vsys,
