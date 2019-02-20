@@ -268,18 +268,33 @@ def get_fluxes(data_cube, data_mask, int_slice1=14, int_slice2=63, x_off=0., y_o
         hdul1.writeto(c_mask)  # rebinned_dat
 
     collapsed_fluxes = np.zeros(shape=(len(data[0]), len(data[0][0])))
-    combined = []
+    # combined = []
     for zi in range(len(data)):
         # combined.append(data[zi] * mask[zi])
         collapsed_fluxes += data[zi] * mask[zi] * abs(f_step)
     # combined = np.asarray(combined)
+    '''  # 
+    collapsed_comb = integrate.simps(combined, axis=0)
+    plt.imshow(collapsed_comb, origin='lower')
+    plt.colorbar()
+    plt.show()
+
+    plt.imshow(collapsed_fluxes, origin='lower')
+    plt.colorbar()
+    plt.show()
+
+    plt.imshow(collapsed_fluxes / np.amax(collapsed_fluxes) - collapsed_comb / np.amax(collapsed_comb), origin='lower')
+    plt.colorbar()
+    plt.show()
+    print(oop)
+    # '''  #
+
     # plt.imshow(combined[35], origin='lower')
     # plt.show()
     # LOOKS GOOD!
 
     # collapsed_fluxes = integrate.simps(data[int_slice1:int_slice2], axis=0)  # according to my python terminal tests
     # collapsed_fluxes = integrate.simps(combined, axis=0)
-    # BUCKET BUCKET!!!!: go back to addition * freq_channel_width instead of integration (still gives Jy/beam Hz)
 
     # plt.imshow(collapsed_fluxes, origin='lower')
     # plt.colorbar()
@@ -290,7 +305,7 @@ def get_fluxes(data_cube, data_mask, int_slice1=14, int_slice2=63, x_off=0., y_o
     hdu.close()
     # print(freq_axis[0], freq_axis[-1], len(freq_axis))
     # print(oop)
-    collapsed_fluxes *= 1000.
+    collapsed_fluxes *= 1000.  # to bring to "regular" numbers for lucy process; will undo after lucy process
 
     if write_name is not None:
         '''  #
@@ -312,6 +327,20 @@ def get_fluxes(data_cube, data_mask, int_slice1=14, int_slice2=63, x_off=0., y_o
 def blockshaped(arr, nrow, ncol):  # CONFIRMED
     h, w = arr.shape
     return arr.reshape(h // nrow, nrow, -1, ncol).swapaxes(1, 2).reshape(-1, nrow, ncol)
+
+
+def rebin(data, n):
+    rebinned = []
+    for z in range(len(data)):
+        subarrays = blockshaped(data[z, :, :], n, n)  # bin the data in groups of nxn (4x4) pixels
+        # each pixel in the new, rebinned data cube is the mean of each 4x4 set of original pixels
+        # reshaped = np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data[0]) / 4.),
+        #                                                                   int(len(data[0][0]) / 4.)))
+        reshaped = n**2 * np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data[0]) / n),
+                                                                                 int(len(data[0][0]) / n)))
+        rebinned.append(reshaped)
+    print('rebinned')
+    return np.asarray(rebinned)
 
 
 # BUCKET UNCONFIRMED: (*ALSO* NEED TO REDEFINE PARAMS)
@@ -423,12 +452,6 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     # print(z_ax[1] - z_ax[0])  # 20.1 km/s yay! (newfiles --> 20km/s [19.9917398153], [19.8979441208] --> okay good?)
     # print(oops)
 
-    # ****************************** BUCKET NEED TO CONVERT TO FREQ GRID!!!!!! ******************************
-    # take v_obs grid and turn to freq using v_obs
-    # delta_sig = delta_freq / freq0 = sigma_los / c
-    # divide both maps by (1+z)
-    # BUCKET BUCKET: use new map from Ben, and divide by sqrt(2*pi*sigma). Do 4x4 binning before compare lps. THEN v_obs->freq
-
     # SET UP OBSERVATION AXES
     # initialize all values along axes at 0., but with a length equal to axis length [arcsec] * oversampling factor /
     # resolution [arcsec / pixel]  --> units of pixels along the observed axes
@@ -505,8 +528,13 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     # CALCULATE ENCLOSED MASS BASED ON MBH AND ENCLOSED STELLAR MASS
     # CREATE A FUNCTION TO INTERPOLATE (AND EXTRAPOLATE) ENCLOSED STELLAR M(R)
     t_mass = time.time()
-    m_star_r = interpolate.interp1d(radii, m_stellar, fill_value='extrapolate')  # this creates a function
+    m_star_r = interpolate.interp1d(radii, m_stellar, kind='cubic', fill_value='extrapolate')  # this creates a function
+    # print(m_star_r(0.53*10**3))  # correct!
+    # print(m_stellar)
+    # print(radii)
+    # print(oops)
     m_R = mbh + ml_const * m_star_r(R)  # Use m_star_r function to interpolate mass at all radii R (2d array)
+    # BUCKET BUCKET USE SPLINE! (cubic maybe?) ALSO, ADJUST TO USE v(R) as well --> multiply by sqrt(ml_const)
     ''' #
     # Plot mass as a function of R
     Rplot = R.ravel()
@@ -838,7 +866,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     cube_model = []
     freq_diffs = []
     for fr in range(len(freq_ax)):
-        print(freq_ax[fr])
+        # print(freq_ax[fr])
         # freq_diffs.append(-(freq_ax[fr] - freq_obs))
         cube_model.append(weight * f_w * np.exp(-(freq_ax[fr] - freq_obs) ** 2 / (2 * delta_freq_obs ** 2)))
     cube_model = np.asarray(cube_model)
@@ -847,6 +875,10 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     print(cube_model.shape)
     print(np.amax(cube_model), np.amin(cube_model), np.argmax(cube_model, axis=0))
 
+    plt.imshow(cube_model[40], origin='lower')
+    plt.colorbar()
+    plt.show()
+    print(oop)
     #hdu = fits.PrimaryHDU(freq_diffs)
     #hdul = fits.HDUList([hdu])
     #hdul.writeto('cube_freq_diffs.fits')
@@ -1010,6 +1042,8 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     if s == 1:
         intrinsic_cube = cube_model  # obs3d
     else:
+        intrinsic_cube = rebin(obs3d, s)
+    '''  # TRYING REBIN FUNCTION
         intrinsic_cube = []  # np.zeros(shape=(len(z_ax), len(fluxes), len(fluxes[0])))
         for z2 in range(len(z_ax)):
             print(z2)
@@ -1023,9 +1057,10 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
             # reshaped = s**2 * np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((len(fluxes), len(fluxes[0])))
             reshaped = np.sum(np.sum(subarrays, axis=-1), axis=-1).reshape((len(fluxes), len(fluxes[0])))
             intrinsic_cube.append(reshaped)
+    intrinsic_cube = np.asarray(intrinsic_cube)
+    # '''  # END TRYING REBIN FUNCTION
     print("intrinsic cube done in {0} s".format(time.time() - t_z))  # 0.34 s YAY! (1.3 s for s=6)
     print("start to intrinsic done in {0} s".format(time.time() - t0))  # 6.2s for s=6
-    intrinsic_cube = np.asarray(intrinsic_cube)
 
     '''
     plt.imshow(intrinsic_cube[37], origin='lower')
@@ -1118,6 +1153,15 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
         print("Convolution loop " + str(z) + " took {0} seconds".format(time.time() - tl))
     print('convolved! Total convolution loop took {0} seconds'.format(time.time() - ts))
 
+    # WRITE OUT RESULTS TO FITS FILE
+    if out_name is not None:
+        hdu = fits.PrimaryHDU(convolved_cube)
+        hdul = fits.HDUList([hdu])
+        hdul.writeto(out_name)
+        print('written!')
+        # NOTE: right now all 0s
+    # '''  #
+
     '''
     plt.imshow(convolved_cube[37], origin='lower')
     plt.colorbar()
@@ -1170,7 +1214,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     # convolved_cube = np.rot90(convolved_cube, axes=(1, 2))
     # print(np.swapaxes(convolved_cube, 1, 2).shape)
 
-    # '''  #
+    '''  #
     # TRY THINGS AGAIN
     # hdu = fits.open(data_cube)
     # data_vs = hdu[0].data[0]  # header = hdu[0].header
@@ -1227,17 +1271,12 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
         print(inds)
         # print(data_vs[0][inds].shape)
         print(inds.shape)  # 320, 320. Good!
-
-        '''
-        inds_to_try2 = np.asarray([[315, 337], [337, 325], [340, 340], [350, 325], [350, 350],
-                                   [325, 350], [320, 360], [315, 315], [337, 315], [270, 411],
-                                   [339, 329], [10, 450]])  # [411, 370]->[270,411]; [329, 301], [346, 405]
-        '''
+        
         # inds_to_try2 = np.asarray([[83, 83], [85, 84], [77, 76], [78, 74], [90, 88], [90, 65]])
         inds_to_try2 = np.asarray(
             [[159, 159], [165, 155], [155, 165], [160, 160], [170, 170], [150, 150], [155, 155], [165, 165]])
 
-        # '''  #  COMPARE MODEL TO DATA SLICES
+        #  #  COMPARE MODEL TO DATA SLICES
         slices_to_try = np.asarray([20, 30, 35, 36, 37, 38, 39, 40])
         for slice in slices_to_try:
             fig = plt.figure()
@@ -1248,7 +1287,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
             ax.set_aspect('equal')
             plt.colorbar(orientation='vertical')
             plt.show()
-        # '''  #
+        #  #
 
         for i in range(len(inds_to_try2)):
             print(i)
@@ -1266,15 +1305,6 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
             plt.close()
         # print(oops)
     # END TRY THINGS AGAIN
-    # '''  #
-
-    # WRITE OUT RESULTS TO FITS FILE
-    if out_name is not None:
-        hdu = fits.PrimaryHDU(convolved_cube)
-        hdul = fits.HDUList([hdu])
-        hdul.writeto(out_name)
-        print('written!')
-        # NOTE: right now all 0s
     # '''  #
 
     return convolved_cube
@@ -1333,7 +1363,7 @@ if __name__ == "__main__":
     # lucy = '/Users/jonathancohn/Documents/dyn_mod/newfiles_fullsize_masked_xy_beam31resfwhm_1000_limchi1e-3lucy_summed_n5.fits'
     lucy = '/Users/jonathancohn/Documents/dyn_mod/newfiles_fullsize_masked_xy_beam31resfwhm1_1000_limchi1e-3lucy_summed_n5.fits'
     # beam = 'newfiles_beam31res_fwhm.fits'
-    out = '/Users/jonathancohn/Documents/dyn_mod/NGC_1332_freqcube_summed_apconv_n5_beam' + str(gsize) + 'fwhm_s' + str(
+    out = '/Users/jonathancohn/Documents/dyn_mod/NGC_1332_freqcube_summed_apconv_n5_beam' + str(gsize) + 'fwhm_spline_s' + str(
         s) + '.fits'
 
     # check_beam(beam)
