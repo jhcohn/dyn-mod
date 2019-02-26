@@ -301,8 +301,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     # MAKE ALMA BEAM  # grid_size anything (must = collapsed datacube size for lucy); x_std=major; y_std=minor; rot=PA
     # beam = make_beam(grid_size=grid_size, res=resolution, x_std=x_fwhm, y_std=y_fwhm, rot=np.deg2rad(90. - pa))
     beam = make_beam(grid_size=grid_size, res=resolution, x_std=x_fwhm, y_std=y_fwhm, rot=np.deg2rad(90. - pa),
-                     fits_name=lucy_b)
-    #                  fits_name='newfiles_fullsize_beam' + str(gsize) + 'res_fwhm.fits')
+                     fits_name=lucy_b)  # this function now auto-creates the beam file lucy_b if it doesn't yet exist
 
     # COLLAPSE THE DATA CUBE
     fluxes, freq_ax, f_0, input_data = get_fluxes(data_cube, data_mask, write_name=lucy_in)
@@ -394,10 +393,10 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
 
     # SET BH POSITION [in arcsec], based on the input offset values
     # DON'T divide offset positions by s, unless offset positions are in subpixels instead of pixels
-    # x_bhctr = x_off * resolution
-    # y_bhctr = y_off * resolution
-    x_bhctr = x_off  # NEW: using arcsec inputs!
-    y_bhctr = y_off  # NEW: using arcsec inputs!
+    x_bhctr = (x_off - x_ctr / s) * resolution
+    y_bhctr = (y_off - y_ctr / s) * resolution
+    # x_bhctr = x_off  # NEW: using arcsec inputs!
+    # y_bhctr = y_off  # NEW: using arcsec inputs!
 
     # CONVERT FROM ARCSEC TO PHYSICAL UNITS (pc)
     # tan(angle) = x/d where d=dist and x=disk_radius --> x = d*tan(angle), where angle = arcsec / arcsec_per_rad
@@ -407,8 +406,11 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     print('BH is at [pc]: ', x_bhctr, y_bhctr)
 
     # convert all x,y observed grid positions to pc
+    x_arcsec = x_obs
+    y_arcsec = y_obs
     x_obs = np.asarray([dist * 10 ** 6 * np.tan(x / constants.arcsec_per_rad) for x in x_obs])  # 206265 arcsec/rad
     y_obs = np.asarray([dist * 10 ** 6 * np.tan(y / constants.arcsec_per_rad) for y in y_obs])  # 206265 arcsec/rad
+
 
     # at each x,y spot in grid, calculate what x_disk and y_disk are, then calculate R, v, etc.
     # CONVERT FROM x_obs, y_obs TO x_disk, y_disk (still in pc)
@@ -504,21 +506,31 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     sigma = get_sig(r=R, sig0=sig_params[0], r0=sig_params[1], mu=sig_params[2], sig1=sig_params[3])[sig_type]
     # print(sigma)
 
-    zred = vsys / (constants.c / constants.m_per_km)  # 0.005210938295185531
+    zred = vsys / constants.c_kms  # 0.005210938295185531
+    print(zred)
+    print(f_0)
 
     # CONVERT v_los TO OBSERVED FREQUENCY MAP
     freq_obs = (f_0 / (1+zred)) * (1 - v_los / constants.c_kms)
-    # print(freq_ax)  # 2.29909 to 2.28777 (e11)
+    print(np.amax(freq_ax), np.amin(freq_ax))      # (229341791123.0, 227496210337.90479)
+    print(np.amax(freq_obs), np.amin(freq_obs))    # (229757280000.37192, 227111459583.84235)
 
-    plt.imshow(freq_obs, origin='lower')
+    plt.imshow(freq_obs, origin='lower', vmax=np.amax(freq_obs), vmin=np.amin(freq_obs), cmap='viridis',
+               extent=[np.amin(x_obs), np.amax(x_obs), np.amin(y_obs), np.amax(y_obs)])
     plt.colorbar()
     plt.show()
 
+    # 60th slice of data -> ~central slice (i.e. ~v_sys) --> freq_ax = 2.28434e11
+
+
     # CONVERT OBSERVED DISPERSION (turbulent) TO FREQUENCY WIDTH
     sigma_grid = np.zeros(shape=(v_los.shape)) + sigma
-    delta_freq_obs = (f_0 / (1 + zred)) * (sigma_grid / constants.c_kms)
+    delta_freq_obs = (f_0 / (1 + zred)) * (sigma_grid / constants.c_kms)  # 1e11 / 1e5 ~ 1e6
 
     print(np.amax(sigma), np.amin(sigma))
+    print(np.amax(delta_freq_obs), np.amin(delta_freq_obs))
+    print(np.argmax(delta_freq_obs, axis=-1))
+    print(delta_freq_obs[np.argmax(delta_freq_obs, axis=0)])
     plt.imshow(delta_freq_obs, origin='lower', vmin=np.amin(delta_freq_obs), vmax=np.amax(delta_freq_obs))
     plt.colorbar()
     plt.show()
@@ -538,17 +550,12 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
 
     # BUILD GAUSSIAN LINE PROFILES!!!
     t_mod = time.time()
-    cube_model = []  # initialize model cube
+    cube_model = np.zeros(shape=(len(freq_ax), len(freq_obs), len(freq_obs[0])))  # initialize model cube
     for fr in range(len(freq_ax)):
         print(fr)
-        cube_model.append(weight * f_w * np.exp(-(freq_ax[fr] - freq_obs) ** 2 / (2 * delta_freq_obs ** 2)))
-    cube_model = np.asarray(cube_model)
+        cube_model[fr] = weight * f_w * np.exp(-(freq_ax[fr] - freq_obs) ** 2 / (2 * delta_freq_obs ** 2))
     print('cube model constructed in ' + str(time.time() - t_mod) + ' s')  # 34s
     # print(cube_model.shape)
-
-    # plt.imshow(cube_model[40], origin='lower')
-    # plt.colorbar()
-    # plt.show()
 
     # x_disk = (x_obs[None, :] - x_bhctr) * np.cos(theta) + (y_obs[:, None] - y_bhctr) * np.sin(theta)  # 2d array
     # y_disk = (y_obs[:, None] - y_bhctr) * np.cos(theta) - (x_obs[None, :] - x_bhctr) * np.sin(theta)  # 2d array
@@ -560,9 +567,8 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
         intrinsic_cube = cube_model
     else:
         intrinsic_cube = rebin(cube_model, s)
-    print("intrinsic cube done in {0} s".format(time.time() - t_z))  # 11s
-    print("start to intrinsic done in {0} s".format(time.time() - t0))  # 85s (including stops to close/save figs)
-
+    print("intrinsic cube done in {0} s".format(time.time() - t_z))  # 15s
+    print("start to intrinsic done in {0} s".format(time.time() - t0))  # 47s (including stops to close/save figs)
 
     # CONVERT INTRINSIC TO OBSERVED
     # take velocity slice from intrinsic data cube, convolve with alma beam --> observed data cube
@@ -575,6 +581,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
         convolved_cube[z, :, :] = convolution.convolve(intrinsic_cube[z, :, :], beam)  # CONFIRMED!
         print("Convolution loop " + str(z) + " took {0} seconds".format(time.time() - tl))
     print('convolved! Total convolution loop took {0} seconds'.format(time.time() - ts))  # ~1.5s x len(z_ax) --> 175s
+    # approx ~3e-6s per pixel. So estimate as len(z_ax)*len(x)*len(y)*3e-6 seconds (within a factor of 3)
 
     # WRITE OUT RESULTS TO FITS FILE
     if not Path(out_name).exists():
@@ -698,7 +705,7 @@ if __name__ == "__main__":
     pars_str = ''
     for key in params:
         pars_str += str(params[key]) + '_'
-    out = '/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_general_' + pars_str + '.fits'
+    out = '/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_general_' + pars_str + '_take2.fits'
 
     # If the lucy process hasn't been done yet, and the mask cube also hasn't been collapsed yet, create collapsed mask
     if not Path(files['lucy']).exists() and not Path(files['lucy_mask']).exists():
@@ -717,11 +724,11 @@ if __name__ == "__main__":
     # CREATE MODEL CUBE!
     out_cube = model_grid(resolution=fixed_pars['resolution'], s=fixed_pars['s'], x_off=params['xoff'],
                           y_off=params['yoff'], mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'],
-                          dist=fixed_pars['dist'], theta=np.deg2rad(params['theta']), data_cube=files['data'],
+                          dist=fixed_pars['dist'], theta=np.deg2rad(params['PAdisk']), data_cube=files['data'],
                           data_mask=files['mask'], lucy_output=files['lucy'], out_name=out, ml_ratio=params['ml_ratio'],
                           enclosed_mass=files['mass'], menc_type=files['mtype']==True, sig_type=fixed_pars['s_type'],
                           grid_size=fixed_pars['gsize'], x_fwhm=fixed_pars['x_fwhm'], y_fwhm=fixed_pars['y_fwhm'],
-                          pa=fixed_pars['PA'], sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']],
+                          pa=fixed_pars['PAbeam'], sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']],
                           f_w=params['f'], lucy_in=files['lucy_in'], lucy_b=files['lucy_b'], lucy_o=files['lucy_o'],
                           lucy_mask=files['lucy_mask'])
 
