@@ -260,7 +260,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
                theta=np.deg2rad(-200.), data_cube=None, data_mask=None, lucy_output=None, out_name=None,
                enclosed_mass=None, ml_ratio=1., sig_type='flat', grid_size=31, sig_params=[1., 1., 1., 1.], f_w=1.,
                x_fwhm=0.052, y_fwhm=0.037, pa=64., menc_type=False,  lucy_in=None, lucy_b=None, lucy_mask=None,
-               lucy_o=None):
+               lucy_o=None, lucy_it=10):
     """
     Build grid for dynamical modeling!
 
@@ -288,10 +288,12 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     :param y_fwhm: FWHM in the y-direction of the ALMA beam (arcsec) to use for the make_beam() function
     :param pa: position angle (in degrees) to use for the make_beam() function
     :param menc_type: Select how you incorporate enclosed stellar mass [True for mass(R) or False for velocity(R)]
-    :param lucy_in: file name of input summed flux map to use for lucy process (if lucy_output is None)
-    :param lucy_b: file name of input beam (built in make_beam function) to use for lucy process (if lucy_output is None)
-    :param lucy_o: file name that will become the lucy_output, used in lucy process (if lucy_output is None)
-    :param lucy_mask: file name of collapsed mask file to use in lucy process (if lucy_output is None)
+    :param lucy_in: file name of input summed flux map to use for lucy process (if lucy_output doesn't exist)
+    :param lucy_b: file name of input beam (built in make_beam function) to use for lucy process (if lucy_output doesn't
+        exist)
+    :param lucy_o: file name that will become the lucy_output, used in lucy process (if lucy_output doesn't exist)
+    :param lucy_mask: file name of collapsed mask file to use in lucy process (if lucy_output doesn't exist)
+    :param lucy_it: number of iterations to run in lucy process (if lucy_output doesn't exist)
 
     :return: observed line-of-sight velocity [km/s]
     """
@@ -320,7 +322,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
         import pyraf
         from pyraf import iraf
         from iraf import stsdas, analysis, restore  # THIS WORKED!!!!
-        restore.lucy(lucy_in, lucy_b, lucy_o, niter=10, maskin=lucy_mask, goodpixval=1, limchisq=1E-3)
+        restore.lucy(lucy_in, lucy_b, lucy_o, niter=lucy_it, maskin=lucy_mask, goodpixval=1, limchisq=1E-3)
         # CONFIRMED THIS WORKS!!!!!!!
         print('lucy process done in ' + str(time.time() - t_pyraf) + 's')  # ~10.6s
         if lucy_output is None:  # lucy_output should be defined, but just in case:
@@ -345,6 +347,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
                 subpix_deconvolved[(ypix * s):(ypix + 1) * s, (xpix * s):(xpix + 1) * s] = lucy_out[ypix, xpix] / s ** 2
     print('deconvolution took {0} s'.format(time.time() - t0))  # ~0.3 s (7.5s for 1280x1280 array)
     # plt.imshow(subpix_deconvolved, origin='lower')  # looks good!  # extent=[xmin, xmax, ymin, ymax]
+    # plt.colorbar()
     # plt.show()
 
     # GAUSSIAN STEP
@@ -470,10 +473,13 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
             for line in em:
                 cols = line.split()
                 radii.append(float(cols[0]))  # file lists radii in pc
-                v_circ.append(np.sqrt(float(cols[1])) * ml_ratio)  # km/s
+                # v_circ.append(np.sqrt(float(cols[1])) * ml_ratio)  # km/s
+                v_circ.append(float(cols[1]))  # v^2 / (M/L) --> units (km/s)^2 / (M_sol/L_sol)
         v_c_r = interpolate.interp1d(radii, v_circ, fill_value='extrapolate')  # create a function
         # print(v_c_r(1.), (v_c_r(5.) / ml_ratio)**2, (v_c_r(500) / ml_ratio)**2, (v_c_r(2000) / ml_ratio)**2)
-        vel = v_c_r(R) + np.sqrt(constants.G_pc * mbh / R)  # use v_c_r function to interpolate velocity due to stars
+        # vel = v_c_r(R) + np.sqrt(constants.G_pc * mbh / R)  # use v_c_r function to interpolate velocity due to stars
+        # vel = np.sqrt(v_c_r(R)**2 + np.sqrt(constants.G_pc * mbh / R)**2)  # velocities sum in quadrature
+        vel = np.sqrt(v_c_r(R) * ml_ratio + (constants.G_pc * mbh / R))  # velocities sum in quadrature
         # BUCKET BUCKET check is ^this right???
 
     print('vel')
@@ -705,7 +711,7 @@ if __name__ == "__main__":
     pars_str = ''
     for key in params:
         pars_str += str(params[key]) + '_'
-    out = '/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_general_' + pars_str + '_take2.fits'
+    out = '/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_general_' + pars_str + '_velcorr.fits'
 
     # If the lucy process hasn't been done yet, and the mask cube also hasn't been collapsed yet, create collapsed mask
     if not Path(files['lucy']).exists() and not Path(files['lucy_mask']).exists():
@@ -730,7 +736,7 @@ if __name__ == "__main__":
                           grid_size=fixed_pars['gsize'], x_fwhm=fixed_pars['x_fwhm'], y_fwhm=fixed_pars['y_fwhm'],
                           pa=fixed_pars['PAbeam'], sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']],
                           f_w=params['f'], lucy_in=files['lucy_in'], lucy_b=files['lucy_b'], lucy_o=files['lucy_o'],
-                          lucy_mask=files['lucy_mask'])
+                          lucy_mask=files['lucy_mask'], lucy_it=fixed_pars['lucy_it'])
 
     # /Users/jonathancohn/Documents/dyn_mod/ngc3258_general_lucyout_n10.fits
     '''
