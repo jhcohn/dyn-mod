@@ -256,7 +256,7 @@ def rebin(data, n):
     return np.asarray(rebinned)
 
 
-def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=np.deg2rad(60.), vsys=None, dist=17.,
+def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=np.deg2rad(60.), vsys=None, dist=17.,
                theta=np.deg2rad(-200.), data_cube=None, data_mask=None, lucy_output=None, out_name=None,
                enclosed_mass=None, ml_ratio=1., sig_type='flat', grid_size=31, sig_params=[1., 1., 1., 1.], f_w=1.,
                x_fwhm=0.052, y_fwhm=0.037, pa=64., menc_type=False,  lucy_in=None, lucy_b=None, lucy_mask=None,
@@ -266,8 +266,8 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
 
     :param resolution: resolution of observations [arcsec/pixel]
     :param s: oversampling factor
-    :param x_off: the location of the BH, offset from the center in the +x direction [arcsec]
-    :param y_off: the location of the BH, offset from the center in the +y direction [arcsec]
+    :param x_loc: the location of the BH, as measured along the x axis of the data cube [pixels]
+    :param y_loc: the location of the BH, as measured along the y axis of the data cube [pixels]
     :param mbh: supermassive black hole mass [solar masses]
     :param inc: inclination of the galaxy [radians]
     :param vsys: if given, the systemic velocity [km/s]
@@ -396,32 +396,27 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
 
     # SET BH POSITION [in arcsec], based on the input offset values
     # offsets are in pixels, rather than subpixels (so DON'T divide offsets by s)
-    x_bhctr = (x_off - x_ctr / s) * resolution  # (pix - subpix/(subpix/pix)) * (arcsec/pix) = arcsec
-    y_bhctr = (y_off - y_ctr / s) * resolution
-    # x_bhctr = x_off  # NEW: using arcsec inputs!
-    # y_bhctr = y_off  # NEW: using arcsec inputs!
+    x_bhctr = (x_loc - x_ctr / s) * resolution  # (pix - subpix/(subpix/pix)) * (arcsec/pix) = arcsec
+    y_bhctr = (y_loc - y_ctr / s) * resolution
+    # x_bhctr = x_loc  # NEW: using arcsec inputs!
+    # y_bhctr = y_loc  # NEW: using arcsec inputs!
 
     # CONVERT FROM ARCSEC TO PHYSICAL UNITS (pc)
     # tan(angle) = x/d where d=dist and x=disk_radius --> x = d*tan(angle), where angle = arcsec / arcsec_per_rad
     # convert BH position from arcsec to pc
-    # x_bhctr1 = dist * 10 ** 6 * np.tan(x_bhctr / constants.arcsec_per_rad)
-    # y_bhctr1 = dist * 10 ** 6 * np.tan(y_bhctr / constants.arcsec_per_rad)
-
-    x_bhctr = 151.8 * x_bhctr  # pc/arcsec
-    y_bhctr = 151.8 * y_bhctr  # pc/arcsec
-    # print(x_bhctr1, x_bhctr2)
-    # print(y_bhctr1, y_bhctr2)
+    x_bhctr = dist * 10 ** 6 * np.tan(x_bhctr / constants.arcsec_per_rad)
+    y_bhctr = dist * 10 ** 6 * np.tan(y_bhctr / constants.arcsec_per_rad)
+    # x_bhctr = 151.8 * x_bhctr  # pc/arcsec
+    # y_bhctr = 151.8 * y_bhctr  # pc/arcsec
     print('BH is at [pc]: ', x_bhctr, y_bhctr)
-
 
     # convert all x,y observed grid positions to pc
     x_arcsec = x_obs
     y_arcsec = y_obs
-    # x_obs = np.asarray([dist * 10 ** 6 * np.tan(x / constants.arcsec_per_rad) for x in x_obs])  # 206265 arcsec/rad
-    # y_obs = np.asarray([dist * 10 ** 6 * np.tan(y / constants.arcsec_per_rad) for y in y_obs])  # 206265 arcsec/rad
-
-    x_obs = 151.8 * np.asarray(x_obs)
-    y_obs = 151.8 * np.asarray(y_obs)
+    x_obs = np.asarray([dist * 10 ** 6 * np.tan(x / constants.arcsec_per_rad) for x in x_obs])  # 206265 arcsec/rad
+    y_obs = np.asarray([dist * 10 ** 6 * np.tan(y / constants.arcsec_per_rad) for y in y_obs])  # 206265 arcsec/rad
+    # x_obs = 151.8 * np.asarray(x_obs)
+    # y_obs = 151.8 * np.asarray(y_obs)
 
     # at each x,y spot in grid, calculate what x_disk and y_disk are, then calculate R, v, etc.
     # CONVERT FROM x_obs, y_obs TO x_disk, y_disk (still in pc)
@@ -513,10 +508,6 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     v_los[center] = 0.
     # print(center, v_los[center])
 
-    hdu1 = fits.PrimaryHDU(collapsed_mask)
-    hdul1 = fits.HDUList([hdu1])
-    hdul1.writeto(files['/Users/jonathancohn/Documents/dyn_mod/ngc_3258/v_los_pcscale.fits'])
-    print(oop)
     # CALCULATE OBSERVED VELOCITY
     v_obs = v_sys - v_los  # observed velocity v_obs at each point in the disk
     print('v_obs')
@@ -626,16 +617,13 @@ if __name__ == "__main__":
     parser.add_argument('--parfile')
 
     args = vars(parser.parse_args())
-    # kwargs = {}
-    # for key in args.keys():
-    #     kwargs[key] = args[key]
-    # print(kwargs['parfile'])
 
     params = {}
     fixed_pars = {}
     files = {}
     print(args['parfile'])
 
+    # READ IN PARAMS FORM THE PARAMETER FILE
     with open(args['parfile'], 'r') as pf:
         for line in pf:
             print(line)
@@ -668,61 +656,7 @@ if __name__ == "__main__":
     # print(params)
     # print(fixed_pars)
     # print(files)
-    '''
-    # BLACK HOLE MASS (M_sol), RESOLUTION (ARCSEC), VELOCITY SPACING (KM/S)
-    mbh = 6.64 * 10 ** 8  # 6.86 * 10 ** 8  # , 20.1 (v_spacing no longer necessary)
-    resolution = 0.01  # was 0.01, now 0.04 because we're binning the data  # now binning later->0.01  # 0.05  # 0.044
-    # DOUBLE CHECK THE ABOVE: 0.04 or 0.044
 
-    # X, Y OFFSETS (PIXELS)
-    x_off, y_off = 0., 0.  # 5., 17.  # +6., -4.  # 631. - 1280./2., 1280/2. - 651  # pixels  0., 0.
-
-    # VELOCITY DISPERSION PARAMETERS
-    sig0 = 32.1  # 22.2  # km/s
-    r0, mu, sig1 = 1., 1., 1.  # using for sigma(R) (Gaussian or exponential)
-    s_type = 'flat'
-
-    # DISTANCE (Mpc), INCLINATION (rad), POSITION ANGLE (rad)
-    dist = 22.3  # Mpc
-    inc = np.deg2rad(85.2)  # 83.
-    theta = np.deg2rad(26.7)  # + 180.)  # (180. + 116.7)  # 116.7 - 90.
-    vsys = 1562.2  # km/s
-    # Note: 22.3 * 10**6 * tan(1280 * 0.01 / 206265) = 1383.85 pc --> 1383.85 pc / 1280 pix = 1.08 pc/pix
-
-    # OVERSAMPLING FACTOR
-    s = 1  # set to 1 to match letter
-
-    # ENCLOSED MASS FILE, CONSTANT BY WHICH TO MULTIPLY THE M/L RATIO
-    enc_mass = 'ngc1332_enclosed_stellar_mass'
-    ml_ratio = 7.83
-    ml_const = ml_ratio / 7.35  # because enc_mass file assumes a ml_ratio of 7.35
-    # ml_const = 1.065  # 7.83 / 7.35 # 7.53 / 7.35 (1.024)
-
-    # ALMA BEAM PARAMS
-    gsize = 31  # size of grid (must be odd)
-    x_fwhm = 0.052  # arcsec
-    y_fwhm = 0.037  # arcsec
-    pa = 64.  # position angle (deg)
-
-    # MAKE ALMA BEAM  # grid_size anything (must = collapsed datacube size for lucy); x_std=major; y_std=minor; rot=PA
-    beam = make_beam(grid_size=gsize, res=resolution, x_std=x_fwhm, y_std=y_fwhm, rot=np.deg2rad(90. - pa))
-    # beam = make_beam(grid_size=gsize, res=resolution, x_std=x_fwhm, y_std=y_fwhm, rot=np.deg2rad(90. - pa),
-    #                  fits_name='newfiles_fullsize_beam' + str(gsize) + 'res_fwhm.fits')
-
-    cube = '/Users/jonathancohn/Documents/dyn_mod/NGC_1332_newfiles/NGC1332_CO21_C3_MS_bri_20kms.pbcor.fits'
-    d_mask = '/Users/jonathancohn/Documents/dyn_mod/NGC_1332_newfiles/NGC1332_CO21_C3_MS_bri_20kms_strictmask.mask.fits'
-    # lucy = '/Users/jonathancohn/Documents/dyn_mod/newfiles_fullsize_masked_xy_beam31resfwhm_1000_limchi1e-3lucy_collapsedmask_n5.fits'
-    # lucy = '/Users/jonathancohn/Documents/dyn_mod/newfiles_fullsize_masked_xy_beam31resfwhm_1000_limchi1e-3lucy_summed_n5.fits'
-    lucy = '/Users/jonathancohn/Documents/dyn_mod/newfiles_fullsize_masked_xy_beam31resfwhm1_1000_limchi1e-3lucy_summed_n5.fits'
-    # beam = 'newfiles_beam31res_fwhm.fits'
-    out = '/Users/jonathancohn/Documents/dyn_mod/NGC_1332_freqcube_summed_apconv_n5_beam' + str(gsize) + 'fwhm_spline_s' + str(
-        s) + '.fits'
-
-    lucy_in = '/Users/jonathancohn/Documents/dyn_mod/NGC1332_newfiles_fullsize_masked_summed_1000.fits'
-    lucy_b = '/Users/jonathancohn/Documents/dyn_mod/newfiles_fullsize_beam31res_fwhm.fits'
-    lucy_o = '/Users/jonathancohn/Documents/dyn_mod/pyraf_out_n5.fits[0]'
-    lucy_mask = '/Users/jonathancohn/Documents/dyn_mod/NGC_1332_newfiles/collapsed_mask_fullsize.fits'
-    '''
     # Make nice plot fonts
     rc('font', **{'family': 'serif', 'serif': ['Times']})
     rc('text', usetex=True)
@@ -748,8 +682,8 @@ if __name__ == "__main__":
         hdul1.writeto(files['lucy_mask'])
 
     # CREATE MODEL CUBE!
-    out_cube = model_grid(resolution=fixed_pars['resolution'], s=fixed_pars['s'], x_off=params['xoff'],
-                          y_off=params['yoff'], mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'],
+    out_cube = model_grid(resolution=fixed_pars['resolution'], s=fixed_pars['s'], x_loc=params['xloc'],
+                          y_loc=params['yloc'], mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'],
                           dist=fixed_pars['dist'], theta=np.deg2rad(params['PAdisk']), data_cube=files['data'],
                           data_mask=files['mask'], lucy_output=files['lucy'], out_name=out, ml_ratio=params['ml_ratio'],
                           enclosed_mass=files['mass'], menc_type=files['mtype']==True, sig_type=fixed_pars['s_type'],
@@ -757,12 +691,3 @@ if __name__ == "__main__":
                           pa=fixed_pars['PAbeam'], sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']],
                           f_w=params['f'], lucy_in=files['lucy_in'], lucy_b=files['lucy_b'], lucy_o=files['lucy_o'],
                           lucy_mask=files['lucy_mask'], lucy_it=fixed_pars['lucy_it'])
-
-    # /Users/jonathancohn/Documents/dyn_mod/ngc3258_general_lucyout_n10.fits
-    '''
-    out_cube = model_grid(resolution=resolution, s=s, x_off=x_off, y_off=y_off, mbh=mbh, inc=inc, dist=dist, vsys=vsys,
-                          theta=theta, data_cube=cube, data_mask=d_mask, lucy_output=lucy, out_name=out, incl_fig=0,
-                          ml_const=ml_const, enclosed_mass=enc_mass, sig_type=s_type, grid_size=gsize, x_fwhm=x_fwhm,
-                          y_fwhm=y_fwhm, pa=pa, sig_params=[sig0, r0, mu, sig1], lucy_in=lucy_in, lucy_b=lucy_b,
-                          lucy_o=lucy_o, lucy_mask=lucy_mask)
-    '''
