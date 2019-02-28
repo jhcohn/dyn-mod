@@ -370,10 +370,10 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     # SET UP OBSERVATION AXES
     # initialize all values along axes at 0., but with a length equal to axis length [arcsec] * oversampling factor /
     # resolution [arcsec / pixel]  --> units of pixels along the observed axes
-    y_obs = [0.] * len(lucy_out) * s
-    x_obs = [0.] * len(lucy_out[0]) * s
+    y_obs = [0.] * len(subpix_deconvolved)
+    x_obs = [0.] * len(subpix_deconvolved[0])
 
-    # set center of the observed axes (find the central pixel number along each axis)
+    # Define coordinates to be 0,0 at center of the observed axes (find the central pixel number along each axis)
     if len(x_obs) % 2. == 0:  # if even
         x_ctr = (len(x_obs)) / 2.  # set the center of the axes (in pixel number)
         for i in range(len(x_obs)):
@@ -395,8 +395,8 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
             # y_obs[i] = resolution * (y_ctr - (i + 1)) / s
 
     # SET BH POSITION [in arcsec], based on the input offset values
-    # DON'T divide offset positions by s, unless offset positions are in subpixels instead of pixels
-    x_bhctr = (x_off - x_ctr / s) * resolution
+    # offsets are in pixels, rather than subpixels (so DON'T divide offsets by s)
+    x_bhctr = (x_off - x_ctr / s) * resolution  # (pix - subpix/(subpix/pix)) * (arcsec/pix) = arcsec
     y_bhctr = (y_off - y_ctr / s) * resolution
     # x_bhctr = x_off  # NEW: using arcsec inputs!
     # y_bhctr = y_off  # NEW: using arcsec inputs!
@@ -404,16 +404,24 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     # CONVERT FROM ARCSEC TO PHYSICAL UNITS (pc)
     # tan(angle) = x/d where d=dist and x=disk_radius --> x = d*tan(angle), where angle = arcsec / arcsec_per_rad
     # convert BH position from arcsec to pc
-    x_bhctr = dist * 10 ** 6 * np.tan(x_bhctr / constants.arcsec_per_rad)
-    y_bhctr = dist * 10 ** 6 * np.tan(y_bhctr / constants.arcsec_per_rad)
+    # x_bhctr1 = dist * 10 ** 6 * np.tan(x_bhctr / constants.arcsec_per_rad)
+    # y_bhctr1 = dist * 10 ** 6 * np.tan(y_bhctr / constants.arcsec_per_rad)
+
+    x_bhctr = 151.8 * x_bhctr  # pc/arcsec
+    y_bhctr = 151.8 * y_bhctr  # pc/arcsec
+    # print(x_bhctr1, x_bhctr2)
+    # print(y_bhctr1, y_bhctr2)
     print('BH is at [pc]: ', x_bhctr, y_bhctr)
+
 
     # convert all x,y observed grid positions to pc
     x_arcsec = x_obs
     y_arcsec = y_obs
-    x_obs = np.asarray([dist * 10 ** 6 * np.tan(x / constants.arcsec_per_rad) for x in x_obs])  # 206265 arcsec/rad
-    y_obs = np.asarray([dist * 10 ** 6 * np.tan(y / constants.arcsec_per_rad) for y in y_obs])  # 206265 arcsec/rad
+    # x_obs = np.asarray([dist * 10 ** 6 * np.tan(x / constants.arcsec_per_rad) for x in x_obs])  # 206265 arcsec/rad
+    # y_obs = np.asarray([dist * 10 ** 6 * np.tan(y / constants.arcsec_per_rad) for y in y_obs])  # 206265 arcsec/rad
 
+    x_obs = 151.8 * np.asarray(x_obs)
+    y_obs = 151.8 * np.asarray(y_obs)
 
     # at each x,y spot in grid, calculate what x_disk and y_disk are, then calculate R, v, etc.
     # CONVERT FROM x_obs, y_obs TO x_disk, y_disk (still in pc)
@@ -424,6 +432,11 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     # CALCULATE THE RADIUS (R) OF EACH POINT (x_disk, y_disk) IN THE DISK (pc)
     R = np.sqrt((y_disk ** 2 / np.cos(inc) ** 2) + x_disk ** 2)  # radius R of each point in the disk (2d array)
     # print(R.shape)
+
+    # hdu = fits.PrimaryHDU(R)
+    # hdul = fits.HDUList([hdu])
+    # hdul.writeto('/Users/jonathancohn/Documents/dyn_mod/ngc_3258_R_s1_pc.fits')
+    # print(oop)
 
     '''  #
     # PRINT PVD
@@ -476,14 +489,17 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
                 # v_circ.append(np.sqrt(float(cols[1])) * ml_ratio)  # km/s
                 v_circ.append(float(cols[1]))  # v^2 / (M/L) --> units (km/s)^2 / (M_sol/L_sol)
         v_c_r = interpolate.interp1d(radii, v_circ, fill_value='extrapolate')  # create a function
-        # print(v_c_r(1.), (v_c_r(5.) / ml_ratio)**2, (v_c_r(500) / ml_ratio)**2, (v_c_r(2000) / ml_ratio)**2)
         # vel = v_c_r(R) + np.sqrt(constants.G_pc * mbh / R)  # use v_c_r function to interpolate velocity due to stars
-        # vel = np.sqrt(v_c_r(R)**2 + np.sqrt(constants.G_pc * mbh / R)**2)  # velocities sum in quadrature
         vel = np.sqrt(v_c_r(R) * ml_ratio + (constants.G_pc * mbh / R))  # velocities sum in quadrature
         # BUCKET BUCKET check is ^this right???
-
-    print('vel')
     print('Time elapsed in assigning enclosed masses is {0} s'.format(time.time() - t_mass))  # ~3.5s
+
+    # plt.plot(radii, np.sqrt(np.asarray(v_circ) * ml_ratio), 'r*', label=r'Data')
+    # plt.plot(np.sort(R), np.sqrt(v_c_r(np.sort(R)) * ml_ratio), 'k-', label=r'v$_{circ}$')
+    # plt.plot(np.sort(R), np.sqrt(constants.G_pc * mbh / np.sort(R)), 'b-', label=r'v$_{BH}$')
+    # plt.plot(np.sort(R), np.sqrt(v_c_r(np.sort(R)) * ml_ratio + constants.G_pc * mbh / np.sort(R)), 'g-', label=r'Total')
+    # plt.show()
+    print('vel')
 
     # CALCULATE LINE-OF-SIGHT VELOCITY AT EACH POINT (x_disk, y_disk) IN THE DISK (km/s)
     alpha = abs(np.arctan(y_disk / (np.cos(inc) * x_disk)))  # alpha meas. from +x (minor axis) toward +y (major axis)
@@ -497,6 +513,10 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     v_los[center] = 0.
     # print(center, v_los[center])
 
+    hdu1 = fits.PrimaryHDU(collapsed_mask)
+    hdul1 = fits.HDUList([hdu1])
+    hdul1.writeto(files['/Users/jonathancohn/Documents/dyn_mod/ngc_3258/v_los_pcscale.fits'])
+    print(oop)
     # CALCULATE OBSERVED VELOCITY
     v_obs = v_sys - v_los  # observed velocity v_obs at each point in the disk
     print('v_obs')
@@ -512,14 +532,14 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     sigma = get_sig(r=R, sig0=sig_params[0], r0=sig_params[1], mu=sig_params[2], sig1=sig_params[3])[sig_type]
     # print(sigma)
 
-    zred = vsys / constants.c_kms  # 0.005210938295185531
+    zred = vsys / constants.c_kms
     print(zred)
     print(f_0)
 
     # CONVERT v_los TO OBSERVED FREQUENCY MAP
     freq_obs = (f_0 / (1+zred)) * (1 - v_los / constants.c_kms)
     print(np.amax(freq_ax), np.amin(freq_ax))      # (229341791123.0, 227496210337.90479)
-    print(np.amax(freq_obs), np.amin(freq_obs))    # (229757280000.37192, 227111459583.84235)
+    print(np.amax(freq_obs), np.amin(freq_obs))    # (229634014164.03555, 227195356303.58209)
 
     plt.imshow(freq_obs, origin='lower', vmax=np.amax(freq_obs), vmin=np.amin(freq_obs), cmap='viridis',
                extent=[np.amin(x_obs), np.amax(x_obs), np.amin(y_obs), np.amax(y_obs)])
@@ -548,7 +568,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     weight = subpix_deconvolved / 1000.  # dividing by 1000 bc multiplying map by 1000 earlier  [Jy/beam km/s]
 
     # WEIGHT CURRENTLY IN UNITS OF Jy/beam * Hz --> need to get it in units of Jy/beam to match data
-    weight /= np.sqrt(2 * np.pi * delta_freq_obs**2)  # divide to get correct units
+    weight *= f_w / np.sqrt(2 * np.pi * delta_freq_obs**2)  # divide to get correct units
 
     # plt.imshow(weight, origin='lower')
     # plt.colorbar()
@@ -559,7 +579,7 @@ def model_grid(resolution=0.05, s=10, x_off=0., y_off=0., mbh=4 * 10 ** 8, inc=n
     cube_model = np.zeros(shape=(len(freq_ax), len(freq_obs), len(freq_obs[0])))  # initialize model cube
     for fr in range(len(freq_ax)):
         print(fr)
-        cube_model[fr] = weight * f_w * np.exp(-(freq_ax[fr] - freq_obs) ** 2 / (2 * delta_freq_obs ** 2))
+        cube_model[fr] = weight * np.exp(-(freq_ax[fr] - freq_obs) ** 2 / (2 * delta_freq_obs ** 2))
     print('cube model constructed in ' + str(time.time() - t_mod) + ' s')  # 34s
     # print(cube_model.shape)
 
@@ -711,7 +731,7 @@ if __name__ == "__main__":
     pars_str = ''
     for key in params:
         pars_str += str(params[key]) + '_'
-    out = '/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_general_' + pars_str + '_velcorr.fits'
+    out = '/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_general_' + pars_str + '_pcscale.fits'
 
     # If the lucy process hasn't been done yet, and the mask cube also hasn't been collapsed yet, create collapsed mask
     if not Path(files['lucy']).exists() and not Path(files['lucy_mask']).exists():
