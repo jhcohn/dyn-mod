@@ -1,7 +1,11 @@
 # dyn-mod
 
-Dynamical Modelling git repo
+Dynamical Modeling git repo
 
-dyn.py: grid.py, but in a nicer form
-
-grid.py: using to define a grid
+dyn.py - defunct
+dyn3.py - defunct
+dyn_f.py - integrated into dyn_general.py
+dyn_general.py - model code!
+dyn_emcee.py - integrating dyn_general with emcee
+dynxy.py - defunct
+grid.py - defunct
