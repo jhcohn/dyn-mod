@@ -1,0 +1,15 @@
+Param mbh xloc yloc sig0 r0 mu sig1 inc PAdisk vsys ml_ratio f
+Value 2.386e9 362.04 354.89 4.75 0.14 -0.46 7.42 46. 166.8 2760.76 3.16 1.02
+Primin 1e3 1. 1. 0. 0. -100. 0. 0. 500. 1. 0.1 0.1
+Primax 1e12 699. 699. 1e4 100. 100. 1e4 360. 360. 1e4 20. 10.
+
+Other_params resolution s_type dist s gsize x_fwhm y_fwhm PAbeam lucy_it zi zf xi xf yi yf
+Other_values 0.04 gauss 31.3 4 41 0.47938 0.3996 -76.985 10 39 84 260 450 280 450
+
+Types_of_files data mask lucy lucy_in lucy_b lucy_o lucy_mask mass mtype
+Files /Users/jonathancohn/Documents/dyn_mod/ngc_3258/NGC3258_CO21_bri.pbcor.fits /Users/jonathancohn/Documents/dyn_mod/ngc_3258/NGC3258_CO21_bri.mask.fits /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_general_lucyout_n10.fits /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_summed_fluxmap.fits /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_beam31.fits /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_general_lucyout_n10.fits[0] /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_collapsed_mask.fits /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_wfc3mge_vc2mlr.txt False
+
+#README
+#PARAMETERS_INFO: mbh=black_hole_mass [solar masses], xloc=x_position_of_BH [pixels], yloc=y_position_of_BH [pixels], sig0=sigma_velocity_dispersion [km/s], r0=sigma_scale_radius [pc], mu=sigma_variance [pc], sig1=sigma_offset [km/s], inc=inclination_angle [deg], PAdisk=disk_PA_from_xobs_axis_to_blueshifted_axis [deg], vsys=systemic_velocity [km/s], ml_ratio=mass_to_light_ratio [solar], f=gaussian_line_profile_normalization_constant
+#OTHER_PARAMS_INFO: resolution=pixel_scale [arcsec/pix], s_type=type_of_sigma ['flat', 'gauss', or 'exp'], dist=galaxy_angular_size_distance [Mpc], s=oversampling_factor [number], gsize=grid_size_for_beam [pixel number; must be odd], x_fwhm=fwhm_of_beam_in_x_direction [arcsec], y_fwhm=fwhm_of_beam_in_y_direction [arcsec], PAbeam=beam_position_angle [deg], zi=slice_number_in_input_data_where_data_starts_showing_up [python, so first slice is 0], zf=slice_number_in_input_data_where_data_stops_showing_up [python, so first slice is 0, and zstop is NOT included]
+#FILES_INFO: data=data_cube, mask=mask_cube, lucy=output_from_lucy [Lucy output file], lucy_in=lucy_input_flux_map [if no output_from_lucy], lucy_b=beam_to_use_with_lucy [if no output_from_lucy], lucy_o=filename_to_save_lucy_output [if no output_from_lucy], lucy_mask=mask_cube_collapsed_to_2d [if no output_from_lucy], mass=file_describing_enclosed_stellar_mass, mtype=type_of_file_describing_enclosed_stellar_mass [True=mass as a function of radius, False=circular velocity as a function of radius]
