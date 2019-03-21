@@ -15,3 +15,5 @@ dyn_emcee.py - integrating dyn_general with emcee
 dynxy.py - defunct
 
 grid.py - defunct
+
+param_files/ - parameter files to run with dyn_general.py
