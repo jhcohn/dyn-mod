@@ -1,0 +1,13 @@
+Param mbh xoff yoff sig0 r0 mu sig1 inc PAdisk vsys ml_ratio f
+Value 6.64e8 0. 0. 32.1 1. 1. 1. 85.2 26.7 1562.2 7.83 1.
+
+Other_params resolution s_type dist s gsize x_fwhm y_fwhm PAbeam
+Other_values 0.01 'flat' 22.3 1 31 0.052 0.037 64.
+
+Types_of_files data mask lucy lucy_in lucy_b lucy_o mass mtype
+Files /Users/jonathancohn/Documents/dyn_mod/NGC_1332_newfiles/NGC1332_CO21_C3_MS_bri_20kms.pbcor.fits /Users/jonathancohn/Documents/dyn_mod/NGC_1332_newfiles/NGC1332_CO21_C3_MS_bri_20kms_strictmask.mask.fits /Users/jonathancohn/Documents/dyn_mod/newfiles_fullsize_masked_xy_beam31resfwhm1_1000_limchi1e-3lucy_summed_n5.fits /Users/jonathancohn/Documents/dyn_mod/NGC1332_newfiles_fullsize_masked_summed_1000.fits /Users/jonathancohn/Documents/dyn_mod/newfiles_fullsize_beam31res_fwhm.fits /Users/jonathancohn/Documents/dyn_mod/pyraf_out_n5.fits[0] /Users/jonathancohn/Documents/dyn_mod/NGC_1332_newfiles/collapsed_mask_fullsize.fits ngc1332_enclosed_stellar_mass True
+
+#README
+#PARAMETERS_INFO: black_hole_mass [solar masses], x_offset [pixels], y_offset [pixels], sigma_velocity_dispersion [km/s], sigma_scale_radius [pc], sigma_variance [pc], sigma_offset [km/s], inclination_angle [deg], disk_PA_from_xobs_axis_to_blueshifted_axis [deg], systemic_velocity [km/s], mass_to_light_ratio [solar]
+#OTHER_PARAMS_INFO: pixel_scale [arcsec/pix], type_of_sigma ['flat', 'gauss', or 'exp'], distance_to_galaxy [Mpc], oversampling_factor [number], grid_size_for_beam [pixel number], fwhm_of_beam_in_x_direction [arcsec], fwhm_of_beam_in_y_direction [arcsec], beam_position_angle [deg]
+#FILES_INFO: data_cube, mask_cube, output_from_lucy [Lucy output file, or None], lucy_input_flux_map [if no output_from_lucy], beam_to_use_with_lucy [if no output_from_lucy], filename_to_save_lucy_output [if no output_from_lucy], file_describing_enclosed_stellar_mass, type_of_file_describing_enclosed_stellar_mass [True=mass as a function of radius, False=circular velocity as a function of radius]

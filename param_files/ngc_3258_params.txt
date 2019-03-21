@@ -1,0 +1,87 @@
+# PARAMETER VALUE PRIOR_MIN PRIOR_MAX
+# FREE PARAMS
+mbh 2.386e9 1e3 1e12
+xloc 362.04 1 699
+yloc 354.89 1 699
+sig0 4.75 0 1e4
+r0 0.14 0 100
+mu -0.46 -100 100
+sig1 7.42 0 1e4
+inc 46 0 360
+PAdisk 166.8 0 360
+vsys 2760.76 500 1e4
+ml_ratio 3.16 0.1 20
+f 1.02 0.1 10
+
+# FIXED PARAMS
+resolution 0.04
+s_type gauss
+dist 31.3
+s 4
+gsize 31
+x_fwhm 0.47938
+y_fwham 0.3996
+PAbeam -76.985
+lucy_it 10
+zi 39
+zf 85
+xi 310
+xf 410
+yi 310
+yf 410
+xerr0 380
+xerr1 480
+yerr1 390
+yerr0 490
+ds 4
+mtype False
+
+# FILES
+directory /Users/jonathancohn/Documents/dyn_mod/ngc_3258/
+data NGC3258_CO21_bri.pbcor.fits
+mask NGC3258_CO21_bri.mask.fits
+lucy ngc3258_general_lucyout_n10.fits
+lucy_in ngc3258_summed_fluxmap.fits
+lucy_b ngc3258_beam31.fits
+lucy_o ngc3258_general_lucyout_n10.fits[0]
+lucy_mask ngc3258_collapsed_mask.fits
+mass ngc3258_wfc3mge_vc2mlr.txt
+
+# INFO FREE PARAMS:
+# mbh=black_hole_mass [solar masses]
+# xloc=x_position_of_BH [pixels]
+# yloc=y_position_of_BH [pixels]
+# sig0=sigma_velocity_dispersion [km/s]
+# r0=sigma_scale_radius [pc]
+# mu=sigma_variance [pc]
+# sig1=sigma_offset [km/s]
+# inc=inclination_angle [deg]
+# PAdisk=disk_PA_from_xobs_axis_to_blueshifted_axis [deg]
+# vsys=systemic_velocity [km/s]
+# ml_ratio=mass_to_light_ratio [solar]
+# f=gaussian_line_profile_normalization_constant
+
+# INFO FIXED PARAMS
+# resolution=pixel_scale [arcsec/pix]
+# s_type=type_of_sigma ['flat', 'gauss', or 'exp']
+# dist=galaxy_angular_size_distance [Mpc]
+# s=oversampling_factor [number]
+# gsize=grid_size_for_beam [pixel number; must be odd]
+# x_fwhm=fwhm_of_beam_in_x_direction [arcsec]
+# y_fwhm=fwhm_of_beam_in_y_direction [arcsec]
+# PAbeam=beam_position_angle [deg]
+# zi=slice_number_in_input_data_where_data_starts_showing_up [python, so first slice is 0]
+# zf=slice_number_in_input_data_where_data_stops_showing_up [python, so first slice is 0, and zstop is NOT included]
+# ds=downsampling factor [int]
+# mtype=type_of_file_describing_enclosed_stellar_mass [True=mass as a function of radius
+
+# INFO FILES
+# data=data_cube
+# mask=mask_cube
+# lucy=output_from_lucy [Lucy output file]
+# lucy_in=lucy_input_flux_map [if no output_from_lucy]
+# lucy_b=beam_to_use_with_lucy [if no output_from_lucy]
+# lucy_o=filename_to_save_lucy_output [if no output_from_lucy]
+# lucy_mask=mask_cube_collapsed_to_2d [if no output_from_lucy]
+# mass=file_describing_enclosed_stellar_mass
+# False=circular velocity as a function of radius]
