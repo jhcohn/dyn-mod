@@ -3,6 +3,9 @@ import dyn_general as dg
 import numpy as np
 import emcee
 import pickle
+import time
+import argparse
+import matplotlib.pyplot as plt
 
 
 def test_dyn(params=None, fixed_pars=None, files=None):
@@ -40,7 +43,7 @@ def lnprior(theta, priors, param_names):
     return lnp
 
 
-def chisq(theta, priors=None, param_names=None, fixed_pars=fixed_pars, files=files):
+def chisq(theta, priors=None, param_names=None, fixed_pars=None, files=None):
     """
     Not computing full posterior probability, so just use chi squared (P propto exp(-chi^2/2) --> ln(P) ~ -chi^2 / 2
 
@@ -56,7 +59,7 @@ def chisq(theta, priors=None, param_names=None, fixed_pars=fixed_pars, files=fil
     if pri == -np.inf:
         chi2 = 1.  # doesn't matter, because -inf + (-0.5 * 1) = -inf
     else:
-        chi2 = test_dyn(theta, fixed_pars=fixed_pars, files=files)
+        chi2 = test_dyn(params=theta, fixed_pars=fixed_pars, files=files)
 
     return pri + (-0.5 * chi2)
 
@@ -66,26 +69,28 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, parfile=None, pri_ma
     params, fixed_pars, files, priors = dg.par_dicts(parfile)  # get dicts of params and file names from parameter file
     ndim = len(params)  # number of dimensions = number of free parameters
 
+    direc = '/Users/jonathancohn/Documents/dyn_mod/emcee_out/'
+
     # SET UP "HYPERPARAMETER" VALUES IN 50 DIMENSIONS
     # ndim = 50
 
-    p0 = [] # initialize parameter vector
+    p0_guess = [] # initialize parameter vector
     param_names = []  # initialize parameter names vector
     for key in params:  # for each parameter
-        p0.append(params[key])  # initial guess
+        p0_guess.append(params[key])  # initial guess
         param_names.append(key)  # parameter name
-    p0 = np.asarray(p0)
-    print('p0', p0)
+    p0_guess = np.asarray(p0_guess)
+    print('p0', p0_guess)
 
     # SET UP RANDOM CLUSTER OF POINTS NEAR INITIAL GUESS
-    walkers = np.zeros(shape=(nwalkers, len(p0)))  # initialize walkers; there are nwalkers for each parameter
+    walkers = np.zeros(shape=(nwalkers, len(p0_guess)))  # initialize walkers; there are nwalkers for each parameter
     stepper_full = np.zeros_like(walkers)  # initializes stepper for each parameter
     for w in range(nwalkers):  # for each walker
-        for p in range(len(p0)):  # for each parameter
+        for p in range(len(p0_guess)):  # for each parameter
             # select random number, within 20% of param value (except for a few possible large steps)
             adjuster = np.random.choice(np.concatenate((np.linspace(-0.2, 0.2, 200), np.linspace(-0.9, -0.2, 10),
                                                         np.linspace(0.2, 0.9, 10))))
-            stepper_full[w, p] = p0[p] * (1 + adjuster)
+            stepper_full[w, p] = p0_guess[p] * (1 + adjuster)
             '''
             if param_names[p] == 'mbh':
                 stepper_full[w, p] = np.random.choice(np.logspace(-1., 1., 200))
@@ -96,7 +101,7 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, parfile=None, pri_ma
     # initialize walkers: start all walkers in a cluster near p0
     for wa in range(nwalkers):  # for each set of walkers
         newstep = stepper_full[wa, :]  # each row is a list of steps for all the params
-        walkers[wa, :] = p0 + newstep  # initialize walkers
+        walkers[wa, :] = p0_guess + newstep  # initialize walkers
 
     # the actual p0 array needs to be the cluster of initialized walkers
     p0 = walkers
@@ -121,8 +126,9 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, parfile=None, pri_ma
     '''
 
     # main interface for emcee is EmceeSampler:
-    sampler = emcee.EnsembleSampler(nwalkers, ndim,
-                                    chisq(priors=priors, param_names=param_names, fixed_pars=fixed_pars, files=files))
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, chisq, args=[priors, param_names, fixed_pars, files])
+                                                        #(p0_guess, priors=priors, param_names=param_names,
+    #                                                      fixed_pars=fixed_pars, files=files))
     # ^don't need theta in chisq() because of setup of EmceeSampler function, right?
 
     # call lbprob as lnprob(p, means, icov) [where p is the position of a single walker. If no args parameter provided,
@@ -152,7 +158,7 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, parfile=None, pri_ma
 
     # params = ['inc', 'mbh', 'gamma', 'beta']
     for i in range(ndim):
-        outfile = jam_dir + 'flatchain_' + param_names[i] + '-' + str(walk) + '-' + str(burn) + '-' + str(step) + '.pkl'
+        outfile = direc + 'flatchain_' + param_names[i] + '_' + str(nwalkers) + '_' + str(burn) + '_' + str(steps) + '.pkl'
         print(outfile)
         with open(outfile, 'wb') as newfile:  # 'wb' because binary format
             pickle.dump(sampler.flatchain[:, i], newfile, pickle.HIGHEST_PROTOCOL)
@@ -163,18 +169,33 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, parfile=None, pri_ma
         # fig = plt.figure()
         # axes = [plt.subplot(221), plt.subplot(222), plt.subplot(223), plt.subplot(224)]
         fig, axes = plt.subplots(3, 4)  # 3 rows, 4 cols of subplots; because there are 12 free params
+        row = 0
+        col = 0
+        print(axes.shape)
         for i in range(ndim):
-            axes[i].hist(sampler.flatchain[:, i], 100, color="k", histtype="step")
-            percs = np.percentile(sampler.flatchain[:, i], [16., 50., 84.])
-            threepercs = np.percentile(sampler.flatchain[:, i], [0.15, 50., 99.85])  # 3sigma
-            print(params[i], percs)
+            if i == 4 or i == 8:
+                row += 1
+                col = 0
+
+            if params.keys()[i] == 'mbh':
+                axes[row, col].hist(np.log10(sampler.flatchain[:, i]), 100, color="k", histtype="step")  # axes[i]
+                percs = np.percentile(np.log10(sampler.flatchain[:, i]), [16., 50., 84.])
+                threepercs = np.percentile(np.log10(sampler.flatchain[:, i]), [0.15, 50., 99.85])  # 3sigma
+            else:
+                axes[row, col].hist(sampler.flatchain[:, i], 100, color="k", histtype="step")  # axes[i]
+                percs = np.percentile(sampler.flatchain[:, i], [16., 50., 84.])
+                threepercs = np.percentile(sampler.flatchain[:, i], [0.15, 50., 99.85])  # 3sigma
+            print([key for key in params], percs)
             print(threepercs)
-            axes[i].axvline(percs[1], ls='-')
-            axes[i].axvline(percs[0], ls='--')
-            axes[i].axvline(percs[2], ls='--')
+            axes[row, col].axvline(percs[1], ls='-')  # axes[i]
+            axes[row, col].axvline(percs[0], ls='--')  # axes[i]
+            axes[row, col].axvline(percs[2], ls='--')  #
+            axes[row, col].tick_params('both', labelsize=8)
             # plt.title("Dimension {0:d}".format(i))
-            axes[i].title(params[i] + ': ' + str(percs[1]) + ' (+' + str(percs[2] - percs[1]) + ', -'
-                          + str(percs[1] - percs[0]) + ')')
+            axes[row, col].set_title(params.keys()[i] + ': ' + str(round(percs[1],2)) + ' (+'
+                                     + str(round(percs[2] - percs[1], 2)) + ', -'
+                                     + str(round(percs[1] - percs[0], 2)) + ')', fontsize=8)
+            col += 1
 
         plt.show()
 
@@ -182,8 +203,17 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, parfile=None, pri_ma
 
 
 if __name__ == "__main__":
-    # MAKE SURE I HAVE ACTIVATED THE three AND iraf27 ENVIRONMENTS!!!
-    do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, parfile=None, pri_maxes=None, pri_mins=None)
+    # MAKE SURE I HAVE ACTIVATED THE iraf27 ENVIRONMENT!!!
+    t0_full = time.time()
+    parser = argparse.ArgumentParser(argument_default=argparse.SUPPRESS)
+    parser.add_argument('--parfile')
+    args = vars(parser.parse_args())
+
+    # do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, parfile=None)
+    flatchain = do_emcee(nwalkers=30, burn=5, steps=10, printer=1, parfile=args['parfile'])
+    print(flatchain)
+    print('full time ' + str(time.time() - t0_full))
+
 
     # BUCKET: DIVIDE BY ERROR! BEST TO DEFINE ERROR DIFFERENTLY EACH SLICE, BUT FOR SMALL DISKS (e.g. NGC3258), DOESN'T
     # MATTER, AND CAN JUST USE THE SAME ELLIPTICAL REGION IN EACH SLICE, NOT CONTAINING ANY LINE EMISSION.
