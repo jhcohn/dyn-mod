@@ -207,7 +207,7 @@ def get_fluxes(data_cube, data_mask, write_name=None):  # CONFIRMED
     # plt.show()
     hdu.close()
     hdu_m.close()
-    collapsed_fluxes *= 1000.  # to bring to "regular" numbers for lucy process; will undo after lucy process
+    # collapsed_fluxes *= 1000.  # to bring to "regular" numbers for lucy process; will undo after lucy process
 
     # if write_name is not None:
     if not Path(write_name).exists():
@@ -236,20 +236,29 @@ def rebin(data, n):
     """
     Rebin some cube (data or model) in groups of n x n pixels
 
-    :param data: input cube (data or model)
+    :param data: input cube (data or model) (can now also be one slice of the cube, e.g. a 2darray mask)
     :param n: size of pixel binning (e.g. n=4 --> rebins the date in sets of 4x4 pixels)
     :return: rebinned cube
     """
 
     rebinned = []
-    for z in range(len(data)):
-        subarrays = blockshaped(data[z, :, :], n, n)  # bin the data in groups of nxn (4x4) pixels
+    if len(data.shape) == 2:
+        subarrays = blockshaped(data, n, n)  # bin the data in groups of nxn (4x4) pixels
         # each pixel in the new, rebinned data cube is the mean of each 4x4 set of original pixels
         # reshaped = np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data[0]) / 4.),
         #                                                                   int(len(data[0][0]) / 4.)))
-        reshaped = n**2 * np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data[0]) / n),
-                                                                                 int(len(data[0][0]) / n)))
+        reshaped = n**2 * np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data) / n),
+                                                                                 int(len(data[0]) / n)))
         rebinned.append(reshaped)
+    else:
+        for z in range(len(data)):
+            subarrays = blockshaped(data[z, :, :], n, n)  # bin the data in groups of nxn (4x4) pixels
+            # each pixel in the new, rebinned data cube is the mean of each 4x4 set of original pixels
+            # reshaped = np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data[0]) / 4.),
+            #                                                                   int(len(data[0][0]) / 4.)))
+            reshaped = n**2 * np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data[0]) / n),
+                                                                                     int(len(data[0][0]) / n)))
+            rebinned.append(reshaped)
     print('rebinned')
     return np.asarray(rebinned)
 
@@ -557,13 +566,13 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     delta_freq_obs = (f_0 / (1 + zred)) * (sigma_grid / constants.c_kms)
 
     # WEIGHTS FOR LINE PROFILES: apply weights to gaussian velocity profiles for each subpixel
-    weight = subpix_deconvolved / 1000.  # dividing by 1000 bc multiplying map by 1000 earlier  [Jy/beam km/s]
+    weight = subpix_deconvolved  # / 1000.  # dividing by 1000 bc multiplying map by 1000 earlier  [Jy/beam Hz]
 
     # WEIGHT CURRENTLY IN UNITS OF Jy/beam * Hz --> need to get it in units of Jy/beam to match data
     weight *= f_w / np.sqrt(2 * np.pi * delta_freq_obs**2)  # divide to get correct units
 
     # BEN_LUCY COMPARISON ONLY (only use for comparing to model with Ben's lucy map, which is in different units)
-    # weight *= fstep * 10**3 * 6.783  # (undo dividing by 1000 above, bc test isn't using the flux part where I do that)
+    weight *= fstep * 6.783  # (undo dividing by 1000 above, bc test isn't using the flux part where I do that [no longer doing])
 
     # BUILD GAUSSIAN LINE PROFILES!!!
     t_mod = time.time()
@@ -597,33 +606,80 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
 
     # ONLY WANT TO FIT WITHIN ELLIPTICAL REGION! APPLY ELLIPTICAL MASK
     ell_mask = ellipse_fitting(convolved_cube, x_loc, y_loc, resolution, theta, inc)
+    # hdu = fits.PrimaryHDU(ell_mask)
+    # hdul = fits.HDUList([hdu])
+    # hdul.writeto('/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_fitting_ellipse.fits')
     convolved_cube *= ell_mask
     input_data_masked = input_data[int(zrange[0]):int(zrange[1]), int(xyrange[2]):int(xyrange[3]),
                         int(xyrange[0]):int(xyrange[1])] * ell_mask
-
     # '''  #
     if chi2:
         chi_sq = 0.  # initialize chisq
+        chi_sq2 = 0.
 
         # compare the data to the model by binning each in groups of dsxds pixels (separate from s)
         data_4 = rebin(input_data_masked, ds)
         ap_4 = rebin(convolved_cube, ds)
 
+        '''  #
+        inds_to_try2 = np.asarray([[10, 10], [10, 15], [15, 10]])
+        for i in range(len(inds_to_try2)):
+            print(inds_to_try2[i][0], inds_to_try2[i][1])
+            plt.plot(z_ax, ap_4[:, inds_to_try2[i][1], inds_to_try2[i][0]], 'r-',
+                     label=r'Astropy conv')  # ap_out
+            plt.plot(z_ax, data_4[:, inds_to_try2[i][1], inds_to_try2[i][0]], 'b:', label=r'Data')  # data_in
+            plt.axvline(x=v_sys, color='k')
+            plt.title(str(inds_to_try2[i][0]) + ', ' + str(inds_to_try2[i][1]))  # ('no x,y offset')
+            plt.legend()
+            plt.show()
+        # '''  #
+
         # MODEL NOISE!
+        # BUCKET: ADJUST SO NOISE IS ONLY CALCULATED ONCE IN EMCEE PROCESS, NOT EACH ITERATION
+        ell_4 = rebin(ell_mask, ds)
         noise = []
+        noise2 = []
+        nums = []
+        cs = []
         z_ind = 0  # the actual index for the model-data comparison cubes
         for z in range(int(zrange[0]), int(zrange[1])):  # for each relevant freq slice (ignore slices with only noise)
-            # BUCKET: ADJUST SO NOISE IS ONLY CALCULATED ONCE IN EMCEE PROCESS, NOT EACH ITERATION
-            # ESTIMATE NOISE (RMS) IN ORIGINAL DATA CUBE
-            noise.append(np.sqrt(np.mean(input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])]) ** 2))
+            # ESTIMATE NOISE (RMS) IN ORIGINAL DATA CUBE [z, y, x]
+            # plt.imshow((ap_4[z_ind] - data_4[z_ind])**2, origin='lower')
+            # plt.colorbar()
+            # plt.show()
+            noise.append(np.sqrt(np.mean(input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])] ** 2)))
 
-            chi_sq += np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise[z_ind])  # calculate chisq!
+            # noise2.append(np.sqrt(np.mean(input_data[z, 390:440, 370:420] ** 2)))  # 260:360, 210:310
+            # noise2 trying to do proper variance
+            noise2.append(np.sqrt(np.mean((input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])]
+                          - np.mean(input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])]))**2)))
+
+            nums.append(np.sum((ap_4[z_ind] - data_4[z_ind])**2))
+            chi_sq += np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise[z_ind]**2)  # calculate chisq!
+            chi_sq2 += np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise2[z_ind]**2)  # calculate chisq!
+            cs.append(np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise2[z_ind]**2))
+
             z_ind += 1  # the actual index for the model-data comparison cubes
 
-        print(chi_sq)
-        plt.plot(freq_ax, noise, 'k*')
+        # CALCULATE REDUCED CHI^2
+        all_pix = np.ndarray.flatten(ell_4)  # all fitted pixels in each slice [len = 625 (yep)] [525 masked, 100 not]
+        masked_pix = all_pix[all_pix != 0]  # all_pix, but this time only the pixels that are actually inside ellipse
+        n_pts = len(masked_pix) * (zrange[1] - zrange[0])  # total number of pixels being compared = 4600 [100*46]
+        n_params = 12  # number of free parameters
+        print(chi_sq / (n_pts - n_params))  # 4284.80414208  # 12300204.6088
+        print(chi_sq2 / (n_pts - n_params))  # 4520.40697867 # 14297855.8736
+        '''  #
+        # plt.plot(freq_ax/1e9, np.asarray(cs) / len(masked_pix), 'ro', label=r'$\chi^2$')
+        plt.plot(freq_ax / 1e9, np.asarray(noise2)**2, 'k*', label=r'Variance')
+        plt.plot(freq_ax / 1e9, nums, 'b+', label=r'$\chi^2$ Numerator')
+        plt.legend(loc='center right')
+        plt.yscale('log')
+        plt.xlabel(r'GHz')
         plt.show()
-        print(oop)
+        plt.plot(freq_ax, noise2, 'k*')
+        plt.show()
+        print(oops)
+        # '''  #
 
         return chi_sq
     else:
@@ -712,7 +768,7 @@ if __name__ == "__main__":
     pars_str = ''
     for key in params:
         pars_str += str(params[key]) + '_'
-    out = '/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_general_' + pars_str + '_subcube_ellmask.fits'
+    out = '/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_general_' + pars_str + '_subcube_ellmask_bl2_noell.fits'
 
     # If the lucy process hasn't been done yet, and the mask cube also hasn't been collapsed yet, create collapsed mask
     if not Path(files['lucy']).exists() and not Path(files['lucy_mask']).exists():
@@ -729,22 +785,28 @@ if __name__ == "__main__":
         hdul1.writeto(files['lucy_mask'])
 
     # CREATE MODEL CUBE!
-    out_cube = model_grid(resolution=fixed_pars['resolution'], s=fixed_pars['s'], x_loc=params['xloc'],
-                          y_loc=params['yloc'], mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'],
-                          dist=fixed_pars['dist'], theta=np.deg2rad(params['PAdisk']), data_cube=files['data'],
-                          data_mask=files['mask'], lucy_output=files['lucy'], out_name=out, ml_ratio=params['ml_ratio'],
-                          enclosed_mass=files['mass'], menc_type=fixed_pars['mtype']==True,
-                          sig_type=fixed_pars['s_type'], grid_size=fixed_pars['gsize'], x_fwhm=fixed_pars['x_fwhm'],
-                          y_fwhm=fixed_pars['y_fwhm'], pa=fixed_pars['PAbeam'], ds=int(fixed_pars['ds']),
-                          sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']],
-                          f_w=params['f'], lucy_in=files['lucy_in'], lucy_b=files['lucy_b'], lucy_o=files['lucy_o'],
-                          lucy_mask=files['lucy_mask'], lucy_it=fixed_pars['lucy_it'], chi2=True, pb=files['pb'],
-                          zrange=[int(fixed_pars['zi']), int(fixed_pars['zf'])],
-                          xyrange=[int(fixed_pars['xi']), int(fixed_pars['xf']), int(fixed_pars['yi']),
-                                   int(fixed_pars['yf'])], xyerr=[int(fixed_pars['xerr0']), int(fixed_pars['xerr1']),
-                                                                  int(fixed_pars['yerr0']), int(fixed_pars['yerr1'])])
+    chisqs = []
+    for mbh in [2.25e9, 2.3e9, 2.35e9, 2.4e9, 2.45e9]:  # mbh=params['mbh']
+        out_cube = model_grid(resolution=fixed_pars['resolution'], s=fixed_pars['s'], x_loc=params['xloc'],
+                              y_loc=params['yloc'], mbh=mbh, inc=np.deg2rad(params['inc']), vsys=params['vsys'],
+                              dist=fixed_pars['dist'], theta=np.deg2rad(params['PAdisk']), data_cube=files['data'],
+                              data_mask=files['mask'], lucy_output=files['lucy'], out_name=out, ml_ratio=params['ml_ratio'],
+                              enclosed_mass=files['mass'], menc_type=fixed_pars['mtype']==True,
+                              sig_type=fixed_pars['s_type'], grid_size=fixed_pars['gsize'], x_fwhm=fixed_pars['x_fwhm'],
+                              y_fwhm=fixed_pars['y_fwhm'], pa=fixed_pars['PAbeam'], ds=int(fixed_pars['ds']),
+                              sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']],
+                              f_w=params['f'], lucy_in=files['lucy_in'], lucy_b=files['lucy_b'], lucy_o=files['lucy_o'],
+                              lucy_mask=files['lucy_mask'], lucy_it=fixed_pars['lucy_it'], chi2=True, pb=files['pb'],
+                              zrange=[int(fixed_pars['zi']), int(fixed_pars['zf'])],
+                              xyrange=[int(fixed_pars['xi']), int(fixed_pars['xf']), int(fixed_pars['yi']),
+                                       int(fixed_pars['yf'])], xyerr=[int(fixed_pars['xerr0']), int(fixed_pars['xerr1']),
+                                                                      int(fixed_pars['yerr0']), int(fixed_pars['yerr1'])])
+        chisqs.append(out_cube)
+    print('True Total: ' + str(time.time() - t0_true))  # 3.93s YAY!  # 23s for 6 models (16.6 for 4 models)
+    print(chisqs)
 
-    print('True Total: ' + str(time.time() - t0_true))  # 3.93s YAY!
+
+
 
 # xf=410,yi=320;xi=310,yi=400 --> want divisible by 4: so...good!
 
