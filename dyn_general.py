@@ -15,6 +15,9 @@ from astropy.nddata.utils import block_reduce
 from astropy.modeling.models import Ellipse2D
 # from plotbin import display_pixels as dp
 # from regions import read_crtf, CRTFParser, DS9Parser, read_ds9, PolygonPixelRegion, PixCoord
+import sys
+sys.path.insert(0, '/Users/jonathancohn/Documents/jam/')
+import mge_vcirc_mine as mvm
 
 
 # constants
@@ -334,7 +337,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
                theta=np.deg2rad(-200.), data_cube=None, data_mask=None, lucy_output=None, out_name=None,
                enclosed_mass=None, ml_ratio=1., sig_type='flat', grid_size=31, sig_params=[1., 1., 1., 1.], f_w=1.,
                x_fwhm=0.052, y_fwhm=0.037, pa=64., menc_type=False, ds=None, lucy_in=None, lucy_b=None, lucy_mask=None,
-               lucy_o=None, lucy_it=10, chi2=False, pb=None, zrange=None, xyrange=None, xyerr=None):
+               lucy_o=None, lucy_it=10, chi2=False, pb=None, zrange=None, xyrange=None, xyerr=None, mge_f=None):
     """
     Build grid for dynamical modeling!
 
@@ -353,6 +356,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     :param out_name: output name of the fits file to which to save the output v_los image (if None, don't save image)
     :param enclosed_mass: file including data of the enclosed stellar mass of the galaxy (1st column should be radius
         r in kpc and second column should be M_stars(<r) or velocity_circ(R) due to stars within R)
+    :param mge_f: file including MGE fit parameters that you can use to create v_circ(R) due to stars, from mge_vcirc.py
     :param ml_ratio: The mass-to-light ratio of the galaxy
     :param sig_type: code for the type of sigma_turb we're using. Can be 'flat', 'exp', or 'gauss'
     :param sig_params: list of parameters to be plugged into the get_sig() function. Number needed varies by sig_type
@@ -498,7 +502,13 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     # CREATE A FUNCTION TO INTERPOLATE (AND EXTRAPOLATE) ENCLOSED STELLAR M(R)
     # THEN CALCULATE KEPLERIAN VELOCITY
     t_mass = time.time()
-    if menc_type:  # if using a file with stellar mass(R)
+    if Path(mge_f).exists():  # if calculating v(R) due to stars directly from MGE parameters
+        comp, surf_pots, sigma_pots, qobs = mvm.load_mge(mge_f)  # load the MGE parameters, then calculate v_circ below
+        v_c = mvm.mge_vcirc(surf_pots * ml_ratio, sigma_pots, qobs, np.rad2deg(inc), 0., dist, R)  # mbh=0 (stars only!)
+
+        # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
+        vel = np.sqrt((constants.G_pc * mbh / R) + v_c**2)
+    elif menc_type:  # if using a file with stellar mass(R)
         radii = []
         m_stellar = []
         with open(enclosed_mass) as em:
@@ -526,6 +536,9 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
         vel = np.sqrt(v_c_r(R) * ml_ratio + (constants.G_pc * mbh / R))  # velocities sum in quadrature
     print('Time elapsed in assigning enclosed masses is {0} s'.format(time.time() - t_mass))  # ~3.5s
+
+    # plt.plot(206265*np.arctan(np.asarray(radii) * 10**-6 / dist), np.sqrt(v_c_r(radii) * ml_ratio))
+    # plt.show()
 
     # CALCULATE LINE-OF-SIGHT VELOCITY AT EACH POINT (x_disk, y_disk) IN THE DISK (km/s)
     alpha = abs(np.arctan(y_disk / (np.cos(inc) * x_disk)))  # alpha meas. from +x (minor axis) toward +y (major axis)
@@ -615,7 +628,9 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     # '''  #
     if chi2:
         chi_sq = 0.  # initialize chisq
-        chi_sq2 = 0.
+        # https://en.wikipedia.org/wiki/Reduced_chi-squared_statistic
+        # https://en.wikipedia.org/wiki/Variance
+        # https://en.wikipedia.org/wiki/Standard_deviation
 
         # compare the data to the model by binning each in groups of dsxds pixels (separate from s)
         data_4 = rebin(input_data_masked, ds)
@@ -638,7 +653,6 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         # BUCKET: ADJUST SO NOISE IS ONLY CALCULATED ONCE IN EMCEE PROCESS, NOT EACH ITERATION
         ell_4 = rebin(ell_mask, ds)
         noise = []
-        noise2 = []
         nums = []
         cs = []
         z_ind = 0  # the actual index for the model-data comparison cubes
@@ -647,17 +661,17 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
             # plt.imshow((ap_4[z_ind] - data_4[z_ind])**2, origin='lower')
             # plt.colorbar()
             # plt.show()
-            noise.append(np.sqrt(np.mean(input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])] ** 2)))
+            # noise.append(np.sqrt(np.mean(input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])] ** 2)))
 
             # noise2.append(np.sqrt(np.mean(input_data[z, 390:440, 370:420] ** 2)))  # 260:360, 210:310
-            # noise2 trying to do proper variance
-            noise2.append(np.sqrt(np.mean((input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])]
-                          - np.mean(input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])]))**2)))
+            # noise2 trying to do proper variance. For large N, Variance ~= std^2!
+            noise.append(np.std(input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])]))
+            # noise2.append(np.sqrt(np.mean((input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])]
+            #               - np.mean(input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])]))**2)))
 
             nums.append(np.sum((ap_4[z_ind] - data_4[z_ind])**2))
             chi_sq += np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise[z_ind]**2)  # calculate chisq!
-            chi_sq2 += np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise2[z_ind]**2)  # calculate chisq!
-            cs.append(np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise2[z_ind]**2))
+            cs.append(np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise[z_ind]**2))
 
             z_ind += 1  # the actual index for the model-data comparison cubes
 
@@ -667,16 +681,15 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         n_pts = len(masked_pix) * (zrange[1] - zrange[0])  # total number of pixels being compared = 4600 [100*46]
         n_params = 12  # number of free parameters
         print(chi_sq / (n_pts - n_params))  # 4284.80414208  # 12300204.6088
-        print(chi_sq2 / (n_pts - n_params))  # 4520.40697867 # 14297855.8736
         '''  #
         # plt.plot(freq_ax/1e9, np.asarray(cs) / len(masked_pix), 'ro', label=r'$\chi^2$')
-        plt.plot(freq_ax / 1e9, np.asarray(noise2)**2, 'k*', label=r'Variance')
+        plt.plot(freq_ax / 1e9, np.asarray(noise)**2, 'k*', label=r'Variance')
         plt.plot(freq_ax / 1e9, nums, 'b+', label=r'$\chi^2$ Numerator')
         plt.legend(loc='center right')
         plt.yscale('log')
         plt.xlabel(r'GHz')
         plt.show()
-        plt.plot(freq_ax, noise2, 'k*')
+        plt.plot(freq_ax, noise, 'k*')
         plt.show()
         print(oops)
         # '''  #
@@ -710,7 +723,6 @@ def par_dicts(parfile):
     # READ IN PARAMS FORM THE PARAMETER FILE
     with open(parfile, 'r') as pf:
         for line in pf:
-            print(line)
             if line.startswith('Pa'):
                 par_names = line.split()[1:]  # ignore the "Param" str in the first column
             elif line.startswith('Primax'):
@@ -747,7 +759,7 @@ def par_dicts(parfile):
 
 
 if __name__ == "__main__":
-    # MAKE SURE I HAVE ACTIVATED THE three AND iraf27 ENVIRONMENTS!!!
+    # MAKE SURE I HAVE ACTIVATED THE iraf27 ENVIRONMENT!!!
     t0_true = time.time()
     parser = argparse.ArgumentParser(argument_default=argparse.SUPPRESS)
     parser.add_argument('--parfile')
@@ -756,7 +768,7 @@ if __name__ == "__main__":
     print(args['parfile'])
 
     params, fixed_pars, files, priors = par_dicts(args['parfile'])
-    print(params)
+    # print(params)
     # print(fixed_pars)
     # print(files)
 
@@ -786,15 +798,17 @@ if __name__ == "__main__":
 
     # CREATE MODEL CUBE!
     chisqs = []
-    for mbh in [2.25e9, 2.3e9, 2.35e9, 2.4e9, 2.45e9]:  # mbh=params['mbh']
+    for sig0 in [4.6, 4.75, 4.9, 5., 101.]:  # sig_params=[params['sig0'],
+    # for vsys in [1900., 2000., 2200., 2700., 2760.76, 3000.]:  # vsys=params['vsys']
+    # for mbh in [2.25e9, 2.3e9, 2.35e9, 2.4e9, 2.45e9]:  # mbh=params['mbh']
         out_cube = model_grid(resolution=fixed_pars['resolution'], s=fixed_pars['s'], x_loc=params['xloc'],
-                              y_loc=params['yloc'], mbh=mbh, inc=np.deg2rad(params['inc']), vsys=params['vsys'],
+                              y_loc=params['yloc'], mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'],
                               dist=fixed_pars['dist'], theta=np.deg2rad(params['PAdisk']), data_cube=files['data'],
                               data_mask=files['mask'], lucy_output=files['lucy'], out_name=out, ml_ratio=params['ml_ratio'],
-                              enclosed_mass=files['mass'], menc_type=fixed_pars['mtype']==True,
+                              mge_f=files['mge'], enclosed_mass=files['mass'], menc_type=fixed_pars['mtype']==True,
                               sig_type=fixed_pars['s_type'], grid_size=fixed_pars['gsize'], x_fwhm=fixed_pars['x_fwhm'],
                               y_fwhm=fixed_pars['y_fwhm'], pa=fixed_pars['PAbeam'], ds=int(fixed_pars['ds']),
-                              sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']],
+                              sig_params=[sig0, params['r0'], params['mu'], params['sig1']],
                               f_w=params['f'], lucy_in=files['lucy_in'], lucy_b=files['lucy_b'], lucy_o=files['lucy_o'],
                               lucy_mask=files['lucy_mask'], lucy_it=fixed_pars['lucy_it'], chi2=True, pb=files['pb'],
                               zrange=[int(fixed_pars['zi']), int(fixed_pars['zf'])],
@@ -804,7 +818,6 @@ if __name__ == "__main__":
         chisqs.append(out_cube)
     print('True Total: ' + str(time.time() - t0_true))  # 3.93s YAY!  # 23s for 6 models (16.6 for 4 models)
     print(chisqs)
-
 
 
 
