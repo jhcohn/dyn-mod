@@ -8,22 +8,92 @@ import argparse
 import matplotlib.pyplot as plt
 
 
-def test_dyn(params=None, fixed_pars=None, files=None):
+def test_dyn_m(theta, params=None, fixed_pars=None, files=None):
     np.random.seed(123)
 
-    chi2 = dg.model_grid(resolution=fixed_pars['resolution'], s=fixed_pars['s'], x_loc=params['xloc'],
-                         y_loc=params['yloc'], mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'],
-                         dist=fixed_pars['dist'], theta=np.deg2rad(params['PAdisk']), data_cube=files['data'],
-                         data_mask=files['mask'], lucy_output=files['lucy'], out_name=out, ml_ratio=params['ml_ratio'],
-                         enclosed_mass=files['mass'], menc_type=files['mtype'] == True, sig_type=fixed_pars['s_type'],
-                         grid_size=fixed_pars['gsize'], x_fwhm=fixed_pars['x_fwhm'], y_fwhm=fixed_pars['y_fwhm'],
-                         sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']],
-                         pa=fixed_pars['PAbeam'], f_w=params['f'], lucy_in=files['lucy_in'], lucy_b=files['lucy_b'],
-                         lucy_o=files['lucy_o'], lucy_mask=files['lucy_mask'], lucy_it=fixed_pars['lucy_it'], chi2=True,
-                         zrange=[fixed_pars['zi'], fixed_pars['zf']], xyrange=[fixed_pars['xi'], fixed_pars['xf'],
-                                                                               fixed_pars['yi'], fixed_pars['yf']])
+    chi2 = dg.model_grid(
+        # FREE PARAMETERS
+        x_loc=params['xloc'],
+        y_loc=params['yloc'],
+        mbh=theta[0],
+        inc=np.deg2rad(params['inc']),
+        vsys=params['vsys'],
+        theta=np.deg2rad(params['PAdisk']),
+        ml_ratio=params['ml_ratio'],
+        sig_params=[params['sig0'],
+                    params['r0'],
+                    params['mu'],
+                    params['sig1']],
+        f_w=params['f'],
+        # FIXED PARAMETERS
+        sig_type=fixed_pars['s_type'], menc_type=fixed_pars['mtype'] == True, ds=int(fixed_pars['ds']),
+        grid_size=fixed_pars['gsize'], x_fwhm=fixed_pars['x_fwhm'], y_fwhm=fixed_pars['y_fwhm'],
+        pa=fixed_pars['PAbeam'], dist=fixed_pars['dist'], resolution=fixed_pars['resolution'], s=fixed_pars['s'],
+        lucy_it=fixed_pars['lucy_it'], zrange=[int(fixed_pars['zi']), int(fixed_pars['zf'])],
+        xyrange=[fixed_pars['xi'], fixed_pars['xf'], fixed_pars['yi'], fixed_pars['yf']],
+        xyerr=[int(fixed_pars['xerr0']), int(fixed_pars['xerr1']), int(fixed_pars['yerr0']), int(fixed_pars['yerr1'])],
+        # FILES
+        mge_f=files['mge'], enclosed_mass=files['mass'], lucy_in=files['lucy_in'], lucy_output=files['lucy'],
+        lucy_b=files['lucy_b'], lucy_o=files['lucy_o'], lucy_mask=files['lucy_mask'], data_cube=files['data'],
+        data_mask=files['mask'],
+        # OTHER PARAMETERS
+        out_name=None, chi2=True)
 
     return chi2
+
+
+def test_dyn(params=None, par_dict=None, fixed_pars=None, files=None):
+    np.random.seed(123)
+
+    chi2 = dg.model_grid(
+        # FREE PARAMETERS
+        x_loc=params[par_dict.keys().index('xloc')],
+        y_loc=params[par_dict.keys().index('yloc')],
+        mbh=params[par_dict.keys().index('mbh')],
+        inc=np.deg2rad(params[par_dict.keys().index('inc')]),
+        vsys=params[par_dict.keys().index('vsys')],
+        theta=np.deg2rad(params[par_dict.keys().index('PAdisk')]),
+        ml_ratio=params[par_dict.keys().index('ml_ratio')],
+        sig_params=[params[par_dict.keys().index('sig0')],
+                    params[par_dict.keys().index('r0')],
+                    params[par_dict.keys().index('mu')],
+                    params[par_dict.keys().index('sig1')]],
+        f_w=params[par_dict.keys().index('f')],
+        # FIXED PARAMETERS
+        sig_type=fixed_pars['s_type'], menc_type=fixed_pars['mtype'] == True, ds=int(fixed_pars['ds']),
+        grid_size=fixed_pars['gsize'], x_fwhm=fixed_pars['x_fwhm'], y_fwhm=fixed_pars['y_fwhm'],
+        pa=fixed_pars['PAbeam'], dist=fixed_pars['dist'], resolution=fixed_pars['resolution'], s=fixed_pars['s'],
+        lucy_it=fixed_pars['lucy_it'], zrange=[int(fixed_pars['zi']), int(fixed_pars['zf'])],
+        xyrange=[fixed_pars['xi'], fixed_pars['xf'], fixed_pars['yi'], fixed_pars['yf']],
+        xyerr=[int(fixed_pars['xerr0']), int(fixed_pars['xerr1']), int(fixed_pars['yerr0']), int(fixed_pars['yerr1'])],
+        # FILES
+        mge_f=files['mge'], enclosed_mass=files['mass'], lucy_in=files['lucy_in'], lucy_output=files['lucy'],
+        lucy_b=files['lucy_b'], lucy_o=files['lucy_o'], lucy_mask=files['lucy_mask'], data_cube=files['data'],
+        data_mask=files['mask'],
+        # OTHER PARAMETERS
+        out_name=None, chi2=True)
+
+    return chi2
+
+
+def lnprior_m(theta, priors, param_names):
+    """
+    Calculate the ln of the prior
+
+    :param theta: input parameters
+    :param priors: prior boundary dictionary, with structure: {'param_name': [pri_min, pri_max]}
+    :param param_names: parameter dictionary key names
+    :return: ln of the prior (0, ie flat, if theta within boundaries; -inf if theta outside of boundaries)
+    """
+    print(theta)
+    print(priors)
+    print(param_names)
+    lnp = 0.  # apply a flat prior, so equivalent probability for all values within the prior range
+    for p in range(len(theta)):  # for each parameter in the param vector theta
+        if theta[p] < priors[0] or theta[p] > priors[1]:
+            lnp = -np.inf  # kill anything that is outside the prior boundaries
+
+    return lnp
 
 
 def lnprior(theta, priors, param_names):
@@ -35,6 +105,9 @@ def lnprior(theta, priors, param_names):
     :param param_names: parameter dictionary key names
     :return: ln of the prior (0, ie flat, if theta within boundaries; -inf if theta outside of boundaries)
     """
+    print(theta)
+    print(priors)
+    print(param_names)
     lnp = 0.  # apply a flat prior, so equivalent probability for all values within the prior range
     for p in range(len(theta)):  # for each parameter in the param vector theta
         if theta[p] < priors[param_names[p]][0] or theta[p] > priors[param_names[p]][1]:
@@ -59,17 +132,114 @@ def chisq(theta, priors=None, param_names=None, fixed_pars=None, files=None):
     if pri == -np.inf:
         chi2 = 1.  # doesn't matter, because -inf + (-0.5 * 1) = -inf
     else:
-        chi2 = test_dyn(params=theta, fixed_pars=fixed_pars, files=files)
+        chi2 = test_dyn(params=theta, par_dict=priors, fixed_pars=fixed_pars, files=files)
 
     return pri + (-0.5 * chi2)
 
 
-def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, parfile=None, pri_maxes=None, pri_mins=None):
+def chisq_m(theta, params=None, priors=None, param_names=None, fixed_pars=None, files=None):
+    """
+    Not computing full posterior probability, so just use chi squared (P propto exp(-chi^2/2) --> ln(P) ~ -chi^2 / 2
 
-    params, fixed_pars, files, priors = dg.par_dicts(parfile)  # get dicts of params and file names from parameter file
+    :param theta: input parameter vector
+    :param priors: prior boundary dictionary, with structure: {'param_name': [pri_min, pri_max]}
+    :param param_names: list of parameter names
+    :param fixed_pars: dictionary of fixed input parameters (e.g. resolution, beam params, etc.)
+    :param files: dictionary containing names of files
+
+    :return: -0.5 * chi^2 (ln likelihood)
+    """
+    pri = lnprior_m(theta, priors, param_names)
+    if pri == -np.inf:
+        chi2 = 1.  # doesn't matter, because -inf + (-0.5 * 1) = -inf
+    else:
+        chi2 = test_dyn_m(theta, params=params, fixed_pars=fixed_pars, files=files)
+
+    return pri + (-0.5 * chi2)
+
+
+def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfile=None):
+
+    t0_mc = time.time()
+    params, fixed_pars, files, priors, qobs = dg.par_dicts(parfile, q=True)  # get dicts of params and file names from parameter file
     ndim = len(params)  # number of dimensions = number of free parameters
-
     direc = '/Users/jonathancohn/Documents/dyn_mod/emcee_out/'
+
+    if not all_free:
+        direc = '/Users/jonathancohn/Documents/dyn_mod/emcee_out/'
+
+        ndim = 1
+        param_names = ['mbh']
+        p0_guess = np.asarray([params['mbh']])  # initial guess
+        print('p0', p0_guess)
+
+        # SET UP RANDOM CLUSTER OF POINTS NEAR INITIAL GUESS
+        walkers = np.zeros(shape=(nwalkers, len(p0_guess)))  # initialize walkers; there are nwalkers for each parameter
+        stepper_full = np.zeros_like(walkers)  # initializes stepper for each parameter
+        for w in range(nwalkers):  # for each walker
+            for p in range(len(p0_guess)):  # for each parameter
+                # select random number, within 20% of param value (except for a few possible large steps)
+                adjuster = np.random.choice(np.concatenate((np.linspace(-0.2, 0.2, 200), np.linspace(-0.9, -0.2, 10),
+                                                            np.linspace(0.2, 0.9, 10))))
+                walkers[w, p] = p0_guess[p] * (1 + adjuster)
+                # stepper_full[w, p] = p0_guess[p] * (1 + adjuster)
+
+        # the actual p0 array needs to be the cluster of initialized walkers
+        p0 = walkers
+
+        # main interface for emcee is EmceeSampler:
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, chisq_m, args=[params, priors['mbh'], param_names, fixed_pars,
+                                                                       files])
+
+        print('p0', p0)
+        print('Burning in!')
+        pos, prob, state = sampler.run_mcmc(p0, burn)
+        # pos = final position of walkers after the 100 steps
+        sampler.reset()  # clears walkers, and clears bookkeeping parameters in sampler so we get a fresh start
+
+        print('Running MCMC!')
+        sampler.run_mcmc(pos, steps)  # production run of 1000 steps (probably overkill, for now)
+        print("printing...")
+
+        # Another good test of whether or not sampling went well: mean acceptance fraction should be 0.25 to 0.5
+        print("Mean acceptance fraction: {0:.3f}".format(np.mean(sampler.acceptance_fraction)))
+
+        for i in range(ndim):
+            outfile = direc + 'flatchain_' + param_names[i] + '_' + str(nwalkers) + '_' + str(burn) + '_' + str(
+                steps) + '.pkl'
+            print(outfile)
+            with open(outfile, 'wb') as newfile:  # 'wb' because binary format
+                pickle.dump(sampler.flatchain[:, i], newfile, pickle.HIGHEST_PROTOCOL)
+                print('pickle dumped!')
+
+        # You can make histograms of these samples to get an estimate of the density that you were sampling
+        print('time in emcee ' + str(t0_mc - time.time()))
+        if printer:
+            fig = plt.figure()
+
+            plt.hist(np.log10(sampler.flatchain), 100, color="k", histtype="step")  # axes[i]
+            percs = np.percentile(np.log10(sampler.flatchain), [16., 50., 84.])
+            threepercs = np.percentile(np.log10(sampler.flatchain), [0.15, 50., 99.85])  # 3sigma
+
+            plt.axvline(percs[1], color='k', ls='-')  # axes[i]
+            plt.axvline(percs[0], color='k', ls='--')  # axes[i]
+            plt.axvline(percs[2], color='k', ls='--')  #
+            plt.axvline(threepercs[0], color='b', ls='--')  # axes[i]
+            plt.axvline(threepercs[2], color='b', ls='--')  #
+            plt.tick_params('both', labelsize=8)
+            # plt.title("Dimension {0:d}".format(i))
+            plt.title('mbh' + ': ' + str(round(percs[1], 2)) + ' (+' + str(round(percs[2] - percs[1], 2)) + ', -'
+                      + str(round(percs[1] - percs[0], 2)) + ')', fontsize=8)
+
+            plt.show()
+            print(oop)
+
+
+    # AVOID ERROR!
+    # all q^2 - cos(inc)^2 > 0 --> q^2 > cos(inc)^2 -> cos(inc) < q
+    priors['inc'][0] = np.deg2rad(priors['inc'][0])
+    priors['inc'][1] = np.amin([np.deg2rad(priors['inc'][1]), np.arccos(np.amin(qobs))])
+
 
     # SET UP "HYPERPARAMETER" VALUES IN 50 DIMENSIONS
     # ndim = 50
@@ -165,13 +335,13 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, parfile=None, pri_ma
             print('pickle dumped!')
 
     # You can make histograms of these samples to get an estimate of the density that you were sampling
+    print('time in emcee ' + str(t0_mc - time.time()))
     if printer:
         # fig = plt.figure()
         # axes = [plt.subplot(221), plt.subplot(222), plt.subplot(223), plt.subplot(224)]
         fig, axes = plt.subplots(3, 4)  # 3 rows, 4 cols of subplots; because there are 12 free params
         row = 0
         col = 0
-        print(axes.shape)
         for i in range(ndim):
             if i == 4 or i == 8:
                 row += 1
@@ -185,8 +355,8 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, parfile=None, pri_ma
                 axes[row, col].hist(sampler.flatchain[:, i], 100, color="k", histtype="step")  # axes[i]
                 percs = np.percentile(sampler.flatchain[:, i], [16., 50., 84.])
                 threepercs = np.percentile(sampler.flatchain[:, i], [0.15, 50., 99.85])  # 3sigma
-            print([key for key in params], percs)
-            print(threepercs)
+            # print([key for key in params], percs)
+            # print(threepercs)
             axes[row, col].axvline(percs[1], ls='-')  # axes[i]
             axes[row, col].axvline(percs[0], ls='--')  # axes[i]
             axes[row, col].axvline(percs[2], ls='--')  #
@@ -210,7 +380,8 @@ if __name__ == "__main__":
     args = vars(parser.parse_args())
 
     # do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, parfile=None)
-    flatchain = do_emcee(nwalkers=30, burn=5, steps=10, printer=1, parfile=args['parfile'])
+    flatchain = do_emcee(nwalkers=10, burn=100, steps=5, printer=1, parfile=args['parfile'], all_free=False)
+    # flatchain = do_emcee(nwalkers=100, burn=100, steps=100, printer=1, parfile=args['parfile'])
     print(flatchain)
     print('full time ' + str(time.time() - t0_full))
 

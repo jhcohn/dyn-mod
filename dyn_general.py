@@ -259,7 +259,7 @@ def rebin(data, n):
             reshaped = n**2 * np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data[0]) / n),
                                                                                      int(len(data[0][0]) / n)))
             rebinned.append(reshaped)
-    print('rebinned')
+    # print('rebinned')
     return np.asarray(rebinned)
 
 
@@ -543,10 +543,16 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         import mge_vcirc_mine as mvm
 
         comp, surf_pots, sigma_pots, qobs = mvm.load_mge(mge_f)  # load the MGE parameters
-        v_c = mvm.mge_vcirc(surf_pots * ml_ratio, sigma_pots, qobs, np.rad2deg(inc), 0., dist, R)  # v_circ due to stars
+        # v_c = mvm.mge_vcirc(surf_pots * ml_ratio, sigma_pots, qobs, np.rad2deg(inc), 0., dist, R)  # v_circ due to stars
+        # note: mge_vcirc currently breaks if R has more than one dimension, so:
+        rads = np.logspace(-2, 10, 30)
+        v_c = mvm.mge_vcirc(surf_pots * ml_ratio, sigma_pots, qobs, np.rad2deg(inc), 0., dist, rads)
+        v_c_func = interpolate.interp1d(rads, v_c, fill_value='extrapolate')  # create a function to interpolate v_circ
 
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
-        vel = np.sqrt((constants.G_pc * mbh / R) + v_c**2)
+        # vel = np.sqrt((constants.G_pc * mbh / R) + v_c**2)
+        # note: mge_vcirc currently breaks if R has more than one dimension, so:
+        vel = np.sqrt(v_c_func(R)**2 + (constants.G_pc * mbh / R))  # velocities sum in quadrature
     elif menc_type:  # if using a file with stellar mass(R)
         radii = []
         m_stellar = []
@@ -574,13 +580,13 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
 
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
         vel = np.sqrt(v_c_r(R) * ml_ratio + (constants.G_pc * mbh / R))  # velocities sum in quadrature
-    print('Time elapsed in assigning enclosed masses is {0} s'.format(time.time() - t_mass))  # ~3.5s
+    # print('Time elapsed in assigning enclosed masses is {0} s'.format(time.time() - t_mass))  # ~3.5s
 
     # CALCULATE LINE-OF-SIGHT VELOCITY AT EACH POINT (x_disk, y_disk) IN THE DISK (km/s)
     alpha = abs(np.arctan(y_disk / (np.cos(inc) * x_disk)))  # alpha meas. from +x (minor axis) toward +y (major axis)
     sign = x_disk / abs(x_disk)  # (+x now back to redshifted side, so don't need extra minus sign back in front!)
     v_los = sign * abs(vel * np.cos(alpha) * np.sin(inc))  # THIS IS CURRENTLY CORRECT
-    print('los')
+    # print('los')
 
     # SET LINE-OF-SIGHT VELOCITY AT THE BLACK HOLE CENTER TO BE 0, SUCH THAT IT DOES NOT BLOW UP
     center = (R == 0.)  # Doing this is only relevant if we have pixel located exactly at the center
@@ -638,19 +644,19 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     else:
         intrinsic_cube = rebin(cube_model, s)
         # intrinsic_cube = block_reduce(cube_model, s, np.mean)
-    print("intrinsic cube done in {0} s".format(time.time() - t_z))  # 16.5s
-    print("start to intrinsic done in {0} s".format(time.time() - t0))  # 42.5s
+    # print("intrinsic cube done in {0} s".format(time.time() - t_z))
+    # print("start to intrinsic done in {0} s".format(time.time() - t0))
 
     # CONVERT INTRINSIC TO OBSERVED
     # take velocity slice from intrinsic data cube, convolve with alma beam --> observed data cube
     convolved_cube = np.zeros(shape=intrinsic_cube.shape)  # approx ~1e-6 to 3e-6s per pixel
     ts = time.time()
     for z in range(len(z_ax)):
-        print(z)
-        tl = time.time()
+        # print(z)
+        # tl = time.time()
         convolved_cube[z, :, :] = convolution.convolve(intrinsic_cube[z, :, :], beam)  # CONFIRMED!
-        print("Convolution loop " + str(z) + " took {0} seconds".format(time.time() - tl))  # 0.03s/loop for 100x100pix
-    print('convolved! Total convolution loop took {0} seconds'.format(time.time() - ts))  # 170.9s
+        # print("Convolution loop " + str(z) + " took {0} seconds".format(time.time() - tl))  # 0.03s/loop for 100x100pix
+    # print('convolved! Total convolution loop took {0} seconds'.format(time.time() - ts))  # 170.9s
     print('total model took {0} seconds'.format(time.time() - t_begin))  # ~213s
 
     # ONLY WANT TO FIT WITHIN ELLIPTICAL REGION! APPLY ELLIPTICAL MASK
@@ -742,7 +748,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         return convolved_cube
 
 
-def par_dicts2(parfile):
+def par_dicts2(parfile, q=False):
     """
     Return dictionaries that contain file names, parameter names, and initial guesses, for free and fixed parameters
 
@@ -766,10 +772,19 @@ def par_dicts2(parfile):
                 elif cols[0] == 'str':
                     params[cols[1]] = cols[2]
 
-    return params, priors
+    if q:
+        import sys
+        sys.path.insert(0, '/Users/jonathancohn/Documents/jam/')  # lets me import file from different folder/path
+        import mge_vcirc_mine as mvm
+        comp, surf_pots, sigma_pots, qobs = mvm.load_mge(params['mass'])
+
+        return params, priors, qobs
+
+    else:
+        return params, priors
 
 
-def par_dicts(parfile):
+def par_dicts(parfile, q=False):
     """
     Return dictionaries that contain file names, parameter names, and initial guesses, for free and fixed parameters
 
@@ -818,7 +833,15 @@ def par_dicts(parfile):
     for n in range(len(file_types)):
         files[file_types[n]] = file_names[n]
 
-    return params, fixed_pars, files, priors
+    if q:
+        import sys
+        sys.path.insert(0, '/Users/jonathancohn/Documents/jam/')  # lets me import file from different folder/path
+        import mge_vcirc_mine as mvm
+        comp, surf_pots, sigma_pots, qobs = mvm.load_mge(files['mge'])
+
+        return params, fixed_pars, files, priors, qobs
+    else:
+        return params, fixed_pars, files, priors
 
 
 if __name__ == "__main__":
