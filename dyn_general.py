@@ -15,9 +15,6 @@ from astropy.nddata.utils import block_reduce
 from astropy.modeling.models import Ellipse2D
 # from plotbin import display_pixels as dp
 # from regions import read_crtf, CRTFParser, DS9Parser, read_ds9, PolygonPixelRegion, PixCoord
-import sys
-sys.path.insert(0, '/Users/jonathancohn/Documents/jam/')
-import mge_vcirc_mine as mvm
 
 
 # constants
@@ -499,12 +496,54 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     # '''  #
 
     # CALCULATE ENCLOSED MASS BASED ON MBH AND ENCLOSED STELLAR MASS
-    # CREATE A FUNCTION TO INTERPOLATE (AND EXTRAPOLATE) ENCLOSED STELLAR M(R)
     # THEN CALCULATE KEPLERIAN VELOCITY
     t_mass = time.time()
+    '''  # WHEN I SWITCH TO NEW PARAM FILE FORMAT
+    if menc_type == 0:  # if calculating v(R) due to stars directly from MGE parameters
+        import sys
+        sys.path.insert(0, '/Users/jonathancohn/Documents/jam/')  # lets me import file from different folder/path
+        import mge_vcirc_mine as mvm
+
+        comp, surf_pots, sigma_pots, qobs = mvm.load_mge(enclosed_mass)  # load the MGE parameters
+        v_c = mvm.mge_vcirc(surf_pots * ml_ratio, sigma_pots, qobs, np.rad2deg(inc), 0., dist, R)  # v_circ due to stars
+
+        # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
+        vel = np.sqrt((constants.G_pc * mbh / R) + v_c**2)
+    elif menc_type == 1:  # elif using a file with stellar mass(R)
+        radii = []
+        v_circ = []
+        with open(enclosed_mass) as em:  # note: current file has units v_circ^2/(M/L) --> v_circ = np.sqrt(col * (M/L))
+            for line in em:
+                cols = line.split()  # note: currently using model "B1" = 2nd col in file (file has 4 cols of models)
+                radii.append(float(cols[0]))  # file lists radii in pc
+                v_circ.append(float(cols[1]))  # v^2 / (M/L) --> units (km/s)^2 / (M_sol/L_sol)
+        v_c_r = interpolate.interp1d(radii, v_circ, fill_value='extrapolate')  # create a function to interpolate v_circ
+
+        # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
+        vel = np.sqrt(v_c_r(R) * ml_ratio + (constants.G_pc * mbh / R))  # velocities sum in quadrature
+    elif menc_type == 2:  # elif using a file directly with v_circ as a function of R due to stellar mass
+        radii = []
+        m_stellar = []
+        with open(enclosed_mass) as em:
+            for line in em:
+                cols = line.split()
+                cols[1] = cols[1].replace('D', 'e')
+                radii.append(float(cols[0]) * 10 ** 3)  # file lists radii in kpc; convert to pc
+                m_stellar.append(float(cols[1]))  # solar masses
+        m_star_r = interpolate.interp1d(radii, m_stellar, kind='cubic', fill_value='extrapolate')  # create a function
+        ml_const = ml_ratio / 7.35  # because mass file assumes a mass-to-light ratio of 7.35
+        m_R = mbh + ml_const * m_star_r(R)  # Use m_star_r function to interpolate mass at all radii R (2d array)
+
+        # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
+        vel = np.sqrt(constants.G_pc * m_R / R)  # Keplerian velocity vel at each point in the disk
+    # '''  # WHEN I SWITCH OT NEW PARAM FILE FORMAT
     if Path(mge_f).exists():  # if calculating v(R) due to stars directly from MGE parameters
-        comp, surf_pots, sigma_pots, qobs = mvm.load_mge(mge_f)  # load the MGE parameters, then calculate v_circ below
-        v_c = mvm.mge_vcirc(surf_pots * ml_ratio, sigma_pots, qobs, np.rad2deg(inc), 0., dist, R)  # mbh=0 (stars only!)
+        import sys
+        sys.path.insert(0, '/Users/jonathancohn/Documents/jam/')  # lets me import file from different folder/path
+        import mge_vcirc_mine as mvm
+
+        comp, surf_pots, sigma_pots, qobs = mvm.load_mge(mge_f)  # load the MGE parameters
+        v_c = mvm.mge_vcirc(surf_pots * ml_ratio, sigma_pots, qobs, np.rad2deg(inc), 0., dist, R)  # v_circ due to stars
 
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
         vel = np.sqrt((constants.G_pc * mbh / R) + v_c**2)
@@ -523,7 +562,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
 
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
         vel = np.sqrt(constants.G_pc * m_R / R)  # Keplerian velocity vel at each point in the disk
-    else:  # elif using a file with circular velocity due to stellar mass as a function of R
+    else:  # elif using a file with v_circ as a function of R due to stellar mass
         radii = []
         v_circ = []
         with open(enclosed_mass) as em:  # note: current file has units v_circ^2/(M/L) --> v_circ = np.sqrt(col * (M/L))
@@ -536,9 +575,6 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
         vel = np.sqrt(v_c_r(R) * ml_ratio + (constants.G_pc * mbh / R))  # velocities sum in quadrature
     print('Time elapsed in assigning enclosed masses is {0} s'.format(time.time() - t_mass))  # ~3.5s
-
-    # plt.plot(206265*np.arctan(np.asarray(radii) * 10**-6 / dist), np.sqrt(v_c_r(radii) * ml_ratio))
-    # plt.show()
 
     # CALCULATE LINE-OF-SIGHT VELOCITY AT EACH POINT (x_disk, y_disk) IN THE DISK (km/s)
     alpha = abs(np.arctan(y_disk / (np.cos(inc) * x_disk)))  # alpha meas. from +x (minor axis) toward +y (major axis)
@@ -706,13 +742,40 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         return convolved_cube
 
 
+def par_dicts2(parfile):
+    """
+    Return dictionaries that contain file names, parameter names, and initial guesses, for free and fixed parameters
+
+    :param parfile: the parameter file
+    :return: params (the free parameters, fixed parameters, and input files), priors (prior boundaries as {'param_name':
+        [min, max]} dictionaries)
+    """
+
+    params = {}
+    with open(parfile, 'r') as pf:
+        for line in pf:
+            if not line.startswith('#'):
+                cols = line.split()
+                if cols[0] == 'free':
+                    params[cols[1]] = float(cols[2])
+                    priors[cols[1]] = [float(cols[3]), float(cols[4])]
+                elif cols[0] == 'float':
+                    params[cols[1]] = float(cols[2])
+                elif cols[0] == 'int':
+                    params[cols[1]] = int(cols[2])
+                elif cols[0] == 'str':
+                    params[cols[1]] = cols[2]
+
+    return params, priors
+
+
 def par_dicts(parfile):
     """
     Return dictionaries that contain file names, parameter names, and initial guesses, for free and fixed parameters
 
     :param parfile: the parameter file
     :return: params (the free parameters), fixed_pars (fixed parameters), files (file names), and priors (prior
-        boundaries as {'param_name': [min, max]}) dictionaries
+        boundaries as {'param_name': [min, max]} dictionaries)
     """
 
     params = {}
@@ -820,6 +883,42 @@ if __name__ == "__main__":
     print(chisqs)
 
 
+    '''
+    params, priors = par_dicts(args['parfile'])
+    out_cube = model_grid(resolution=pars['resolution'], s=pars['s'], x_loc=pars['xloc'], y_loc=pars['yloc'],
+                          mbh=pars['mbh'], inc=np.deg2rad(pars['inc']), vsys=pars['vsys'], dist=pars['dist'],
+                          theta=np.deg2rad(pars['PAdisk']), data_cube=pars['data'], data_mask=pars['mask'], chi2=True,
+                          lucy_output=pars['lucy'], out_name=out, ml_ratio=pars['ml_ratio'], grid_size=pars['gsize'],
+                          enclosed_mass=pars['mass'], menc_type=pars['mtype'], sig_type=pars['s_type'], f_w=pars['f'],
+                          x_fwhm=pars['x_fwhm'], y_fwhm=pars['y_fwhm'], pa=pars['PAbeam'], lucy_it=pars['lucy_it'],
+                          sig_params=[pars['sig0'], pars['r0'], pars['mu'], pars['sig1']], lucy_mask=pars['lucy_mask'],
+                          lucy_in=pars['lucy_in'], lucy_b=pars['lucy_b'], lucy_o=pars['lucy_o'], ds=pars['ds'],
+                          zrange=[pars['zi'], pars['zf']], xyrange=[pars['xi'], pars['xf'], pars['yi'], pars['yf']],
+                          xyerr=[pars['xerr0'], pars['xerr1'], pars['yerr0'], pars['yerr1']])
+    
+    chi2 = dg.model_grid(
+        # FREE PARAMETERS (entered as list of params because these change each iteration)
+        x_loc=params[pars.keys().index('xloc')],
+        y_loc=params[pars.keys().index('yloc')],
+        mbh=params[pars.keys().index('mbh')],
+        inc=np.deg2rad(params[pars.keys().index('inc')]),
+        vsys=params[pars.keys().index('vsys')],
+        theta=np.deg2rad(params[pars.keys().index('PAdisk')]),
+        ml_ratio=params[pars.keys().index('ml_ratio')],
+        sig_params=[params[pars.keys().index('sig0')], params[pars.keys().index('r0')],
+                    params[pars.keys().index('mu')], params[pars.keys().index('sig1')]],
+        f_w=params[pars.keys().index('f')],
+        # FIXED PARAMETERS
+        sig_type=pars['s_type'], menc_type=pars['mtype'], ds=pars['ds'], grid_size=pars['gsize'], s=pars['s'],
+        x_fwhm=pars['x_fwhm'], y_fwhm=pars['y_fwhm'], pa=pars['PAbeam'], dist=pars['dist'], lucy_it=pars['lucy_it'], 
+        resolution=pars['resolution'], xyrange=[pars['xi'], pars['xf'], pars['yi'], pars['yf']],
+        zrange=[pars['zi'], pars['zf']], xyerr=[pars['xerr0'], pars['xerr1'], pars['yerr0'], pars['yerr1']],
+        # FILES
+        enclosed_mass=pars['mass'], lucy_in=pars['lucy_in'], lucy_output=pars['lucy'], lucy_b=pars['lucy_b'],
+        lucy_o=pars['lucy_o'], lucy_mask=pars['lucy_mask'], data_cube=pars['data'], data_mask=pars['mask'],
+        # OTHER PARAMETERS
+        out_name=None, chi2=True)
+    '''
 
 # xf=410,yi=320;xi=310,yi=400 --> want divisible by 4: so...good!
 
