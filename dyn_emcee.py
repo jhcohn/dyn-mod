@@ -16,7 +16,7 @@ def test_dyn_m(theta, params=None, fixed_pars=None, files=None):
         x_loc=params['xloc'],
         y_loc=params['yloc'],
         mbh=theta[0],
-        inc=np.deg2rad(params['inc']),
+        inc=params['inc'],
         vsys=params['vsys'],
         theta=np.deg2rad(params['PAdisk']),
         ml_ratio=params['ml_ratio'],
@@ -50,7 +50,7 @@ def test_dyn(params=None, par_dict=None, fixed_pars=None, files=None):
         x_loc=params[par_dict.keys().index('xloc')],
         y_loc=params[par_dict.keys().index('yloc')],
         mbh=params[par_dict.keys().index('mbh')],
-        inc=np.deg2rad(params[par_dict.keys().index('inc')]),
+        inc=params[par_dict.keys().index('inc')],
         vsys=params[par_dict.keys().index('vsys')],
         theta=np.deg2rad(params[par_dict.keys().index('PAdisk')]),
         ml_ratio=params[par_dict.keys().index('ml_ratio')],
@@ -85,9 +85,7 @@ def lnprior_m(theta, priors, param_names):
     :param param_names: parameter dictionary key names
     :return: ln of the prior (0, ie flat, if theta within boundaries; -inf if theta outside of boundaries)
     """
-    print(theta)
-    print(priors)
-    print(param_names)
+
     lnp = 0.  # apply a flat prior, so equivalent probability for all values within the prior range
     for p in range(len(theta)):  # for each parameter in the param vector theta
         if theta[p] < priors[0] or theta[p] > priors[1]:
@@ -105,9 +103,7 @@ def lnprior(theta, priors, param_names):
     :param param_names: parameter dictionary key names
     :return: ln of the prior (0, ie flat, if theta within boundaries; -inf if theta outside of boundaries)
     """
-    print(theta)
-    print(priors)
-    print(param_names)
+
     lnp = 0.  # apply a flat prior, so equivalent probability for all values within the prior range
     for p in range(len(theta)):  # for each parameter in the param vector theta
         if theta[p] < priors[param_names[p]][0] or theta[p] > priors[param_names[p]][1]:
@@ -171,7 +167,6 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
         ndim = 1
         param_names = ['mbh']
         p0_guess = np.asarray([params['mbh']])  # initial guess
-        print('p0', p0_guess)
 
         # SET UP RANDOM CLUSTER OF POINTS NEAR INITIAL GUESS
         walkers = np.zeros(shape=(nwalkers, len(p0_guess)))  # initialize walkers; there are nwalkers for each parameter
@@ -190,7 +185,6 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
         # main interface for emcee is EmceeSampler:
         sampler = emcee.EnsembleSampler(nwalkers, ndim, chisq_m, args=[params, priors['mbh'], param_names, fixed_pars,
                                                                        files])
-
         print('p0', p0)
         print('Burning in!')
         pos, prob, state = sampler.run_mcmc(p0, burn)
@@ -237,9 +231,9 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
 
     # AVOID ERROR!
     # all q^2 - cos(inc)^2 > 0 --> q^2 > cos(inc)^2 -> cos(inc) < q
-    priors['inc'][0] = np.deg2rad(priors['inc'][0])
-    priors['inc'][1] = np.amin([np.deg2rad(priors['inc'][1]), np.arccos(np.amin(qobs))])
-
+    # priors['inc'][0] = np.deg2rad(priors['inc'][0])
+    # priors['inc'][1] = np.amin([np.deg2rad(priors['inc'][1]), np.arccos(np.amin(qobs))])
+    priors['inc'][0] = np.amax([priors['inc'][0], np.rad2deg(np.arccos(np.amin(qobs)))])
 
     # SET UP "HYPERPARAMETER" VALUES IN 50 DIMENSIONS
     # ndim = 50
@@ -250,17 +244,16 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
         p0_guess.append(params[key])  # initial guess
         param_names.append(key)  # parameter name
     p0_guess = np.asarray(p0_guess)
-    print('p0', p0_guess)
+    # print('p0', p0_guess)
 
     # SET UP RANDOM CLUSTER OF POINTS NEAR INITIAL GUESS
     walkers = np.zeros(shape=(nwalkers, len(p0_guess)))  # initialize walkers; there are nwalkers for each parameter
-    stepper_full = np.zeros_like(walkers)  # initializes stepper for each parameter
     for w in range(nwalkers):  # for each walker
         for p in range(len(p0_guess)):  # for each parameter
             # select random number, within 20% of param value (except for a few possible large steps)
             adjuster = np.random.choice(np.concatenate((np.linspace(-0.2, 0.2, 200), np.linspace(-0.9, -0.2, 10),
                                                         np.linspace(0.2, 0.9, 10))))
-            stepper_full[w, p] = p0_guess[p] * (1 + adjuster)
+            walkers[w, p] = p0_guess[p] * (1 + adjuster)
             '''
             if param_names[p] == 'mbh':
                 stepper_full[w, p] = np.random.choice(np.logspace(-1., 1., 200))
@@ -269,12 +262,14 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
             '''
 
     # initialize walkers: start all walkers in a cluster near p0
-    for wa in range(nwalkers):  # for each set of walkers
-        newstep = stepper_full[wa, :]  # each row is a list of steps for all the params
-        walkers[wa, :] = p0_guess + newstep  # initialize walkers
+    # for wa in range(nwalkers):  # for each set of walkers
+    #     newstep = stepper_full[wa, :]  # each row is a list of steps for all the params
+    #     walkers[wa, :] = p0_guess + newstep  # initialize walkers
 
     # the actual p0 array needs to be the cluster of initialized walkers
     p0 = walkers
+    print(param_names)
+    print('p0', p0)
 
     '''
     means = np.random.rand(ndim)  # returns random numbers between 0, 1 with shape ndim
@@ -306,7 +301,6 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     # Note: using delta chi^2 instead of lnprob?
     # run a few burn-in steps in your MCMC chain to let the walkers explore the parameter space a bit and get settled
     # into the maximum of the density. We'll run a burn-in of burn=100 steps, starting from our initial guess p0:
-    print('p0', p0)
     print('Burning in!')
     pos, prob, state = sampler.run_mcmc(p0, burn)
     # pos = final position of walkers after the 100 steps
@@ -380,7 +374,7 @@ if __name__ == "__main__":
     args = vars(parser.parse_args())
 
     # do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, parfile=None)
-    flatchain = do_emcee(nwalkers=10, burn=100, steps=5, printer=1, parfile=args['parfile'], all_free=False)
+    flatchain = do_emcee(nwalkers=1000, burn=1, steps=5, printer=1, parfile=args['parfile'], all_free=True)
     # flatchain = do_emcee(nwalkers=100, burn=100, steps=100, printer=1, parfile=args['parfile'])
     print(flatchain)
     print('full time ' + str(time.time() - t0_full))

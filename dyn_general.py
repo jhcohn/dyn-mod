@@ -272,14 +272,14 @@ def ellipse_fitting(cube, x0_sub, y0_sub, res, pa_disk, inc):
     :param y0_sub: y-pixel location of BH, in coordinates of the sub-cube [pix]
     :param res: resolution of the pixel scale [arcsec/pix]
     :param pa_disk: position angle of the disk [radians]
-    :param inc: inclination angle of the disk [radians]
+    :param inc: inclination angle of the disk [deg]
 
     :return: masked ellipse array, to mask out everything in model cube outside of ellipse we want to fit
     """
 
     # Define the Fitting Ellipse
     a = 1. / res  # size of semimajor axis, in pixels
-    b = (1. / res) * np.cos(inc)  # size of semiminor axis, in pixels
+    b = (1. / res) * np.cos(np.deg2rad(inc))  # size of semiminor axis, in pixels
     # a = 34.28
     # b = 23.68
     ell = Ellipse2D(amplitude=1., x_0=x0_sub, y_0=y0_sub, a=a, b=b, theta=pa_disk)
@@ -330,7 +330,7 @@ def check_ellipse(data, res, xo, yo, major, minor, theta):
     return data_masked
 
 
-def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=np.deg2rad(60.), vsys=None, dist=17.,
+def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=60., vsys=None, dist=17.,
                theta=np.deg2rad(-200.), data_cube=None, data_mask=None, lucy_output=None, out_name=None,
                enclosed_mass=None, ml_ratio=1., sig_type='flat', grid_size=31, sig_params=[1., 1., 1., 1.], f_w=1.,
                x_fwhm=0.052, y_fwhm=0.037, pa=64., menc_type=False, ds=None, lucy_in=None, lucy_b=None, lucy_mask=None,
@@ -343,7 +343,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     :param x_loc: the location of the BH, as measured along the x axis of the data cube [pixels]
     :param y_loc: the location of the BH, as measured along the y axis of the data cube [pixels]
     :param mbh: supermassive black hole mass [solar masses]
-    :param inc: inclination of the galaxy [radians]
+    :param inc: inclination of the galaxy [degrees]
     :param vsys: if given, the systemic velocity [km/s]
     :param dist: distance to the galaxy [Mpc]
     :param theta: angle from the +x_obs axis counterclockwise to the blueshifted side of the disk (-x_disk) [radians]
@@ -389,7 +389,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
 
     # COLLAPSE THE DATA CUBE
     fluxes, freq_ax, f_0, input_data, fstep = get_fluxes(data_cube, data_mask, write_name=lucy_in)
-    print(fluxes.shape)
+    # print(fluxes.shape)
 
     # DECONVOLVE FLUXES WITH BEAM PSF
     # to use pyraf, must be in the "three" environment ("source activate three" or "tres" on command line)
@@ -420,7 +420,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         for ypix in range(len(lucy_out)):
             for xpix in range(len(lucy_out[0])):
                 subpix_deconvolved[(ypix * s):(ypix + 1) * s, (xpix * s):(xpix + 1) * s] = lucy_out[ypix, xpix] / s ** 2
-    print('deconvolution took {0} s'.format(time.time() - t0))  # ~0.3 s (7.5s for 1280x1280 array)
+    # print('deconvolution took {0} s'.format(time.time() - t0))  # ~0.3 s (7.5s for 1280x1280 array)
 
     # SET UP VELOCITY AXIS
     if vsys is None:
@@ -474,7 +474,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     # CONVERT FROM ARCSEC TO PHYSICAL UNITS (pc)
     x_bhoff = dist * 10 ** 6 * np.tan(x_bhoff / constants.arcsec_per_rad)  # tan(off) = x_disk/dist --> x = d*tan(off)
     y_bhoff = dist * 10 ** 6 * np.tan(y_bhoff / constants.arcsec_per_rad)  # 206265 arcsec/rad
-    print('BH is at [pc]: ', x_bhoff, y_bhoff)
+    # print('BH is at [pc]: ', x_bhoff, y_bhoff)
 
     # convert all x,y observed grid positions to pc
     x_obs = np.asarray([dist * 10 ** 6 * np.tan(x / constants.arcsec_per_rad) for x in x_obs])  # 206265 arcsec/rad
@@ -484,10 +484,10 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     # CONVERT FROM x_obs, y_obs TO x_disk, y_disk (still in pc)
     x_disk = (x_obs[None, :] - x_bhoff) * np.cos(theta) + (y_obs[:, None] - y_bhoff) * np.sin(theta)  # 2d array
     y_disk = (y_obs[:, None] - y_bhoff) * np.cos(theta) - (x_obs[None, :] - x_bhoff) * np.sin(theta)  # 2d array
-    print('x, y disk', x_disk.shape, y_disk.shape)
+    # print('x, y disk', x_disk.shape, y_disk.shape)
 
     # CALCULATE THE RADIUS (R) OF EACH POINT (x_disk, y_disk) IN THE DISK (pc)
-    R = np.sqrt((y_disk ** 2 / np.cos(inc) ** 2) + x_disk ** 2)  # radius R of each point in the disk (2d array)
+    R = np.sqrt((y_disk ** 2 / np.cos(np.deg2rad(inc)) ** 2) + x_disk ** 2)  # radius R of each point in the disk (2d array)
 
     '''  #
     # PRINT PVD
@@ -546,7 +546,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         # v_c = mvm.mge_vcirc(surf_pots * ml_ratio, sigma_pots, qobs, np.rad2deg(inc), 0., dist, R)  # v_circ due to stars
         # note: mge_vcirc currently breaks if R has more than one dimension, so:
         rads = np.logspace(-2, 10, 30)
-        v_c = mvm.mge_vcirc(surf_pots * ml_ratio, sigma_pots, qobs, np.rad2deg(inc), 0., dist, rads)
+        v_c = mvm.mge_vcirc(surf_pots * ml_ratio, sigma_pots, qobs, inc, 0., dist, rads)
         v_c_func = interpolate.interp1d(rads, v_c, fill_value='extrapolate')  # create a function to interpolate v_circ
 
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
@@ -583,9 +583,9 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     # print('Time elapsed in assigning enclosed masses is {0} s'.format(time.time() - t_mass))  # ~3.5s
 
     # CALCULATE LINE-OF-SIGHT VELOCITY AT EACH POINT (x_disk, y_disk) IN THE DISK (km/s)
-    alpha = abs(np.arctan(y_disk / (np.cos(inc) * x_disk)))  # alpha meas. from +x (minor axis) toward +y (major axis)
+    alpha = abs(np.arctan(y_disk / (np.cos(np.deg2rad(inc)) * x_disk)))  # alpha meas. from +x (minor axis) toward +y (major axis)
     sign = x_disk / abs(x_disk)  # (+x now back to redshifted side, so don't need extra minus sign back in front!)
-    v_los = sign * abs(vel * np.cos(alpha) * np.sin(inc))  # THIS IS CURRENTLY CORRECT
+    v_los = sign * abs(vel * np.cos(alpha) * np.sin(np.deg2rad(inc)))  # THIS IS CURRENTLY CORRECT
     # print('los')
 
     # SET LINE-OF-SIGHT VELOCITY AT THE BLACK HOLE CENTER TO BE 0, SUCH THAT IT DOES NOT BLOW UP
@@ -633,9 +633,9 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     t_mod = time.time()
     cube_model = np.zeros(shape=(len(freq_ax), len(freq_obs), len(freq_obs[0])))  # initialize model cube
     for fr in range(len(freq_ax)):
-        print(fr)
+        # print(fr)
         cube_model[fr] = weight * np.exp(-(freq_ax[fr] - freq_obs) ** 2 / (2 * delta_freq_obs ** 2))
-    print('cube model constructed in ' + str(time.time() - t_mod) + ' s')  # 22s
+    # print('cube model constructed in ' + str(time.time() - t_mod) + ' s')  # 22s
 
     # RE-SAMPLE BACK TO CORRECT PIXEL SCALE (take average of sxs sub-pixels for real alma pixel) --> intrinsic data cube
     t_z = time.time()
@@ -657,7 +657,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         convolved_cube[z, :, :] = convolution.convolve(intrinsic_cube[z, :, :], beam)  # CONFIRMED!
         # print("Convolution loop " + str(z) + " took {0} seconds".format(time.time() - tl))  # 0.03s/loop for 100x100pix
     # print('convolved! Total convolution loop took {0} seconds'.format(time.time() - ts))  # 170.9s
-    print('total model took {0} seconds'.format(time.time() - t_begin))  # ~213s
+    print('total model constructed in {0} seconds'.format(time.time() - t_begin))  # ~213s
 
     # ONLY WANT TO FIT WITHIN ELLIPTICAL REGION! APPLY ELLIPTICAL MASK
     ell_mask = ellipse_fitting(convolved_cube, x_loc, y_loc, resolution, theta, inc)
@@ -722,7 +722,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         masked_pix = all_pix[all_pix != 0]  # all_pix, but this time only the pixels that are actually inside ellipse
         n_pts = len(masked_pix) * (zrange[1] - zrange[0])  # total number of pixels being compared = 4600 [100*46]
         n_params = 12  # number of free parameters
-        print(chi_sq / (n_pts - n_params))  # 4284.80414208  # 12300204.6088
+        print(r'Supposedly reduced chi^2=', chi_sq / (n_pts - n_params))  # 4284.80414208  # 12300204.6088
         '''  #
         # plt.plot(freq_ax/1e9, np.asarray(cs) / len(masked_pix), 'ro', label=r'$\chi^2$')
         plt.plot(freq_ax / 1e9, np.asarray(noise)**2, 'k*', label=r'Variance')
@@ -888,7 +888,7 @@ if __name__ == "__main__":
     # for vsys in [1900., 2000., 2200., 2700., 2760.76, 3000.]:  # vsys=params['vsys']
     # for mbh in [2.25e9, 2.3e9, 2.35e9, 2.4e9, 2.45e9]:  # mbh=params['mbh']
         out_cube = model_grid(resolution=fixed_pars['resolution'], s=fixed_pars['s'], x_loc=params['xloc'],
-                              y_loc=params['yloc'], mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'],
+                              y_loc=params['yloc'], mbh=params['mbh'], inc=params['inc'], vsys=params['vsys'],
                               dist=fixed_pars['dist'], theta=np.deg2rad(params['PAdisk']), data_cube=files['data'],
                               data_mask=files['mask'], lucy_output=files['lucy'], out_name=out, ml_ratio=params['ml_ratio'],
                               mge_f=files['mge'], enclosed_mass=files['mass'], menc_type=fixed_pars['mtype']==True,
@@ -909,7 +909,7 @@ if __name__ == "__main__":
     '''
     params, priors = par_dicts(args['parfile'])
     out_cube = model_grid(resolution=pars['resolution'], s=pars['s'], x_loc=pars['xloc'], y_loc=pars['yloc'],
-                          mbh=pars['mbh'], inc=np.deg2rad(pars['inc']), vsys=pars['vsys'], dist=pars['dist'],
+                          mbh=pars['mbh'], inc=pars['inc'], vsys=pars['vsys'], dist=pars['dist'],
                           theta=np.deg2rad(pars['PAdisk']), data_cube=pars['data'], data_mask=pars['mask'], chi2=True,
                           lucy_output=pars['lucy'], out_name=out, ml_ratio=pars['ml_ratio'], grid_size=pars['gsize'],
                           enclosed_mass=pars['mass'], menc_type=pars['mtype'], sig_type=pars['s_type'], f_w=pars['f'],
@@ -924,7 +924,7 @@ if __name__ == "__main__":
         x_loc=params[pars.keys().index('xloc')],
         y_loc=params[pars.keys().index('yloc')],
         mbh=params[pars.keys().index('mbh')],
-        inc=np.deg2rad(params[pars.keys().index('inc')]),
+        inc=params[pars.keys().index('inc')],
         vsys=params[pars.keys().index('vsys')],
         theta=np.deg2rad(params[pars.keys().index('PAdisk')]),
         ml_ratio=params[pars.keys().index('ml_ratio')],
