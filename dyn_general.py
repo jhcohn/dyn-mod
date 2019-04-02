@@ -702,16 +702,15 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
             # ESTIMATE NOISE (RMS) IN ORIGINAL DATA CUBE [z, y, x]
 
             # noise.append(np.sqrt(np.mean(input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])] ** 2)))
-
             # noise2.append(np.sqrt(np.mean(input_data[z, 390:440, 370:420] ** 2)))  # 260:360, 210:310
-            # noise2 trying to do proper variance. For large N, Variance ~= std^2!
             # noise2.append(np.sqrt(np.mean((input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])]
             #               - np.mean(input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])]))**2)))
 
-            noise.append(np.std(input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])]))
-            nums.append(np.sum((ap_4[z_ind] - data_4[z_ind])**2))
+            # For large N, Variance ~= std^2
+            noise.append(np.std(input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])]))  # noise!
             chi_sq += np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise[z_ind]**2)  # calculate chisq!
-            cs.append(np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise[z_ind]**2))
+            nums.append(np.sum((ap_4[z_ind] - data_4[z_ind])**2))  # numerator of chisq per slice
+            cs.append(np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise[z_ind]**2))  # chisq per slice
 
             z_ind += 1  # the actual index for the model-data comparison cubes
 
