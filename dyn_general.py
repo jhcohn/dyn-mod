@@ -263,11 +263,12 @@ def rebin(data, n):
     return np.asarray(rebinned)
 
 
-def ellipse_fitting(cube, x0_sub, y0_sub, res, pa_disk, inc):
+def ellipse_fitting(cube, rfit, x0_sub, y0_sub, res, pa_disk, inc):
     """
     Create an elliptical mask, within which we will do all of the actual fitting
 
     :param cube: down-sampled version of the sub-cube around the emission (model or data; using only for the dimensions)
+    :param rfit: the radius of the fitting region [arcsec]
     :param x0_sub: x-pixel location of BH, in coordinates of the sub-cube [pix]
     :param y0_sub: y-pixel location of BH, in coordinates of the sub-cube [pix]
     :param res: resolution of the pixel scale [arcsec/pix]
@@ -278,8 +279,8 @@ def ellipse_fitting(cube, x0_sub, y0_sub, res, pa_disk, inc):
     """
 
     # Define the Fitting Ellipse
-    a = 1. / res  # size of semimajor axis, in pixels
-    b = (1. / res) * np.cos(inc)  # size of semiminor axis, in pixels
+    a = rfit / res  # size of semimajor axis, in pixels
+    b = (rfit / res) * np.cos(inc)  # size of semiminor axis, in pixels
     # a = 34.28
     # b = 23.68
     ell = Ellipse2D(amplitude=1., x_0=x0_sub, y_0=y0_sub, a=a, b=b, theta=pa_disk)
@@ -331,7 +332,7 @@ def check_ellipse(data, res, xo, yo, major, minor, theta):
 
 
 def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=np.deg2rad(60.), vsys=None, dist=17.,
-               theta=np.deg2rad(-200.), data_cube=None, data_mask=None, lucy_output=None, out_name=None,
+               theta=np.deg2rad(-200.), data_cube=None, data_mask=None, lucy_output=None, out_name=None, inc_star=0.,
                enclosed_mass=None, ml_ratio=1., sig_type='flat', grid_size=31, sig_params=[1., 1., 1., 1.], f_w=1.,
                x_fwhm=0.052, y_fwhm=0.037, pa=64., menc_type=False, ds=None, lucy_in=None, lucy_b=None, lucy_mask=None,
                lucy_o=None, lucy_it=10, chi2=False, pb=None, zrange=None, xyrange=None, xyerr=None, mge_f=None):
@@ -351,6 +352,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     :param data_mask: input mask cube of each slice of the data, for constructing the weight map
     :param lucy_output: output from running lucy on data cube and beam PSF
     :param out_name: output name of the fits file to which to save the output v_los image (if None, don't save image)
+    :param inc_star: inclination of stellar component [deg]
     :param enclosed_mass: file including data of the enclosed stellar mass of the galaxy (1st column should be radius
         r in kpc and second column should be M_stars(<r) or velocity_circ(R) due to stars within R)
     :param mge_f: file including MGE fit parameters that you can use to create v_circ(R) due to stars, from mge_vcirc.py
@@ -378,7 +380,6 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
 
     :return: convolved model cube (if chi2 is False); chi2 (if chi2 is True)
     """
-    ## BUCKET BUCKET: NEXT TO DO: INCORPORATE xyrange, AND TALK TO BEN SOME MORE ABOUT CHOOSING AN APPROPRIATE RANGE
     t_begin = time.time()
     # INSTANTIATE ASTRONOMICAL CONSTANTS
     constants = Constants()
@@ -546,13 +547,17 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         comp, surf_pots, sigma_pots, qobs = mvm.load_mge(mge_f)  # load the MGE parameters
         # v_c = mvm.mge_vcirc(surf_pots * ml_ratio, sigma_pots, qobs, np.rad2deg(inc), 0., dist, R)  # v_circ due to stars
         # note: mge_vcirc currently breaks if R has more than one dimension, so:
-        rads = np.logspace(-2, 10, 30)
-        v_c = mvm.mge_vcirc(surf_pots * ml_ratio, sigma_pots, qobs, np.rad2deg(inc), 0., dist, rads)
+        rads = np.logspace(-2, 1, 30)
+        v_c = mvm.mge_vcirc(surf_pots * ml_ratio, sigma_pots, qobs, inc_star, 0., dist, rads)
         v_c_func = interpolate.interp1d(rads, v_c, fill_value='extrapolate')  # create a function to interpolate v_circ
 
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
         # vel = np.sqrt((constants.G_pc * mbh / R) + v_c**2)
         # note: mge_vcirc currently breaks if R has more than one dimension, so:
+        # plt.plot(rads, v_c, 'k-')
+        # plt.plot(rads, v_c_func(rads), 'b*')
+        # plt.show()
+
         vel = np.sqrt(v_c_func(R)**2 + (constants.G_pc * mbh / R))  # velocities sum in quadrature
     elif menc_type:  # if using a file with stellar mass(R)
         print('m(R)')
@@ -663,7 +668,8 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     print('total model constructed in {0} seconds'.format(time.time() - t_begin))  # ~213s
 
     # ONLY WANT TO FIT WITHIN ELLIPTICAL REGION! APPLY ELLIPTICAL MASK
-    ell_mask = ellipse_fitting(convolved_cube, x_loc, y_loc, resolution, theta, inc)
+    rfit = 1.  # arcsec
+    ell_mask = ellipse_fitting(convolved_cube, rfit, x_loc, y_loc, resolution, theta, np.deg2rad(inc_star))
     # hdu = fits.PrimaryHDU(ell_mask)
     # hdul = fits.HDUList([hdu])
     # hdul.writeto('/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_fitting_ellipse.fits')
@@ -684,10 +690,10 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         # MODEL NOISE!
         # BUCKET: ADJUST SO NOISE IS ONLY CALCULATED ONCE IN EMCEE PROCESS, NOT EACH ITERATION
         ell_4 = rebin(ell_mask, ds)
-        # inds_to_try2 = np.asarray([[10, 10], [10, 15], [15, 10]])
-        # import test_dyn_funcs as tdf
-        # f_sys = f_0 / (1+zred)
-        # tdf.compare(input_data_masked, convolved_cube, freq_ax / 1e9, inds_to_try2, f_sys / 1e9, 4)
+        inds_to_try2 = np.asarray([[10, 10], [10, 15], [15, 10]])
+        import test_dyn_funcs as tdf
+        f_sys = f_0 / (1+zred)
+        tdf.compare(input_data_masked, convolved_cube, freq_ax / 1e9, inds_to_try2, f_sys / 1e9, 4)
         noise = []
         nums = []
         cs = []
@@ -711,19 +717,26 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
 
         # CALCULATE REDUCED CHI^2
         all_pix = np.ndarray.flatten(ell_4)  # all fitted pixels in each slice [len = 625 (yep)] [525 masked, 100 not]
+        print(ell_4.shape)
         masked_pix = all_pix[all_pix != 0]  # all_pix, but this time only the pixels that are actually inside ellipse
         n_pts = len(masked_pix) * (zrange[1] - zrange[0])  # total number of pixels being compared = 4600 [100*46]
         n_params = 12  # number of free parameters
+        print(np.sum(cs), n_pts)
         print(r'Supposedly reduced chi^2=', chi_sq / (n_pts - n_params))  # 4284.80414208  # 12300204.6088
-        '''  #
+        # '''  #
         # plt.plot(freq_ax/1e9, np.asarray(cs) / len(masked_pix), 'ro', label=r'$\chi^2$')
         plt.plot(freq_ax / 1e9, np.asarray(noise)**2, 'k*', label=r'Variance')
         plt.plot(freq_ax / 1e9, nums, 'b+', label=r'$\chi^2$ Numerator')
+        plt.axhline(np.median(nums))  # 3e-3
+        plt.axhline(np.median(np.asarray(noise)**2))  # 1.5e-7
+        # 2e4 / 4.6e3 --> .5e1 *46 -> ~2e3
         plt.legend(loc='center right')
         plt.yscale('log')
         plt.xlabel(r'GHz')
         plt.show()
         plt.plot(freq_ax, noise, 'k*')
+        plt.show()
+        plt.plot(freq_ax, np.asarray(cs) / n_pts, 'k*')
         plt.show()
         print(oops)
         # '''  #
@@ -888,21 +901,19 @@ if __name__ == "__main__":  # NEED AT LEAST TWO SPACES ABOVE THIS PROBABLY????
     # for xl in [300, 325, 350, 375, 400]:  # params['xloc']
     #     print('xloc', xl)
     # for xl in [362.04]:
-    # for mbh in [2.386e9]:  # [2.25e9, 2.3e9, 2.35e9, 2.4e9, 2.45e9]:  # mbh=params['mbh']
-    for vsys in [1e3, 2000., 2760.76, 3000., 7000.]:  # vsys=params['vsys'] (good)
-        print('vsys', vsys)
+    for mbh in [2.386e9]:  # [2.25e9, 2.3e9, 2.35e9, 2.4e9, 2.45e9]:  # mbh=params['mbh']
         out = files['outname']  # '/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_general_' + pars_str + '_subcube_ellmask_bl2.fits'
         out_cube = model_grid(resolution=fixed_pars['resolution'], s=fixed_pars['s'], x_loc=params['xloc'],
-                              y_loc=params['yloc'], mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'],
+                              y_loc=params['yloc'], mbh=mbh, inc=np.deg2rad(params['inc']), vsys=params['vsys'],
                               dist=fixed_pars['dist'], theta=np.deg2rad(params['PAdisk']), data_cube=files['data'],
                               data_mask=files['mask'], lucy_output=files['lucy'], out_name=out, ml_ratio=params['ml_ratio'],
                               mge_f=files['mge'], enclosed_mass=files['mass'], menc_type=fixed_pars['mtype']==True,
+                              inc_star=fixed_pars['inc_star'], zrange=[int(fixed_pars['zi']), int(fixed_pars['zf'])],
                               sig_type=fixed_pars['s_type'], grid_size=fixed_pars['gsize'], x_fwhm=fixed_pars['x_fwhm'],
                               y_fwhm=fixed_pars['y_fwhm'], pa=fixed_pars['PAbeam'], ds=int(fixed_pars['ds']),
                               sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']],
                               f_w=params['f'], lucy_in=files['lucy_in'], lucy_b=files['lucy_b'], lucy_o=files['lucy_o'],
                               lucy_mask=files['lucy_mask'], lucy_it=fixed_pars['lucy_it'], chi2=True, pb=files['pb'],
-                              zrange=[int(fixed_pars['zi']), int(fixed_pars['zf'])],
                               xyrange=[int(fixed_pars['xi']), int(fixed_pars['xf']), int(fixed_pars['yi']),
                                        int(fixed_pars['yf'])], xyerr=[int(fixed_pars['xerr0']), int(fixed_pars['xerr1']),
                                                                       int(fixed_pars['yerr0']), int(fixed_pars['yerr1'])])
@@ -910,11 +921,10 @@ if __name__ == "__main__":  # NEED AT LEAST TWO SPACES ABOVE THIS PROBABLY????
     print('True Total: ' + str(time.time() - t0_true))  # 3.93s YAY!  # 23s for 6 models (16.6 for 4 models)
     print(chisqs)
 
-
     '''
     params, priors = par_dicts(args['parfile'])
-    out_cube = model_grid(resolution=pars['resolution'], s=pars['s'], x_loc=pars['xloc'], y_loc=pars['yloc'],
-                          mbh=pars['mbh'], inc=pars['inc'], vsys=pars['vsys'], dist=pars['dist'],
+    out_cube = model_grid(resolution=pars['resolution'], s=pars['s'], inc_star=pars['inc_star'], x_loc=pars['xloc'], 
+                          y_loc=pars['yloc'], mbh=pars['mbh'], inc=pars['inc'], vsys=pars['vsys'], dist=pars['dist'],
                           theta=np.deg2rad(pars['PAdisk']), data_cube=pars['data'], data_mask=pars['mask'], chi2=True,
                           lucy_output=pars['lucy'], out_name=out, ml_ratio=pars['ml_ratio'], grid_size=pars['gsize'],
                           enclosed_mass=pars['mass'], menc_type=pars['mtype'], sig_type=pars['s_type'], f_w=pars['f'],
@@ -937,10 +947,10 @@ if __name__ == "__main__":  # NEED AT LEAST TWO SPACES ABOVE THIS PROBABLY????
                     params[pars.keys().index('mu')], params[pars.keys().index('sig1')]],
         f_w=params[pars.keys().index('f')],
         # FIXED PARAMETERS
-        sig_type=pars['s_type'], menc_type=pars['mtype'], ds=pars['ds'], grid_size=pars['gsize'], s=pars['s'],
-        x_fwhm=pars['x_fwhm'], y_fwhm=pars['y_fwhm'], pa=pars['PAbeam'], dist=pars['dist'], lucy_it=pars['lucy_it'], 
-        resolution=pars['resolution'], xyrange=[pars['xi'], pars['xf'], pars['yi'], pars['yf']],
-        zrange=[pars['zi'], pars['zf']], xyerr=[pars['xerr0'], pars['xerr1'], pars['yerr0'], pars['yerr1']],
+        sig_type=pars['s_type'], menc_type=pars['mtype'], grid_size=pars['gsize'], lucy_it=pars['lucy_it'], s=pars['s'],
+        x_fwhm=pars['x_fwhm'], y_fwhm=pars['y_fwhm'], pa=pars['PAbeam'], dist=pars['dist'], inc_star=pars['inc_star'], 
+        resolution=pars['resolution'], xyrange=[pars['xi'], pars['xf'], pars['yi'], pars['yf']], ds=pars['ds'],
+        zrange=[pars['zi'], pars['zf']], xyerr=[pars['xerr0'], pars['xerr1'], pars['yerr0'], pars['yerr1']], 
         # FILES
         enclosed_mass=pars['mass'], lucy_in=pars['lucy_in'], lucy_output=pars['lucy'], lucy_b=pars['lucy_b'],
         lucy_o=pars['lucy_o'], lucy_mask=pars['lucy_mask'], data_cube=pars['data'], data_mask=pars['mask'],
@@ -948,6 +958,8 @@ if __name__ == "__main__":  # NEED AT LEAST TWO SPACES ABOVE THIS PROBABLY????
         out_name=None, chi2=True)
     '''
 
-# xf=410,yi=320;xi=310,yi=400 --> want divisible by 4: so...good!
+# check rad/deg interplay for inc between general and emcee
+# play with softening parameter?
+# whyyyyyy is chi^2 wrong?
 
-# TAKE TRUNCATED MODEL AND PUT BACK IN ZEROS FULL SIZE MODEL CUBE TO COMPARE TO DATA
+# xf=410,yi=320;xi=310,yi=400 --> want divisible by 4: so...good!
