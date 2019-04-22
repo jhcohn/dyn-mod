@@ -16,7 +16,8 @@ def test_dyn_m(theta, params=None, fixed_pars=None, files=None):
         x_loc=params['xloc'],
         y_loc=params['yloc'],
         mbh=theta[0],
-        inc=params['inc'],
+        inc=np.deg2rad(params['inc']),
+        inc_star=params['inc_star'],
         vsys=params['vsys'],
         theta=np.deg2rad(params['PAdisk']),
         ml_ratio=params['ml_ratio'],
@@ -29,8 +30,8 @@ def test_dyn_m(theta, params=None, fixed_pars=None, files=None):
         sig_type=fixed_pars['s_type'], menc_type=fixed_pars['mtype'] == True, ds=int(fixed_pars['ds']),
         grid_size=fixed_pars['gsize'], x_fwhm=fixed_pars['x_fwhm'], y_fwhm=fixed_pars['y_fwhm'],
         pa=fixed_pars['PAbeam'], dist=fixed_pars['dist'], resolution=fixed_pars['resolution'], s=fixed_pars['s'],
-        lucy_it=fixed_pars['lucy_it'], zrange=[int(fixed_pars['zi']), int(fixed_pars['zf'])],
-        xyrange=[fixed_pars['xi'], fixed_pars['xf'], fixed_pars['yi'], fixed_pars['yf']],
+        zrange=[int(fixed_pars['zi']), int(fixed_pars['zf'])], rfit=fixed_pars['rfit'],
+        xyrange=[fixed_pars['xi'], fixed_pars['xf'], fixed_pars['yi'], fixed_pars['yf']], lucy_it=fixed_pars['lucy_it'],
         xyerr=[int(fixed_pars['xerr0']), int(fixed_pars['xerr1']), int(fixed_pars['yerr0']), int(fixed_pars['yerr1'])],
         # FILES
         mge_f=files['mge'], enclosed_mass=files['mass'], lucy_in=files['lucy_in'], lucy_output=files['lucy'],
@@ -50,7 +51,8 @@ def test_dyn(params=None, par_dict=None, fixed_pars=None, files=None):
         x_loc=params[par_dict.keys().index('xloc')],
         y_loc=params[par_dict.keys().index('yloc')],
         mbh=params[par_dict.keys().index('mbh')],
-        inc=params[par_dict.keys().index('inc')],
+        inc=np.deg2rad(params[par_dict.keys().index('inc')]),
+        inc_star=params[par_dict.keys().index('inc_star')],
         vsys=params[par_dict.keys().index('vsys')],
         theta=np.deg2rad(params[par_dict.keys().index('PAdisk')]),
         ml_ratio=params[par_dict.keys().index('ml_ratio')],
@@ -64,14 +66,14 @@ def test_dyn(params=None, par_dict=None, fixed_pars=None, files=None):
         grid_size=fixed_pars['gsize'], x_fwhm=fixed_pars['x_fwhm'], y_fwhm=fixed_pars['y_fwhm'],
         pa=fixed_pars['PAbeam'], dist=fixed_pars['dist'], resolution=fixed_pars['resolution'], s=fixed_pars['s'],
         lucy_it=fixed_pars['lucy_it'], zrange=[int(fixed_pars['zi']), int(fixed_pars['zf'])],
-        xyrange=[fixed_pars['xi'], fixed_pars['xf'], fixed_pars['yi'], fixed_pars['yf']],
+        xyrange=[fixed_pars['xi'], fixed_pars['xf'], fixed_pars['yi'], fixed_pars['yf']], rfit=fixed_pars['rfit'],
         xyerr=[int(fixed_pars['xerr0']), int(fixed_pars['xerr1']), int(fixed_pars['yerr0']), int(fixed_pars['yerr1'])],
         # FILES
         mge_f=files['mge'], enclosed_mass=files['mass'], lucy_in=files['lucy_in'], lucy_output=files['lucy'],
         lucy_b=files['lucy_b'], lucy_o=files['lucy_o'], lucy_mask=files['lucy_mask'], data_cube=files['data'],
         data_mask=files['mask'],
         # OTHER PARAMETERS
-        out_name=None, chi2=True)
+        out_name=None, chi2=True, reduced=False)
 
     return chi2
 
@@ -112,7 +114,7 @@ def lnprior(theta, priors, param_names):
     return lnp
 
 
-def chisq(theta, priors=None, param_names=None, fixed_pars=None, files=None):
+def lnprob(theta, priors=None, param_names=None, fixed_pars=None, files=None):
     """
     Not computing full posterior probability, so just use chi squared (P propto exp(-chi^2/2) --> ln(P) ~ -chi^2 / 2
 
@@ -130,6 +132,7 @@ def chisq(theta, priors=None, param_names=None, fixed_pars=None, files=None):
     else:
         chi2 = test_dyn(params=theta, par_dict=priors, fixed_pars=fixed_pars, files=files)
 
+    print('lnprob stuff', pri, chi2, pri + (-0.5 * chi2))
     return pri + (-0.5 * chi2)
 
 
@@ -157,7 +160,11 @@ def chisq_m(theta, params=None, priors=None, param_names=None, fixed_pars=None, 
 def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfile=None):
 
     t0_mc = time.time()
-    params, fixed_pars, files, priors, qobs = dg.par_dicts(parfile, q=True)  # get dicts of params and file names from parameter file
+    # BUCKET set q=True once mge working
+    # params, fixed_pars, files, priors, qobs = dg.par_dicts(parfile, q=True)  # get dicts of params and file names from parameter file
+    # AVOID ERROR! --> all q^2 - cos(inc)^2 > 0 --> q^2 > cos(inc)^2 -> cos(inc) < q
+    # priors['inc_star'][0] = np.amax([priors['inc_star'][0], np.rad2deg(np.arccos(np.amin(qobs)))])  # BUCKET TURN ON ONCE MGE WORKING
+    params, fixed_pars, files, priors = dg.par_dicts(parfile, q=False)  # get dicts of params and file names from parameter file
     ndim = len(params)  # number of dimensions = number of free parameters
     direc = '/Users/jonathancohn/Documents/dyn_mod/emcee_out/'
 
@@ -174,8 +181,9 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
         for w in range(nwalkers):  # for each walker
             for p in range(len(p0_guess)):  # for each parameter
                 # select random number, within 20% of param value (except for a few possible large steps)
-                adjuster = np.random.choice(np.concatenate((np.linspace(-0.2, 0.2, 200), np.linspace(-0.9, -0.2, 10),
-                                                            np.linspace(0.2, 0.9, 10))))
+                # adjuster = np.random.choice(np.concatenate((np.linspace(-0.2, 0.2, 200), np.linspace(-0.9, -0.2, 10),
+                #                                             np.linspace(0.2, 0.9, 10))))
+                adjuster = np.random.choice(np.linspace(-0.02, 0.02, 200))
                 walkers[w, p] = p0_guess[p] * (1 + adjuster)
                 # stepper_full[w, p] = p0_guess[p] * (1 + adjuster)
 
@@ -228,13 +236,6 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
             plt.show()
             print(oop)
 
-
-    # AVOID ERROR!
-    # all q^2 - cos(inc)^2 > 0 --> q^2 > cos(inc)^2 -> cos(inc) < q
-    # priors['inc'][0] = np.deg2rad(priors['inc'][0])
-    # priors['inc'][1] = np.amin([np.deg2rad(priors['inc'][1]), np.arccos(np.amin(qobs))])
-    priors['inc'][0] = np.amax([priors['inc'][0], np.rad2deg(np.arccos(np.amin(qobs)))])
-
     # SET UP "HYPERPARAMETER" VALUES IN 50 DIMENSIONS
     # ndim = 50
 
@@ -251,8 +252,9 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     for w in range(nwalkers):  # for each walker
         for p in range(len(p0_guess)):  # for each parameter
             # select random number, within 20% of param value (except for a few possible large steps)
-            adjuster = np.random.choice(np.concatenate((np.linspace(-0.2, 0.2, 200), np.linspace(-0.9, -0.2, 10),
-                                                        np.linspace(0.2, 0.9, 10))))
+            # adjuster = np.random.choice(np.concatenate((np.linspace(-0.2, 0.2, 200), np.linspace(-0.9, -0.2, 10),
+            #                                             np.linspace(0.2, 0.9, 10))))
+            adjuster = np.random.choice(np.linspace(-0.02, 0.02, 200))
             walkers[w, p] = p0_guess[p] * (1 + adjuster)
             '''
             if param_names[p] == 'mbh':
@@ -291,10 +293,10 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     '''
 
     # main interface for emcee is EmceeSampler:
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, chisq, args=[priors, param_names, fixed_pars, files])
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=[priors, param_names, fixed_pars, files])
                                                         #(p0_guess, priors=priors, param_names=param_names,
     #                                                      fixed_pars=fixed_pars, files=files))
-    # ^don't need theta in chisq() because of setup of EmceeSampler function, right?
+    # ^don't need theta in lnprob() because of setup of EmceeSampler function, right?
 
     # call lbprob as lnprob(p, means, icov) [where p is the position of a single walker. If no args parameter provided,
     # the calling sequence would be lnprob(p) instead.]
@@ -320,7 +322,6 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     print("Mean acceptance fraction: {0:.3f}"
           .format(np.mean(sampler.acceptance_fraction)))  # should be 0.25 to 0.5
 
-    # params = ['inc', 'mbh', 'gamma', 'beta']
     for i in range(ndim):
         outfile = direc + 'flatchain_' + param_names[i] + '_' + str(nwalkers) + '_' + str(burn) + '_' + str(steps) + '.pkl'
         print(outfile)
@@ -333,11 +334,11 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     if printer:
         # fig = plt.figure()
         # axes = [plt.subplot(221), plt.subplot(222), plt.subplot(223), plt.subplot(224)]
-        fig, axes = plt.subplots(3, 4)  # 3 rows, 4 cols of subplots; because there are 12 free params
+        fig, axes = plt.subplots(4, 4)  # 3 rows, 4 cols of subplots; because there are 12 free params (ahhh now 13)
         row = 0
         col = 0
         for i in range(ndim):
-            if i == 4 or i == 8:
+            if i == 4 or i == 8 or i == 12:
                 row += 1
                 col = 0
 
@@ -356,12 +357,19 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
             axes[row, col].axvline(percs[2], ls='--')  #
             axes[row, col].tick_params('both', labelsize=8)
             # plt.title("Dimension {0:d}".format(i))
-            axes[row, col].set_title(params.keys()[i] + ': ' + str(round(percs[1],2)) + ' (+'
+            axes[row, col].set_title(params.keys()[i] + ': ' + str(round(percs[1],4)) + ' (+'
                                      + str(round(percs[2] - percs[1], 2)) + ', -'
                                      + str(round(percs[1] - percs[0], 2)) + ')', fontsize=8)
             col += 1
 
         plt.show()
+        plt.close()
+        for i in range(ndim):
+            plt.plot(sampler.flatchain[:, i])
+            plt.title(params.keys()[i])
+            plt.xlabel(r'Iteration')
+            plt.ylabel('Value')
+            plt.show()
 
     return sampler.flatchain
 
@@ -374,14 +382,7 @@ if __name__ == "__main__":
     args = vars(parser.parse_args())
 
     # do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, parfile=None)
-    flatchain = do_emcee(nwalkers=1000, burn=1, steps=5, printer=1, parfile=args['parfile'], all_free=True)
+    flatchain = do_emcee(nwalkers=100, burn=0, steps=50, printer=1, parfile=args['parfile'], all_free=True)
     # flatchain = do_emcee(nwalkers=100, burn=100, steps=100, printer=1, parfile=args['parfile'])
     print(flatchain)
     print('full time ' + str(time.time() - t0_full))
-
-
-    # BUCKET: DIVIDE BY ERROR! BEST TO DEFINE ERROR DIFFERENTLY EACH SLICE, BUT FOR SMALL DISKS (e.g. NGC3258), DOESN'T
-    # MATTER, AND CAN JUST USE THE SAME ELLIPTICAL REGION IN EACH SLICE, NOT CONTAINING ANY LINE EMISSION.
-
-    # TO DO EVENTUALLY: ADD IN MGE STEP TO ESTIMATE v(R) (or M(R))
-    # TO DO NOW!!! TWEAK MODEL TO ONLY RUN ON SMALL SUBSECTION OF CUBE!
