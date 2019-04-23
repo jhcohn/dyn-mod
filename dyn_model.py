@@ -455,8 +455,9 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     # CALCULATE ENCLOSED MASS BASED ON MBH AND ENCLOSED STELLAR MASS
     # THEN CALCULATE KEPLERIAN VELOCITY
     t_mass = time.time()
-    '''  # WHEN I SWITCH TO NEW PARAM FILE FORMAT
+    # '''  # UNCOMMENT WHEN I SWITCH TO NEW PARAM FILE FORMAT
     if menc_type == 0:  # if calculating v(R) due to stars directly from MGE parameters
+        print('mge')
         import sys
         sys.path.insert(0, '/Users/jonathancohn/Documents/jam/')  # lets me import file from different folder/path
         import mge_vcirc_mine as mvm
@@ -466,7 +467,8 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
 
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
         vel = np.sqrt((constants.G_pc * mbh / R) + v_c**2)
-    elif menc_type == 1:  # elif using a file with stellar mass(R)
+    elif menc_type == 1:  # elif using a file with v_circ(R) due to stellar mass
+        print('v(r)')
         radii = []
         v_circ = []
         with open(enclosed_mass) as em:  # note: current file has units v_circ^2/(M/L) --> v_circ = np.sqrt(col * (M/L))
@@ -478,7 +480,8 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
 
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
         vel = np.sqrt(v_c_r(R) * ml_ratio + (constants.G_pc * mbh / R))  # velocities sum in quadrature
-    elif menc_type == 2:  # elif using a file directly with v_circ as a function of R due to stellar mass
+    elif menc_type == 2:  # elif using a file directly with stellar mass as a function of R
+        print('M(R)')
         radii = []
         m_stellar = []
         with open(enclosed_mass) as em:
@@ -493,7 +496,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
 
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
         vel = np.sqrt(constants.G_pc * m_R / R)  # Keplerian velocity vel at each point in the disk
-    # '''  # WHEN I SWITCH OT NEW PARAM FILE FORMAT
+    '''  # COMMENT WHEN I SWITCH TO NEW PARAM FILE FORMAT
     if Path(mge_f).exists():  # if calculating v(R) due to stars directly from MGE parameters
         import sys
         sys.path.insert(0, '/Users/jonathancohn/Documents/jam/')  # allows me to import file from different folder/path
@@ -538,6 +541,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
 
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
         vel = np.sqrt(v_c_r(R) * ml_ratio + (constants.G_pc * mbh / R))  # velocities sum in quadrature
+    # '''  #
     # print('Time elapsed in assigning enclosed masses is {0} s'.format(time.time() - t_mass))  # ~3.5s
 
     # CALCULATE LINE-OF-SIGHT VELOCITY AT EACH POINT (x_disk, y_disk) IN THE DISK (km/s)
@@ -695,7 +699,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
             # For large N, Variance ~= std^2
             # noise.append(np.std(input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])]))  # noise!
             # 400 480 400 480 --> 100 120 100 120
-            noise.append(np.std(noise_4[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])]))  # noise!
+            noise.append(np.std(noise_4[z, xyerr[2]:xyerr[3], xyerr[0]:xyerr[1]]))  # noise!
             chi_sq += np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise[z_ind]**2)  # calculate chisq!
             nums.append(np.sum((ap_4[z_ind] - data_4[z_ind])**2))  # numerator of chisq per slice
             cs.append(np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise[z_ind]**2))  # chisq per slice
@@ -763,24 +767,27 @@ def par_dicts(parfile, q=False):
     Return dictionaries that contain file names, parameter names, and initial guesses, for free and fixed parameters
 
     :param parfile: the parameter file
+    :param q: True if I'm using mge vcirc
     :return: params (the free parameters, fixed parameters, and input files), priors (prior boundaries as {'param_name':
-        [min, max]} dictionaries)
+        [min, max]} dictionaries), qobs (mge parameter qobs; only included if q=True)
     """
 
     params = {}
+    priors = {}
     with open(parfile, 'r') as pf:
         for line in pf:
             if not line.startswith('#'):
                 cols = line.split()
-                if cols[0] == 'free':
-                    params[cols[1]] = float(cols[2])
-                    priors[cols[1]] = [float(cols[3]), float(cols[4])]
-                elif cols[0] == 'float':
-                    params[cols[1]] = float(cols[2])
-                elif cols[0] == 'int':
-                    params[cols[1]] = int(cols[2])
-                elif cols[0] == 'str':
-                    params[cols[1]] = cols[2]
+                if len(cols) > 0:  # ignore empty lines
+                    if cols[0] == 'free':  # free parameters are floats with priors
+                        params[cols[1]] = float(cols[2])
+                        priors[cols[1]] = [float(cols[3]), float(cols[4])]
+                    elif cols[0] == 'float':  # fixed floats
+                        params[cols[1]] = float(cols[2])
+                    elif cols[0] == 'int':  # fixed ints
+                        params[cols[1]] = int(cols[2])
+                    elif cols[0] == 'str':  # fixed strings
+                        params[cols[1]] = cols[2]
 
     if q:
         import sys
@@ -877,7 +884,7 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=
 
     # If the lucy process hasn't been done yet, and the mask cube also hasn't been collapsed yet, create collapsed mask
     if not Path(lucy_out).exists() and not Path(lucy_mask).exists():
-        hdu_m = fits.open(mask)
+        hdu_m = fits.open(data_mask)
         fullmask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
         print(fullmask.shape)
         collapsed_mask = integrate.simps(fullmask, axis=0)   # integrate the mask, collapsing to 2D
@@ -912,7 +919,8 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=
 
     return lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data
 
-if __name__ == "__main__":  # NEED AT LEAST TWO SPACES ABOVE THIS PROBABLY????
+
+if __name__ == "__main__":
     # MAKE SURE I HAVE ACTIVATED THE iraf27 ENVIRONMENT!!!
     t0_true = time.time()
     parser = argparse.ArgumentParser(argument_default=argparse.SUPPRESS)
@@ -921,11 +929,11 @@ if __name__ == "__main__":  # NEED AT LEAST TWO SPACES ABOVE THIS PROBABLY????
     args = vars(parser.parse_args())
     print(args['parfile'])
 
-    params, fixed_pars, files, priors = par_dicts2(args['parfile'])
+    # params, fixed_pars, files, priors = par_dicts2(args['parfile'])
     # print(params)
     # print(fixed_pars)
     # print(files)
-    # params, priors = par_dicts(args['parfile'])
+    params, priors = par_dicts(args['parfile'])
 
     # Make nice plot fonts
     rc('font', **{'family': 'serif', 'serif': ['Times']})
@@ -935,28 +943,27 @@ if __name__ == "__main__":  # NEED AT LEAST TWO SPACES ABOVE THIS PROBABLY????
     pars_str = ''
     for key in params:
         pars_str += str(params[key]) + '_'
-    out = '/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_general_' + pars_str + '_subcube_ellmask_bl2_noell.fits'
+    out = '/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_general_' + pars_str + '_subcube_ellmask_bl2.fits'
 
-    mod_ins = model_prep(data=files['data'], lucy_out=files['lucy'], lucy_mask=files['lucy_mask'], lucy_b=files['lucy_b'],
-                         lucy_in=files['lucy_in'], lucy_o=files['lucy_o'], lucy_it=fixed_pars['lucy_it'],
-                         data_mask=files['mask'], grid_size=fixed_pars['gsize'], res=fixed_pars['resolution'],
-                         x_std=fixed_pars['x_fwhm'], y_std=fixed_pars['y_fwhm'], pa=fixed_pars['PAbeam'])
+    mod_ins = model_prep(data=params['data'], lucy_out=params['lucy'], lucy_mask=params['lucy_mask'],
+                         lucy_b=params['lucy_b'], lucy_in=params['lucy_in'], lucy_o=params['lucy_o'],
+                         lucy_it=params['lucy_it'], data_mask=params['mask'], grid_size=params['gsize'],
+                         res=params['resolution'], x_std=params['x_fwhm'], y_std=params['y_fwhm'], pa=params['PAbeam'])
 
     lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data = mod_ins
 
     # CREATE MODEL CUBE!
-    out = files['outname']  # '/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_general_' + pars_str + '_subcube_ellmask_bl2.fits'
-    chisq = model_grid(resolution=fixed_pars['resolution'], s=fixed_pars['s'], x_loc=params['xloc'],
+    out = params['outname']  # '/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_general_' + pars_str + '_subcube_ellmask_bl2.fits'
+    chisq = model_grid(resolution=params['resolution'], s=params['s'], x_loc=params['xloc'],
                        y_loc=params['yloc'], mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'],
-                       dist=fixed_pars['dist'], theta=np.deg2rad(params['PAdisk']), input_data=input_data,
+                       dist=params['dist'], theta=np.deg2rad(params['PAdisk']), input_data=input_data,
                        lucy_out=lucy_out, out_name=out, beam=beam, inc_star=params['inc_star'],
-                       enclosed_mass=files['mass'], ml_ratio=params['ml_ratio'], sig_type=fixed_pars['s_type'],
+                       enclosed_mass=params['mass'], ml_ratio=params['ml_ratio'], sig_type=params['s_type'],
                        sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], f_w=params['f'],
-                       rfit=fixed_pars['rfit'], menc_type=fixed_pars['mtype']==True, ds=int(fixed_pars['ds']),
-                       chi2=True, zrange=[int(fixed_pars['zi']), int(fixed_pars['zf'])], mge_f=files['mge'],
-                       xyrange=[int(fixed_pars['xi']), int(fixed_pars['xf']), int(fixed_pars['yi']),
-                                int(fixed_pars['yf'])], xyerr=[int(fixed_pars['xerr0']), int(fixed_pars['xerr1']),
-                                                               int(fixed_pars['yerr0']), int(fixed_pars['yerr1'])],
+                       rfit=params['rfit'], menc_type=params['mtype'], ds=int(params['ds']),
+                       chi2=True, zrange=[params['zi'], params['zf']], mge_f=params['mge'],
+                       xyrange=[params['xi'], params['xf'], params['yi'], params['yf']],
+                       xyerr=[params['xerr0'], params['xerr1'], params['yerr0'], params['yerr1']],
                        reduced=True, freq_ax=freq_ax, f_0=f_0, fstep=fstep)
 
     # '''
