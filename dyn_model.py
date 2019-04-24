@@ -1,11 +1,9 @@
 import numpy as np
 import astropy.io.fits as fits
-# from astropy.table import Table
 import matplotlib.pyplot as plt
 from matplotlib import rc
 from scipy import integrate, signal, interpolate
 from scipy.ndimage import filters, interpolation
-# from astropy import modeling
 import time
 from astropy import convolution
 import argparse
@@ -13,27 +11,23 @@ from pathlib import Path
 from astropy.modeling.models import Box2D
 from astropy.nddata.utils import block_reduce
 from astropy.modeling.models import Ellipse2D
-# from plotbin import display_pixels as dp
-# from regions import read_crtf, CRTFParser, DS9Parser, read_ds9, PolygonPixelRegion, PixCoord
 
 
-# constants
-class Constants:  # CONFIRMED
-    # a bunch of useful astronomy constants
+class Constants:  # a bunch of useful astronomy constants
 
     def __init__(self):
-        self.c = 2.99792458 * 10 ** 8  # m/s
-        self.pc = 3.086 * 10 ** 16  # m [m per pc]
-        self.G = 6.67 * 10 ** -11  # kg^-1 * m^3 * s^-2
-        self.M_sol = 1.989 * 10 ** 30  # kg [kg / solar mass]
-        self.H0 = 70  # km/s/Mpc
-        self.arcsec_per_rad = 206265.  # arcsec per radian
-        self.m_per_km = 10. ** 3  # m per km
-        self.G_pc = self.G * self.M_sol * (1. / self.pc) / self.m_per_km ** 2  # Msol^-1 * pc * km^2 * s^-2 [fuck astronomy units]
-        self.c_kms = self.c / self.m_per_km
+        self.c = 2.99792458 * 10 ** 8  # [m / s]
+        self.pc = 3.086 * 10 ** 16  # [m / pc]
+        self.G = 6.67 * 10 ** -11  # [kg^-1 * m^3 * s^-2]
+        self.M_sol = 1.989 * 10 ** 30  # [kg / solar mass]
+        self.H0 = 70  # [km/s/Mpc]
+        self.arcsec_per_rad = 206265.  # [arcsec / radian]
+        self.m_per_km = 10. ** 3  # [m / km]
+        self.G_pc = self.G * self.M_sol * (1. / self.pc) / self.m_per_km ** 2  # G [Msol^-1 * pc * km^2 * s^-2] (gross)
+        self.c_kms = self.c / self.m_per_km  # [km / s]
 
 
-def make_beam(grid_size=99, res=1., amp=1., x0=0., y0=0., x_std=1., y_std=1., rot=0., fits_name=None):  # CONFIRMED
+def make_beam(grid_size=99, res=1., amp=1., x0=0., y0=0., x_std=1., y_std=1., rot=0., fits_name=None):
     """
     Generate a beam spread function for the ALMA beam
 
@@ -47,7 +41,7 @@ def make_beam(grid_size=99, res=1., amp=1., x0=0., y0=0., x_std=1., y_std=1., ro
     :param rot: rotation angle in radians
     :param fits_name: this name will be the filename to which the beam fits file is written (if None, write no file)
 
-    return the synthesized beam
+    :return the synthesized beam
     """
 
     # SET RESOLUTION OF BEAM GRID THE SAME AS FLUXES GRID
@@ -79,7 +73,6 @@ def make_beam(grid_size=99, res=1., amp=1., x0=0., y0=0., x_std=1., y_std=1., ro
     synth_beam *= A
 
     # IF write_fits, WRITE PSF TO FITS FILE
-    # if fits_name is not None:
     if not Path(fits_name).exists():
         hdu = fits.PrimaryHDU(synth_beam)
         hdul = fits.HDUList([hdu])
@@ -88,7 +81,7 @@ def make_beam(grid_size=99, res=1., amp=1., x0=0., y0=0., x_std=1., y_std=1., ro
     return synth_beam
 
 
-def get_sig(r=None, sig0=1., r0=1., mu=1., sig1=0.):  # CONFIRMED
+def get_sig(r=None, sig0=1., r0=1., mu=1., sig1=0.):
     """
     :param r: 2D array of radius values = r(x, y) [length units]
     :param sig0: uniform sigma_turb component [velocity units]
@@ -116,7 +109,6 @@ def pvd(data_cube, theta, z_ax, x_arcsec, R, v_sys):  # BUCKET UNCONFIRMED
 
     # REBIN IN GROUPS OF 4x4 PIXELS
     rebinned = []  # np.zeros(shape=(len(z_ax), len(fluxes), len(fluxes[0])))
-    t_rebin = time.time()
     for z in range(len(data)):
         subarrays = blockshaped(data[z, :, :], 4, 4)  # bin the data in groups of 4x4 pixels
 
@@ -124,9 +116,7 @@ def pvd(data_cube, theta, z_ax, x_arcsec, R, v_sys):  # BUCKET UNCONFIRMED
         reshaped = np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data[0]) / 4.),
                                                                           int(len(data[0][0]) / 4.)))
         rebinned.append(reshaped)
-    # print("Rebinning the cube done in {0} s".format(time.time() - t_rebin))  # 0.5 s
     data = np.asarray(rebinned)
-    # print(data.shape)
 
     col = np.zeros_like(data[0])
     for x in range(len(data[0, 0, :])):
@@ -170,7 +160,7 @@ def pvd(data_cube, theta, z_ax, x_arcsec, R, v_sys):  # BUCKET UNCONFIRMED
     return data_masked, pvd_fill
 
 
-def get_fluxes(data_cube, data_mask, write_name=None):  # CONFIRMED
+def get_fluxes(data_cube, data_mask, write_name=None):
     """
     Integrate over the frequency axis of a data cube to get a flux map!
 
@@ -191,22 +181,18 @@ def get_fluxes(data_cube, data_mask, write_name=None):  # CONFIRMED
     f_step = float(hdu[0].header['CDELT3'])  # frequency step in the data cube
     f_0 = float(hdu[0].header['RESTFRQ'])
     freq_axis = np.arange(freq1, freq1 + (z_len * f_step), f_step)  # [bluest, ..., reddest]
-    # NOTE: something is forcing the inclusion of the endpoint, which arange normally doesn't include
-    # However, when cutting the endpoint one f_step sooner, arange doesn't include the endpoint...
-    # So, I'm including the extra point above, then cutting it off, so that it gives the correct array:
-    # NOTE: NGC_3258 DATA DOES *NOT* HAVE THIS ISSUE, SOOOOOOOOOO *SHRUG* COMMENTING OUT THE HACK/FIX BELOW
+    # NOTE: For NGC1332, this includes endpoint (arange shouldn't be inclusive). However, when citting endpoint 1 fstep
+    # sooner, arange doesn't include the endpoint...So, for 1332, include the extra point above, then cutting it off:
     # freq_axis = freq_axis[:-1]
+    # NOTE: NGC_3258 DATA DOES *NOT* HAVE THIS ISSUE, SOOOOOOOOOO COMMENT OUT FOR NOW!
 
     # Collapse the fluxes! Sum over all slices, multiplying each slice by the slice's mask and by the frequency step
     collapsed_fluxes = np.zeros(shape=(len(data[0]), len(data[0][0])))
     for zi in range(len(data)):
         collapsed_fluxes += data[zi] * mask[zi] * abs(f_step)
 
-    # plt.imshow(collapsed_fluxes, origin='lower')
-    # plt.colorbar()
-    # plt.show()
-    hdu.close()
-    hdu_m.close()
+    hdu.close()  # close data
+    hdu_m.close()  # close mask
 
     if not Path(write_name).exists():
         hdu = fits.PrimaryHDU(collapsed_fluxes)
@@ -216,7 +202,7 @@ def get_fluxes(data_cube, data_mask, write_name=None):  # CONFIRMED
     return collapsed_fluxes, freq_axis, f_0, data, abs(f_step)
 
 
-def blockshaped(arr, nrow, ncol):  # CONFIRMED
+def blockshaped(arr, nrow, ncol):
     """
     Function to use for rebinning data
 
@@ -256,7 +242,7 @@ def rebin(data, n):
     return np.asarray(rebinned)
 
 
-def ellipse_fitting(cube, rfit, x0_sub, y0_sub, res, pa_disk, inc):
+def ellipse_fitting(cube, rfit, x0_sub, y0_sub, res, pa_disk, q):
     """
     Create an elliptical mask, within which we will do the actual fitting
 
@@ -266,14 +252,14 @@ def ellipse_fitting(cube, rfit, x0_sub, y0_sub, res, pa_disk, inc):
     :param y0_sub: y-pixel location of BH, in coordinates of the sub-cube [pix]
     :param res: resolution of the pixel scale [arcsec/pix]
     :param pa_disk: position angle of the disk [radians]
-    :param inc: inclination angle of the disk [radians]
+    :param q: axis ratio of the ellipse = cos(disk_inc) [unitless]
 
     :return: masked ellipse array, to mask out everything in model cube outside of the ellipse we want to fit
     """
 
     # Define the Fitting Ellipse
     a = rfit / res  # size of semimajor axis, in pixels
-    b = (rfit / res) * np.cos(inc)  # size of semiminor axis, in pixels
+    b = (rfit / res) * q  # size of semiminor axis, in pixels
     # a = 34.28
     # b = 23.68
     ell = Ellipse2D(amplitude=1., x_0=x0_sub, y_0=y0_sub, a=a, b=b, theta=pa_disk)
@@ -285,50 +271,10 @@ def ellipse_fitting(cube, rfit, x0_sub, y0_sub, res, pa_disk, inc):
     return ellipse_mask
 
 
-def check_ellipse(data, res, xo, yo, major, minor, theta):
-    """
-    Test x0,y0 point: is it within ellipse defined by major,minor axis and theta position angle?
-
-    :param data: data (or model) cube
-    :param res: resolution of grid [arcsec/pix]
-    :param xo: pixel point (x) to check
-    :param yo: pixel point (y) to check
-    :param major: major axis of ellipse [arcsec]
-    :param minor: minor axis of ellipse [arcsec]
-    :param theta: position angle of ellipse [radians]
-
-    :return: data cube with points outside the ellipse masked
-    """
-
-    tests = []
-    mask = np.zeros(shape=(len(data[0][0]), len(data[0])))  # array of indices, corresponding to x,y data
-    for i in range(len(data[0][0])):  # (x axis)
-        for j in range(len(data[0])):  # (y axis)
-            maj = major / res  # ellipse major axis
-            mi = minor / res  # ellipse minor axis
-            # NOTE: THE TEST_PT EQUATION BELOW IS FOR theta_rot MEASURED FROM +y, SO ADD +90deg TO theta
-            # https://stackoverflow.com/questions/7946187/point-and-ellipse-rotated-position-test-algorithm
-            theta_rot = theta + np.pi/2.  # + np.pi/4.
-            test_pt = ((np.cos(theta_rot) * (i - (len(data[0][0])/2. + xo)) + np.sin(theta_rot) *
-                        (j - (len(data[0])/2. + yo))) / maj) ** 2 \
-                + ((np.sin(theta_rot) * (i - (len(data[0][0])/2. + xo)) - np.cos(theta_rot) *
-                    (j - (len(data[0])/2. + yo))) / mi) ** 2
-            tests.append(test_pt)
-            mask[i, j] = test_pt
-
-    import numpy.ma as ma
-    data_masked = np.zeros(shape=data.shape)
-    for k in range(len(data)):
-        data_masked[k] = ma.masked_where(mask > 1., data[k])
-
-    return data_masked
-
-
 def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=np.deg2rad(60.), vsys=None, dist=17.,
-               theta=np.deg2rad(-200.), input_data=None, lucy_out=None, out_name=None, beam=None, inc_star=0.,
-               enclosed_mass=None, ml_ratio=1., sig_type='flat', sig_params=[1., 1., 1., 1.], f_w=1.,
-               rfit=1., menc_type=False, ds=None, chi2=False, zrange=None, xyrange=None, xyerr=None, mge_f=None,
-               reduced=False, freq_ax=None, f_0=0., fstep=0.):
+               theta=np.deg2rad(-200.), input_data=None, lucy_out=None, out_name=None, beam=None, inc_star=0., q_ell=1.,
+               enclosed_mass=None, menc_type=False, ml_ratio=1., sig_type='flat', sig_params=None, f_w=1., noise=None,
+               rfit=1., ds=None, chi2=False, zrange=None, xyrange=None, reduced=False, freq_ax=None, f_0=0., fstep=0.):
     """
     Build grid for dynamical modeling!
 
@@ -344,36 +290,38 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     :param input_data: input data cube of observations
     :param lucy_out: output from running lucy on data cube and beam PSF
     :param out_name: output name of the fits file to which to save the output v_los image (if None, don't save image)
+    :param beam: synthesized alma beam (output from model_ins)
     :param inc_star: inclination of stellar component [deg]
+    :param q_ell: axis ratio q of fitting ellipse [unitless]
     :param enclosed_mass: file including data of the enclosed stellar mass of the galaxy (1st column should be radius
         r in kpc and second column should be M_stars(<r) or velocity_circ(R) due to stars within R)
+    :param menc_type: Select how you incorporate enclosed stellar mass [0 for MGE; 1 for v(R) file; 2 for M(R) file]
     :param mge_f: file including MGE fit parameters that you can use to create v_circ(R) due to stars, from mge_vcirc.py
     :param ml_ratio: The mass-to-light ratio of the galaxy
     :param sig_type: code for the type of sigma_turb we're using. Can be 'flat', 'exp', or 'gauss'
     :param sig_params: list of parameters to be plugged into the get_sig() function. Number needed varies by sig_type
     :param f_w: multiplicative weight factor for the line profiles
-    :param grid_size: the pixel grid size to use for the make_beam() function
-    :param x_fwhm: FWHM in the x-direction of the ALMA beam (arcsec) to use for the make_beam() function
-    :param y_fwhm: FWHM in the y-direction of the ALMA beam (arcsec) to use for the make_beam() function
-    :param pa: position angle (in degrees) to use for the make_beam() function
+    :param noise: array of the estimated (ds x ds-binned) noise per slice (within the desired zrange)
     :param rfit: disk radius within which we will compare model and data [arcsec]
-    :param menc_type: Select how you incorporate enclosed stellar mass [True for mass(R) or False for velocity(R)]
     :param ds: downsampling factor to use when averaging pixels together for actual model-data comparison
     :param chi2: if True, record chi^2 of model vs data! If False, ignore, and return convolved model cube
-    :param reduced: if True, return reduced chi^2 instead of regular chi^2 (requires chi2=True, too)
     :param zrange: the slices of the data cube where the data shows up (i.e. isn't just noise) [zi, zf]
     :param xyrange: the subset of the cube (in pixels) that we actually want to run data on [xi, xf, yi, yf]
-    :param xyerr: the subset of the cube (in pixels) used for estimating the noise [xi, xf, yi, yf]
+    :param reduced: if True, return reduced chi^2 instead of regular chi^2 (requires chi2=True, too)
+    :param freq_ax: array of the frequency axis in the data cube, from bluest to reddest frequency [Hz]
+    :param f_0: rest frequency of the observed line in the data cube [Hz]
+    :param fstep: frequency step in the frequency axis [Hz]
 
     :return: convolved model cube (if chi2 is False); chi2 (if chi2 is True)
     """
     t_begin = time.time()
+
     # INSTANTIATE ASTRONOMICAL CONSTANTS
     constants = Constants()
 
     # SUBPIXELS (RESHAPING DATA sxs)
     # take deconvolved flux map (output from lucy), assign each subpixel flux=(real pixel flux)/s**2 --> weight map
-    print('start ')
+    print('start')
     if s == 1:  # subpix_deconvolved is identical to lucy_out, with sxs subpixels per pixel & total flux conserved
         subpix_deconvolved = lucy_out
     else:
@@ -393,17 +341,15 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     # z_ax = np.asarray([v_sys + ((f_0 - freq)/f_0) * (constants.c / constants.m_per_km) for freq in freq_ax])  # v_rad
 
     # RESCALE subpix_deconvolved, z_ax, freq_ax TO CONTAIN ONLY THE SUB-CUBE REGION WHERE EMISSION ACTUALLY EXISTS
-    subpix_deconvolved = subpix_deconvolved[int(s * xyrange[2]):int(s * xyrange[3]),
-                                            int(s * xyrange[0]):int(s * xyrange[1])]  # stored: y,x
-    z_ax = z_ax[int(zrange[0]):int(zrange[1])]
-    freq_ax = freq_ax[int(zrange[0]):int(zrange[1])]
+    subpix_deconvolved = subpix_deconvolved[s * xyrange[2]:s * xyrange[3], s * xyrange[0]:s * xyrange[1]]  # stored: y,x
+    z_ax = z_ax[zrange[0]:zrange[1]]
+    freq_ax = freq_ax[zrange[0]:zrange[1]]
 
     # RESCALE x_loc, y_loc PIXEL VALUES TO CORRESPOND TO SUB-CUBE PIXEL LOCATIONS!
     x_loc = x_loc - xyrange[0]  # x_loc - xi
     y_loc = y_loc - xyrange[2]  # y_loc - yi
 
-    # SET UP OBSERVATION AXES
-    # initialize all values along x,y axes at 0., with axes length set to equal input data cube lengths * s
+    # SET UP OBSERVATION AXES: initialize x,y axes at 0., with lengths = s * len(input data cube axes)
     y_obs = [0.] * len(subpix_deconvolved)
     x_obs = [0.] * len(subpix_deconvolved[0])
 
@@ -438,29 +384,19 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     x_obs = np.asarray([dist * 10 ** 6 * np.tan(x / constants.arcsec_per_rad) for x in x_obs])  # 206265 arcsec/rad
     y_obs = np.asarray([dist * 10 ** 6 * np.tan(y / constants.arcsec_per_rad) for y in y_obs])  # 206265 arcsec/rad
 
-    # at each x,y subpixel in the grid, calculate x_disk,y_disk, then calculate R, v, etc.
-    # CONVERT FROM x_obs, y_obs TO x_disk, y_disk (still in pc)
+    # CONVERT FROM x_obs, y_obs TO x_disk, y_disk [pc]
     x_disk = (x_obs[None, :] - x_bhoff) * np.cos(theta) + (y_obs[:, None] - y_bhoff) * np.sin(theta)  # 2d array
     y_disk = (y_obs[:, None] - y_bhoff) * np.cos(theta) - (x_obs[None, :] - x_bhoff) * np.sin(theta)  # 2d array
 
-    # CALCULATE THE RADIUS (R) OF EACH POINT (x_disk, y_disk) IN THE DISK (pc)
+    # CALCULATE THE RADIUS (R) OF EACH POINT (x_disk, y_disk) IN THE DISK [pc]
     R = np.sqrt((y_disk ** 2 / np.cos(inc) ** 2) + x_disk ** 2)  # radius R of each point in the disk (2d array)
 
-    '''  #
-    # PRINT PVD
-    pvd(data_cube, theta, z_ax, x_obs, R, v_sys)  # x_obs = x in arcsec
-    print(oops)
-    # '''  #
-
-    # CALCULATE ENCLOSED MASS BASED ON MBH AND ENCLOSED STELLAR MASS
-    # THEN CALCULATE KEPLERIAN VELOCITY
-    t_mass = time.time()
-    # '''  # UNCOMMENT WHEN I SWITCH TO NEW PARAM FILE FORMAT
+    # CALCULATE KEPLERIAN VELOCITY DUE TO ENCLOSED STELLAR MASS
     if menc_type == 0:  # if calculating v(R) due to stars directly from MGE parameters
         print('mge')
         import sys
         sys.path.insert(0, '/Users/jonathancohn/Documents/jam/')  # lets me import file from different folder/path
-        import mge_vcirc_mine as mvm
+        import mge_vcirc_mine as mvm  # import mge_vcirc code
 
         comp, surf_pots, sigma_pots, qobs = mvm.load_mge(enclosed_mass)  # load the MGE parameters
         v_c = mvm.mge_vcirc(surf_pots * ml_ratio, sigma_pots, qobs, np.rad2deg(inc), 0., dist, R)  # v_circ due to stars
@@ -496,59 +432,11 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
 
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
         vel = np.sqrt(constants.G_pc * m_R / R)  # Keplerian velocity vel at each point in the disk
-    '''  # COMMENT WHEN I SWITCH TO NEW PARAM FILE FORMAT
-    if Path(mge_f).exists():  # if calculating v(R) due to stars directly from MGE parameters
-        import sys
-        sys.path.insert(0, '/Users/jonathancohn/Documents/jam/')  # allows me to import file from different folder/path
-        import mge_vcirc_mine as mvm
-
-        comp, surf_pots, sigma_pots, qobs = mvm.load_mge(mge_f)  # load the MGE parameters
-        rads = np.logspace(-2, 1, 30)  # initialize radii in arcsec to evaluate mge_vcirc
-        v_c = mvm.mge_vcirc(surf_pots * ml_ratio, sigma_pots, qobs, inc_star, 0., dist, rads)
-        v_c_func = interpolate.interp1d(rads, v_c, fill_value='extrapolate')  # create a function to interpolate v_circ
-        # plt.plot(rads, v_c, 'k-')
-        # plt.plot(rads, v_c_func(rads), 'b*')
-        # plt.show()
-
-        # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
-        vel = np.sqrt(v_c_func(R)**2 + (constants.G_pc * mbh / R))  # velocities sum in quadrature
-    elif menc_type:  # if using a file with stellar mass(R)
-        print('m(R)')
-        radii = []
-        m_stellar = []
-        with open(enclosed_mass) as em:
-            for line in em:
-                cols = line.split()
-                cols[1] = cols[1].replace('D', 'e')  # NGC 1332 file stored with solar masses as, eg, 1D3 instead of 1e3
-                radii.append(float(cols[0]) * 10 ** 3)  # file lists radii in kpc; convert to pc
-                m_stellar.append(float(cols[1]))  # solar masses
-        m_star_r = interpolate.interp1d(radii, m_stellar, kind='cubic', fill_value='extrapolate')  # create a function
-        ml_const = ml_ratio / 7.35  # because mass file assumes a mass-to-light ratio of 7.35
-        m_R = mbh + ml_const * m_star_r(R)  # Use m_star_r function to interpolate mass at all radii R (2d array)
-
-        # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
-        vel = np.sqrt(constants.G_pc * m_R / R)  # Keplerian velocity vel at each point in the disk
-    else:  # elif using a file with circular velocity as a function of R due to stellar mass
-        print('v(R)')
-        radii = []
-        v_circ = []
-        with open(enclosed_mass) as em:  # note: current file has units v_circ^2/(M/L) --> v_circ = np.sqrt(col * (M/L))
-            for line in em:
-                cols = line.split()  # note: currently using model "B1" = 2nd col in file (file has 4 cols of models)
-                radii.append(float(cols[0]))  # file lists radii in pc
-                v_circ.append(float(cols[1]))  # v^2 / (M/L) --> units (km/s)^2 / (M_sol/L_sol)
-        v_c_r = interpolate.interp1d(radii, v_circ, fill_value='extrapolate')  # create a function to interpolate v_circ
-
-        # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
-        vel = np.sqrt(v_c_r(R) * ml_ratio + (constants.G_pc * mbh / R))  # velocities sum in quadrature
-    # '''  #
-    # print('Time elapsed in assigning enclosed masses is {0} s'.format(time.time() - t_mass))  # ~3.5s
 
     # CALCULATE LINE-OF-SIGHT VELOCITY AT EACH POINT (x_disk, y_disk) IN THE DISK (km/s)
     alpha = abs(np.arctan(y_disk / (np.cos(inc) * x_disk)))  # alpha meas. from +x (minor axis) toward +y (major axis)
     sign = x_disk / abs(x_disk)  # (+x now back to redshifted side, so don't need extra minus sign back in front!)
     v_los = sign * abs(vel * np.cos(alpha) * np.sin(inc))  # THIS IS CURRENTLY CORRECT
-    # print('los')
 
     # SET LINE-OF-SIGHT VELOCITY AT THE BLACK HOLE CENTER TO BE 0, SUCH THAT IT DOES NOT BLOW UP
     center = (R == 0.)  # Doing this is only relevant if we have pixel located exactly at the center
@@ -565,19 +453,6 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     # CONVERT v_los TO OBSERVED FREQUENCY MAP
     freq_obs = (f_0 / (1+zred)) * (1 - v_los / constants.c_kms)
 
-    '''  #
-    plt.imshow(v_los, origin='lower', cmap='RdBu_r', vmax=np.amax([np.amax(v_los), -np.amin(v_los)]),
-               vmin=-np.amax([np.amax(v_los), -np.amin(v_los)]))
-    cbar = plt.colorbar()
-    cbar.set_label(r'km/s', fontsize=20, rotation=0, labelpad=20)
-    plt.show()
-    plt.imshow(freq_obs, origin='lower', vmax=np.amax(freq_obs), vmin=np.amin(freq_obs), cmap='viridis',
-               extent=[np.amin(x_obs), np.amax(x_obs), np.amin(y_obs), np.amax(y_obs)])
-    cbar = plt.colorbar()
-    cbar.set_label(r'Hz', fontsize=20, rotation=0, labelpad=20)
-    plt.show()
-    # '''  #
-
     # CONVERT OBSERVED DISPERSION (turbulent) TO FREQUENCY WIDTH
     sigma_grid = np.zeros(shape=R.shape) + sigma  # make sigma (whether already R-shaped or constant) R-shaped
     delta_freq_obs = (f_0 / (1 + zred)) * (sigma_grid / constants.c_kms)
@@ -589,69 +464,30 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     weight *= f_w / np.sqrt(2 * np.pi * delta_freq_obs**2)  # divide to get correct units
 
     # BEN_LUCY COMPARISON ONLY (only use for comparing to model with Ben's lucy map, which is in different units)
-    weight *= fstep * 6.783 #6.783  # (multiply by vel_step because Ben's lucy map is actually in Jy/beam km/s units)
+    weight *= fstep * 6.783  # (multiply by vel_step because Ben's lucy map is actually in Jy/beam km/s units)
 
     # BUILD GAUSSIAN LINE PROFILES!!!
-    t_mod = time.time()
     cube_model = np.zeros(shape=(len(freq_ax), len(freq_obs), len(freq_obs[0])))  # initialize model cube
     for fr in range(len(freq_ax)):
-        # print(fr)
         cube_model[fr] = weight * np.exp(-(freq_ax[fr] - freq_obs) ** 2 / (2 * delta_freq_obs ** 2))
-    # print('cube model constructed in ' + str(time.time() - t_mod) + ' s')  # 22s
 
     # RE-SAMPLE BACK TO CORRECT PIXEL SCALE (take average of sxs sub-pixels for real alma pixel) --> intrinsic data cube
-    t_z = time.time()
     if s == 1:
         intrinsic_cube = cube_model
     else:
         intrinsic_cube = rebin(cube_model, s)
         # intrinsic_cube = block_reduce(cube_model, s, np.mean)
-    # print("intrinsic cube done in {0} s".format(time.time() - t_z))
-    # print("start to intrinsic done in {0} s".format(time.time() - t0))
 
     # CONVERT INTRINSIC TO OBSERVED
     # take velocity slice from intrinsic data cube, convolve with alma beam --> observed data cube
     convolved_cube = np.zeros(shape=intrinsic_cube.shape)  # approx ~1e-6 to 3e-6s per pixel
-    ts = time.time()
     for z in range(len(z_ax)):
-        # print(z)
-        # tl = time.time()
-        convolved_cube[z, :, :] = convolution.convolve(intrinsic_cube[z, :, :], beam)  # CONFIRMED!
-        # print("Convolution loop " + str(z) + " took {0} seconds".format(time.time() - tl))  # 0.03s/loop for 100x100pix
-    # print('convolved! Total convolution loop took {0} seconds'.format(time.time() - ts))  # 170.9s
-    print('total model constructed in {0} seconds'.format(time.time() - t_begin))  # ~213s
+        convolved_cube[z, :, :] = convolution.convolve(intrinsic_cube[z, :, :], beam)  # CONVOLVE CUBE WITH BEAM
 
     # ONLY WANT TO FIT WITHIN ELLIPTICAL REGION! APPLY ELLIPTICAL MASK
-    ell_mask = ellipse_fitting(convolved_cube, rfit, x_loc, y_loc, resolution, theta, np.deg2rad(inc_star))  # 29.7
-    #print(x_loc, y_loc)
-    #print(rfit / resolution, (rfit / resolution)*np.cos(np.deg2rad(inc_star)))
-    #print(rfit, resolution)
-    # print(oop)
-    # hdu = fits.PrimaryHDU(ell_mask)
-    # hdul = fits.HDUList([hdu])
-    # hdul.writeto('/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_fitting_ellipse.fits')
+    ell_mask = ellipse_fitting(convolved_cube, rfit, x_loc, y_loc, resolution, theta, q_ell)  # 29.7
     convolved_cube *= ell_mask
-    input_data_masked = input_data[int(zrange[0]):int(zrange[1]), int(xyrange[2]):int(xyrange[3]),
-                        int(xyrange[0]):int(xyrange[1])] * ell_mask
-
-    '''  #
-    fig = plt.figure()
-    ax = plt.gca()
-    plt.imshow(ell_mask, origin='lower')
-    from matplotlib import patches
-    e1 = patches.Ellipse((x_loc, y_loc), 2*rfit/resolution, 2*rfit/resolution*np.cos(np.deg2rad(inc_star)),
-                         angle=np.rad2deg(theta), linewidth=2, edgecolor='w', fill=False)
-    ax.add_patch(e1)
-    # plt.title(v_obs[10, 50])
-    plt.colorbar()
-    plt.show()
-    #print(oop)
-
-    #plt.imshow(fluxes[int(xyrange[2]):int(xyrange[3]), int(xyrange[0]):int(xyrange[1])], origin='lower')
-    #plt.colorbar()
-    #plt.show()
-    #print(oop)
-    # '''
+    input_data_masked = input_data[zrange[0]:zrange[1], xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask
 
     # '''  #
     if chi2:
@@ -661,47 +497,14 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         # https://en.wikipedia.org/wiki/Standard_deviation
 
         # compare the data to the model by binning each in groups of dsxds pixels (separate from s)
-        noise_4 = rebin(input_data, ds)
         data_4 = rebin(input_data_masked, ds)
         ap_4 = rebin(convolved_cube, ds)
-
-        '''  # 
-        ax = []
-        for z in range(len(input_data_masked)):
-            ax.append(np.sum(input_data_masked[z]))
-        plt.plot(freq_ax, ax)
-        plt.axvline((f_0 / (1+zred)))
-        plt.show()
-        print(oop)
-        # '''  #
-
-        # MODEL NOISE!
-        # BUCKET: ADJUST SO NOISE IS ONLY CALCULATED ONCE IN EMCEE PROCESS, NOT EACH ITERATION
         ell_4 = rebin(ell_mask, ds)
-        '''  #
-        inds_to_try2 = np.asarray([[10, 10], [10, 15], [15, 10]])
-        import test_dyn_funcs as tdf
-        f_sys = f_0 / (1+zred)
-        tdf.compare(input_data_masked, convolved_cube, freq_ax / 1e9, inds_to_try2, f_sys / 1e9, 4)
-        # '''  #
-        noise = []
-        nums = []
+
         cs = []
         z_ind = 0  # the actual index for the model-data comparison cubes
-        for z in range(int(zrange[0]), int(zrange[1])):  # for each relevant freq slice (ignore slices with only noise)
-            # ESTIMATE NOISE (RMS) IN ORIGINAL DATA CUBE [z, y, x]
-
-            # noise.append(np.sqrt(np.mean(input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])] ** 2)))
-            # noise2.append(np.sqrt(np.mean(input_data[z, 390:440, 370:420] ** 2)))  # 260:360, 210:310
-            # noise2.append(np.sqrt(np.mean((input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])]
-            #               - np.mean(input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])]))**2)))
-
-            # For large N, Variance ~= std^2
-            # noise.append(np.std(input_data[z, int(xyerr[2]):int(xyerr[3]), int(xyerr[0]):int(xyerr[1])]))  # noise!
-            # 400 480 400 480 --> 100 120 100 120
-            noise.append(np.std(noise_4[z, xyerr[2]:xyerr[3], xyerr[0]:xyerr[1]]))  # noise!
+        for z in range(zrange[0], zrange[1]):  # for each relevant freq slice (ignore slices with only noise)
             chi_sq += np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise[z_ind]**2)  # calculate chisq!
-            nums.append(np.sum((ap_4[z_ind] - data_4[z_ind])**2))  # numerator of chisq per slice
             cs.append(np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise[z_ind]**2))  # chisq per slice
 
             z_ind += 1  # the actual index for the model-data comparison cubes
@@ -709,37 +512,11 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         # CALCULATE REDUCED CHI^2
         all_pix = np.ndarray.flatten(ell_4)  # all fitted pixels in each slice [len = 625 (yep)] [525 masked, 100 not]
         masked_pix = all_pix[all_pix != 0]  # all_pix, but this time only the pixels that are actually inside ellipse
-        n_pts = len(masked_pix) * len(z_ax)  # (zrange[1] - zrange[0])  # total number of pixels being compared = 4600 [100*46]
+        n_pts = len(masked_pix) * len(z_ax)  # (zrange[1] - zrange[0])  # total number of pixels being compared
         # print(n_pts, len(masked_pix))  # rfit=1.2 --> 6440 (140/slice); 6716 (146/slice) for fully inclusive ellipse
         n_params = 12  # number of free parameters
-        #print(np.sum(cs), n_pts)
-        if noise == 0.:
-            print('hey this is bad')
-        # print(chi_sq, n_pts, n_params, n_pts-n_params, chi_sq / (n_pts - n_params), noise)
         print(r'Reduced chi^2=', chi_sq / (n_pts - n_params))  # 4284.80414208  # 12300204.6088
-        #plt.plot(np.asarray(cs) / (n_pts - n_params), 'k*')
-        #plt.show()
-        '''  #
-        # plt.plot(freq_ax/1e9, np.asarray(cs) / len(masked_pix), 'ro', label=r'$\chi^2$')
-        plt.plot(freq_ax / 1e9, np.asarray(noise)**2, 'k*', label=r'Variance')
-        plt.plot(freq_ax / 1e9, nums, 'b+', label=r'$\chi^2$ Numerator')
-        plt.axhline(np.median(nums))  # 3e-3
-        plt.axhline(np.median(np.asarray(noise)**2))  # 1.5e-7
-        # 2e4 / 4.6e3 --> .5e1 *46 -> ~2e3
-        plt.legend(loc='center right')
-        plt.yscale('log')
-        plt.xlabel(r'GHz')
-        plt.show()
-        plt.plot(freq_ax / 1e9, noise, 'k*')
-        plt.ylabel(r'Noise')
-        plt.show()
-        plt.plot(freq_ax / 1e9, np.asarray(cs) / n_pts, 'k*')
-        plt.yscale('log')
-        plt.ylabel(r'$\chi_{\nu}^2$ by slice')
-        plt.xlabel(r'GHz')
-        plt.show()
-        print(oops)
-        # '''  #
+        print('total model constructed in {0} seconds'.format(time.time() - t_begin))  # ~213s
 
         if reduced:
             chi_sq /= (n_pts - n_params)  # convert to reduced chi^2
@@ -929,10 +706,6 @@ if __name__ == "__main__":
     args = vars(parser.parse_args())
     print(args['parfile'])
 
-    # params, fixed_pars, files, priors = par_dicts2(args['parfile'])
-    # print(params)
-    # print(fixed_pars)
-    # print(files)
     params, priors = par_dicts(args['parfile'])
 
     # Make nice plot fonts
@@ -945,43 +718,41 @@ if __name__ == "__main__":
         pars_str += str(params[key]) + '_'
     out = '/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_general_' + pars_str + '_subcube_ellmask_bl2.fits'
 
+    # CREATE THINGS THAT ONLY NEED TO BE CALCULATED ONCE
     mod_ins = model_prep(data=params['data'], lucy_out=params['lucy'], lucy_mask=params['lucy_mask'],
                          lucy_b=params['lucy_b'], lucy_in=params['lucy_in'], lucy_o=params['lucy_o'],
                          lucy_it=params['lucy_it'], data_mask=params['mask'], grid_size=params['gsize'],
                          res=params['resolution'], x_std=params['x_fwhm'], y_std=params['y_fwhm'], pa=params['PAbeam'])
-
     lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data = mod_ins
+    noise_4 = rebin(input_data, params['ds'])
+    noise = []
+    for z in range(params['zi'], params['zf']):  # for each relevant freq slice
+        # ESTIMATE NOISE (RMS) IN ORIGINAL DATA CUBE [z, y, x]  # For large N, Variance ~= std^2
+        noise.append(np.std(noise_4[z, params['yerr0']:params['yerr1'], params['xerr0']:params['xerr1']]))
 
     # CREATE MODEL CUBE!
     out = params['outname']  # '/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_general_' + pars_str + '_subcube_ellmask_bl2.fits'
-    chisq = model_grid(resolution=params['resolution'], s=params['s'], x_loc=params['xloc'],
-                       y_loc=params['yloc'], mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'],
-                       dist=params['dist'], theta=np.deg2rad(params['PAdisk']), input_data=input_data,
-                       lucy_out=lucy_out, out_name=out, beam=beam, inc_star=params['inc_star'],
-                       enclosed_mass=params['mass'], ml_ratio=params['ml_ratio'], sig_type=params['s_type'],
-                       sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], f_w=params['f'],
-                       rfit=params['rfit'], menc_type=params['mtype'], ds=int(params['ds']),
-                       chi2=True, zrange=[params['zi'], params['zf']], mge_f=params['mge'],
-                       xyrange=[params['xi'], params['xf'], params['yi'], params['yf']],
-                       xyerr=[params['xerr0'], params['xerr1'], params['yerr0'], params['yerr1']],
-                       reduced=True, freq_ax=freq_ax, f_0=f_0, fstep=fstep)
+    chi2 = model_grid(resolution=params['resolution'], s=params['s'], x_loc=params['xloc'], y_loc=params['yloc'],
+                      mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'], dist=params['dist'],
+                      theta=np.deg2rad(params['PAdisk']), input_data=input_data, lucy_out=lucy_out, out_name=out,
+                      beam=beam, inc_star=params['inc_star'], rfit=params['rfit'], enclosed_mass=params['mass'],
+                      ml_ratio=params['ml_ratio'], sig_type=params['s_type'], zrange=[params['zi'], params['zf']],
+                      sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], f_w=params['f'],
+                      menc_type=params['mtype'], ds=params['ds'], noise=noise, chi2=True, reduced=True, freq_ax=freq_ax,
+                      xyrange=[params['xi'], params['xf'], params['yi'], params['yf']], fstep=fstep, f_0=f_0,
+                      q_ell=params['q_ell'])
 
-    # '''
     print('True Total: ' + str(time.time() - t0_true))  # 3.93s YAY!  # 23s for 6 models (16.6 for 4 models)
-    print(chisq)
+    print(chi2)
 
     '''
     params, priors = par_dicts(args['parfile'])
-    out_cube = model_grid(resolution=pars['resolution'], s=pars['s'], inc_star=pars['inc_star'], x_loc=pars['xloc'], 
-                          y_loc=pars['yloc'], mbh=pars['mbh'], inc=pars['inc'], vsys=pars['vsys'], dist=pars['dist'],
-                          theta=np.deg2rad(pars['PAdisk']), data_cube=pars['data'], data_mask=pars['mask'], chi2=True,
-                          lucy_output=pars['lucy'], out_name=out, ml_ratio=pars['ml_ratio'], grid_size=pars['gsize'],
-                          enclosed_mass=pars['mass'], menc_type=pars['mtype'], sig_type=pars['s_type'], f_w=pars['f'],
-                          x_fwhm=pars['x_fwhm'], y_fwhm=pars['y_fwhm'], pa=pars['PAbeam'], lucy_it=pars['lucy_it'],
-                          sig_params=[pars['sig0'], pars['r0'], pars['mu'], pars['sig1']], lucy_mask=pars['lucy_mask'],
-                          lucy_in=pars['lucy_in'], lucy_b=pars['lucy_b'], lucy_o=pars['lucy_o'], ds=pars['ds'],
-                          zrange=[pars['zi'], pars['zf']], xyrange=[pars['xi'], pars['xf'], pars['yi'], pars['yf']],
-                          xyerr=[pars['xerr0'], pars['xerr1'], pars['yerr0'], pars['yerr1']], rfit=pars['rfit'])
+    # CREATE THINGS THAT ONLY NEED TO BE CALCULATED ONCE
+    mod_ins = model_prep(data=params['data'], lucy_out=params['lucy'], lucy_mask=params['lucy_mask'],
+                         lucy_b=params['lucy_b'], lucy_in=params['lucy_in'], lucy_o=params['lucy_o'],
+                         lucy_it=params['lucy_it'], data_mask=params['mask'], grid_size=params['gsize'],
+                         res=params['resolution'], x_std=params['x_fwhm'], y_std=params['y_fwhm'], pa=params['PAbeam'])
+    lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data = mod_ins
     
     chi2 = dg.model_grid(
         # FREE PARAMETERS (entered as list of params because these change each iteration)
@@ -996,16 +767,20 @@ if __name__ == "__main__":
                     params[pars.keys().index('mu')], params[pars.keys().index('sig1')]],
         f_w=params[pars.keys().index('f')],
         # FIXED PARAMETERS
-        sig_type=pars['s_type'], menc_type=pars['mtype'], grid_size=pars['gsize'], lucy_it=pars['lucy_it'], s=pars['s'],
-        x_fwhm=pars['x_fwhm'], y_fwhm=pars['y_fwhm'], pa=pars['PAbeam'], dist=pars['dist'], inc_star=pars['inc_star'], 
-        resolution=pars['resolution'], xyrange=[pars['xi'], pars['xf'], pars['yi'], pars['yf']], ds=pars['ds'],
-        zrange=[pars['zi'], pars['zf']], xyerr=[pars['xerr0'], pars['xerr1'], pars['yerr0'], pars['yerr1']],
-        rfit=pars['rfit'], 
-        # FILES
-        enclosed_mass=pars['mass'], lucy_in=pars['lucy_in'], lucy_output=pars['lucy'], lucy_b=pars['lucy_b'],
-        lucy_o=pars['lucy_o'], lucy_mask=pars['lucy_mask'], data_cube=pars['data'], data_mask=pars['mask'],
+        resolution=pars['resolution'], sig_type=pars['s_type'], dist=pars['dist'], inc_star=pars['inc_star'], 
+         s=pars['s'], xyrange=[pars['xi'], pars['xf'], pars['yi'], pars['yf']], zrange=[pars['zi'], pars['zf']],
+        ds=pars['ds'], rfit=pars['rfit'],
+        # FILES ETC.
+        enclosed_mass=pars['mass'], menc_type=pars['mtype'], data_cube=pars['data'], data_mask=pars['mask'],
         # OTHER PARAMETERS
-        out_name=None, chi2=True)
+        input_data=input_data, lucy_out=lucy_out, beam=beam, noise=noise, freq_ax=freq_ax, f_0=f_0, fstep=fstep,
+        out_name=None, chi2=True, reduced=False)
     '''
 
 # play with softening parameter?
+
+# TO DO:
+# change ellipse fitting region to be fixed!
+# maybe put noise calc in model_prep?
+# update dyn_emcee to use dyn_model instead of dyn_general format!
+# read up on convergence
