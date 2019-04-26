@@ -1,13 +1,13 @@
-Param mbh xloc yloc sig0 r0 mu sig1 inc PAdisk vsys ml_ratio f
-Value 2.386e9 362.04 354.89 4.75 0.14 -0.46 7.42 46. 166.8 2760.76 3.16 1.02
-Primin 1e3 1. 1. 0. 0. -100. 0. 0. 0. 500. 0.1 0.1
-Primax 1e12 699. 699. 1e4 100. 100. 1e4 360. 360. 1e4 20. 10.
+Param mbh xloc yloc sig0 r0 mu sig1 inc inc_star PAdisk vsys ml_ratio f
+Value 2.386e9 362.04 354.89 4.75 0.14 -0.46 7.42 46. 48. 166.8 2760.76 3.16 1.02
+Primin 1e3 1. 1. 0. 0. -100. 0. 0. 0. 0. 500. 0.1 0.1
+Primax 1e12 699. 699. 1e4 100. 100. 1e4 360. 360. 360. 1e4 20. 10.
 
-Other_params resolution s_type dist s gsize x_fwhm y_fwhm PAbeam lucy_it zi zf xi xf yi yf xerr0 xerr1 yerr0 yerr1 ds mtype
-Other_values 0.04 gauss 31.3 4 41 0.47938 0.3996 -76.985 10 39 85 310 410 310 410 380 480 390 490 4 False
+Other_params resolution rfit s_type dist s gsize x_fwhm y_fwhm PAbeam lucy_it zi zf xi xf yi yf xerr0 xerr1 yerr0 yerr1 ds mtype
+Other_values 0.04 1. gauss 31.3 4 41 0.47938 0.3996 -76.985 10 39 83 310 410 310 410 400 480 400 480 4 True
 
-Types_of_files data mask lucy lucy_in lucy_b lucy_o lucy_mask mass pb
-Files /Users/jonathancohn/Documents/dyn_mod/ngc_3258/NGC3258_CO21_bri.pbcor.fits /Users/jonathancohn/Documents/dyn_mod/ngc_3258/NGC3258_CO21_bri.mask.fits /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_general_lucyout_n10.fits /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_summed_fluxmap.fits /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_beam31.fits /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_general_lucyout_n10.fits[0] /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_collapsed_mask.fits /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_wfc3mge_vc2mlr.txt /Users/jonathancohn/Documents/dyn_mod/ngc_3258/product/NGC3258_CO_image.flux.fits
+Types_of_files data mask lucy lucy_in lucy_b lucy_o lucy_mask mass mge outname
+Files /Users/jonathancohn/Documents/dyn_mod/ngc_3258/NGC3258_CO21_bri.pbcor.fits /Users/jonathancohn/Documents/dyn_mod/ngc_3258/NGC3258_CO21_bri.mask.fits /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_general_lucyout_n10.fits /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_summed_fluxmap.fits /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_beam31.fits /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_general_lucyout_n10.fits[0] /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_collapsed_mask.fits /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_wfc3mge_vc2mlr.txt /Users/jonathancohn/Documents/dyn_mod/param_files/ngc_3258_mge0.txt /Users/jonathancohn/Documents/dyn_mod/outputs/ngc_3258_benlucy_outcube.fits
 
 #README
 #PARAMETERS_INFO: mbh=black_hole_mass [solar masses], xloc=x_position_of_BH [pixels], yloc=y_position_of_BH [pixels], sig0=sigma_velocity_dispersion [km/s], r0=sigma_scale_radius [pc], mu=sigma_variance [pc], sig1=sigma_offset [km/s], inc=inclination_angle [deg], PAdisk=disk_PA_from_xobs_axis_to_blueshifted_axis [deg], vsys=systemic_velocity [km/s], ml_ratio=mass_to_light_ratio [solar], f=gaussian_line_profile_normalization_constant
