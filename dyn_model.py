@@ -272,7 +272,7 @@ def ellipse_fitting(cube, rfit, x0_sub, y0_sub, res, pa_disk, q):
 
 
 def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=np.deg2rad(60.), vsys=None, dist=17.,
-               theta=np.deg2rad(-200.), input_data=None, lucy_out=None, out_name=None, beam=None, inc_star=0., q_ell=1.,
+               theta=np.deg2rad(-200.), input_data=None, lucy_out=None, out_name=None, beam=None, q_ell=1.,
                enclosed_mass=None, menc_type=False, ml_ratio=1., sig_type='flat', sig_params=None, f_w=1., noise=None,
                rfit=1., ds=None, chi2=False, zrange=None, xyrange=None, reduced=False, freq_ax=None, f_0=0., fstep=0.):
     """
@@ -291,7 +291,6 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     :param lucy_out: output from running lucy on data cube and beam PSF
     :param out_name: output name of the fits file to which to save the output v_los image (if None, don't save image)
     :param beam: synthesized alma beam (output from model_ins)
-    :param inc_star: inclination of stellar component [deg]
     :param q_ell: axis ratio q of fitting ellipse [unitless]
     :param enclosed_mass: file including data of the enclosed stellar mass of the galaxy (1st column should be radius
         r in kpc and second column should be M_stars(<r) or velocity_circ(R) due to stars within R)
@@ -377,18 +376,25 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     y_bhoff = (y_loc - y_ctr / s) * resolution
 
     # CONVERT FROM ARCSEC TO PHYSICAL UNITS (pc)
+    x_bh_ac = x_bhoff  # arcsec
+    y_bh_ac = y_bhoff  # arcsec
     x_bhoff = dist * 10 ** 6 * np.tan(x_bhoff / constants.arcsec_per_rad)  # tan(off) = x_disk/dist --> x = d*tan(off)
     y_bhoff = dist * 10 ** 6 * np.tan(y_bhoff / constants.arcsec_per_rad)  # 206265 arcsec/rad
 
     # convert all x,y observed grid positions to pc
+    x_obs_ac = np.asarray(x_obs)  # x_obs arcsec
+    y_obs_ac = np.asarray(y_obs)  # y_obs arcsec
     x_obs = np.asarray([dist * 10 ** 6 * np.tan(x / constants.arcsec_per_rad) for x in x_obs])  # 206265 arcsec/rad
     y_obs = np.asarray([dist * 10 ** 6 * np.tan(y / constants.arcsec_per_rad) for y in y_obs])  # 206265 arcsec/rad
 
     # CONVERT FROM x_obs, y_obs TO x_disk, y_disk [pc]
+    x_disk_ac = (x_obs_ac[None, :] - x_bh_ac) * np.cos(theta) + (y_obs_ac[:, None] - y_bh_ac) * np.sin(theta)  # arcsec
+    y_disk_ac = (y_obs_ac[:, None] - y_bh_ac) * np.cos(theta) - (x_obs_ac[None, :] - x_bh_ac) * np.sin(theta)  # arcsec
     x_disk = (x_obs[None, :] - x_bhoff) * np.cos(theta) + (y_obs[:, None] - y_bhoff) * np.sin(theta)  # 2d array
     y_disk = (y_obs[:, None] - y_bhoff) * np.cos(theta) - (x_obs[None, :] - x_bhoff) * np.sin(theta)  # 2d array
 
     # CALCULATE THE RADIUS (R) OF EACH POINT (x_disk, y_disk) IN THE DISK [pc]
+    R_ac = np.sqrt((y_disk_ac ** 2 / np.cos(inc) ** 2) + x_disk_ac ** 2)  # radius R (arcsec)
     R = np.sqrt((y_disk ** 2 / np.cos(inc) ** 2) + x_disk ** 2)  # radius R of each point in the disk (2d array)
 
     # CALCULATE KEPLERIAN VELOCITY DUE TO ENCLOSED STELLAR MASS
@@ -398,11 +404,16 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         sys.path.insert(0, '/Users/jonathancohn/Documents/jam/')  # lets me import file from different folder/path
         import mge_vcirc_mine as mvm  # import mge_vcirc code
 
+        test_rad = np.linspace(np.amin(R_ac), np.amax(R_ac), 100)
+
         comp, surf_pots, sigma_pots, qobs = mvm.load_mge(enclosed_mass)  # load the MGE parameters
-        v_c = mvm.mge_vcirc(surf_pots * ml_ratio, sigma_pots, qobs, np.rad2deg(inc), 0., dist, R)  # v_circ due to stars
+        v_c = mvm.mge_vcirc(surf_pots * ml_ratio, sigma_pots, qobs, np.rad2deg(inc), 0., dist, test_rad)  # v_c,star
+        v_c_r = interpolate.interp1d(test_rad, v_c, kind='cubic', fill_value='extrapolate')
 
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
-        vel = np.sqrt((constants.G_pc * mbh / R) + v_c**2)
+        # vel = np.sqrt((constants.G_pc * mbh / R) + v_c**2)
+        vel = np.sqrt((constants.G_pc * mbh / R) + v_c_r(R_ac)**2)
+        print(np.amin(vel), np.amax(vel), np.median(vel))
     elif menc_type == 1:  # elif using a file with v_circ(R) due to stellar mass
         print('v(r)')
         radii = []
@@ -461,10 +472,21 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     weight = subpix_deconvolved  # [Jy/beam Hz]
 
     # WEIGHT CURRENTLY IN UNITS OF Jy/beam * Hz --> need to get it in units of Jy/beam to match data
-    weight *= f_w / np.sqrt(2 * np.pi * delta_freq_obs**2)  # divide to get correct units
+    weight *=  f_w / np.sqrt(2 * np.pi * delta_freq_obs**2)  # divide to get correct units
+    # NOTE: MAYBE multiply by fstep here, after collapsing and lucy process, rather than during collapse
+    # NOTE: would then need to multiply by ~1000 factor or something else large there, bc otherwise lucy cvg too fast
 
     # BEN_LUCY COMPARISON ONLY (only use for comparing to model with Ben's lucy map, which is in different units)
-    weight *= fstep * 6.783  # (multiply by vel_step because Ben's lucy map is actually in Jy/beam km/s units)
+    # weight *= fstep * 6.783  # (multiply by vel_step because Ben's lucy map is actually in Jy/beam km/s units)
+    # NOTE: 6.783 = beam size / channel width in km/s
+
+    '''  #
+    # ADJUSTING WEIGHT ABOVE BECAUSE (SEE BELOW DIFF BETWEEN MY LUCY OUT AND BEN'S)
+    plt.imshow(lucy_out, origin='lower')  # 2.5e-2 for bl, 2.5e9 for mine
+    plt.colorbar()
+    plt.show()
+    print(oop)
+    # '''  #
 
     # BUILD GAUSSIAN LINE PROFILES!!!
     cube_model = np.zeros(shape=(len(freq_ax), len(freq_obs), len(freq_obs[0])))  # initialize model cube
@@ -502,10 +524,12 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         ell_4 = rebin(ell_mask, ds)
 
         cs = []
+        num = []
         z_ind = 0  # the actual index for the model-data comparison cubes
         for z in range(zrange[0], zrange[1]):  # for each relevant freq slice (ignore slices with only noise)
             chi_sq += np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise[z_ind]**2)  # calculate chisq!
             cs.append(np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise[z_ind]**2))  # chisq per slice
+            num.append(np.sum(ap_4[z_ind] - data_4[z_ind])**2)
 
             z_ind += 1  # the actual index for the model-data comparison cubes
 
@@ -735,12 +759,11 @@ if __name__ == "__main__":
     chi2 = model_grid(resolution=params['resolution'], s=params['s'], x_loc=params['xloc'], y_loc=params['yloc'],
                       mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'], dist=params['dist'],
                       theta=np.deg2rad(params['PAdisk']), input_data=input_data, lucy_out=lucy_out, out_name=out,
-                      beam=beam, inc_star=params['inc_star'], rfit=params['rfit'], enclosed_mass=params['mass'],
-                      ml_ratio=params['ml_ratio'], sig_type=params['s_type'], zrange=[params['zi'], params['zf']],
+                      beam=beam, rfit=params['rfit'], enclosed_mass=params['mass'], ml_ratio=params['ml_ratio'],
+                      sig_type=params['s_type'], zrange=[params['zi'], params['zf']], menc_type=params['mtype'],
                       sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], f_w=params['f'],
-                      menc_type=params['mtype'], ds=params['ds'], noise=noise, chi2=True, reduced=True, freq_ax=freq_ax,
-                      xyrange=[params['xi'], params['xf'], params['yi'], params['yf']], fstep=fstep, f_0=f_0,
-                      q_ell=params['q_ell'])
+                      ds=params['ds'], noise=noise, chi2=True, reduced=True, freq_ax=freq_ax, q_ell=params['q_ell'],
+                      xyrange=[params['xi'], params['xf'], params['yi'], params['yf']], fstep=fstep, f_0=f_0)
 
     print('True Total: ' + str(time.time() - t0_true))  # 3.93s YAY!  # 23s for 6 models (16.6 for 4 models)
     print(chi2)
@@ -767,9 +790,8 @@ if __name__ == "__main__":
                     params[pars.keys().index('mu')], params[pars.keys().index('sig1')]],
         f_w=params[pars.keys().index('f')],
         # FIXED PARAMETERS
-        resolution=pars['resolution'], sig_type=pars['s_type'], dist=pars['dist'], inc_star=pars['inc_star'], 
-         s=pars['s'], xyrange=[pars['xi'], pars['xf'], pars['yi'], pars['yf']], zrange=[pars['zi'], pars['zf']],
-        ds=pars['ds'], rfit=pars['rfit'],
+        resolution=pars['resolution'], sig_type=pars['s_type'], dist=pars['dist'], s=pars['s'], rfit=pars['rfit'],
+        xyrange=[pars['xi'], pars['xf'], pars['yi'], pars['yf']], zrange=[pars['zi'], pars['zf']], ds=pars['ds'],
         # FILES ETC.
         enclosed_mass=pars['mass'], menc_type=pars['mtype'], data_cube=pars['data'], data_mask=pars['mask'],
         # OTHER PARAMETERS
@@ -777,10 +799,67 @@ if __name__ == "__main__":
         out_name=None, chi2=True, reduced=False)
     '''
 
-# play with softening parameter?
-
 # TO DO:
-# change ellipse fitting region to be fixed!
+# MAIN. Implement MGE as Jonelle requested, explore number of pixels in ellipse issue, start playing with PGC
+# DEFINE FITTING REGION OUTSIDE! (So theta doesn't change)
+# note: mge likely doesn't match bc Ben reported different mge in paper
+# Tighten all the priors!
+# Later (after done matching with Ben): prevent mu from going negative!
+# AHHHH FIX MGE
+# play with softening parameter?
+# change ellipse fitting region so it is not free!
 # maybe put noise calc in model_prep?
+# switch to using scikit-image (instead of iraf27) --> can do everything in python 3!
 # update dyn_emcee to use dyn_model instead of dyn_general format!
-# read up on convergence
+# read up on convergence, implement convergence checks!
+'''
+# MGE implementation:
+There are a couple ways to proceed from here. One way is the way that 
+Ben chose (I assume he did it this) - before you start modeling, you 
+have a decent idea of the inclination angle of the gas disk based on the 
+q of the ellipse you created from the collapsed ALMA cube. You assume 
+that inclination angle is basically the inclination angle of the gas 
+disk and is the inclination angle of the galaxy. You calculate v_c,star 
+for that one inclination angle and generate an array of radii and the 
+corresponding v_c,star for M/L = 1. That is done once, outside of your 
+model iterations. During each model iteration you scale v_c,star for the 
+M/L of that iteration. You also probably need to interpolate to get 
+v_c,star at the exact radii that you need for the model. So v_c,star has 
+been determined for a specific inclination angle of the galaxy, which 
+will be very similar to (but not necessarily exactly the same) as the 
+inclination angle of the gas disk, which is a free parameter in the model.
+
+If calculating v_c,star takes time, then doing it this first way, 
+outside of the model iteration, makes the most sense. This was true for 
+Ben because he was doing an integral himself. In the case of 
+Cappellari's code, Cappellari uses approximations in a couple of regimes 
+(e.g., close to the nucleus) so that he does not need to do the full 
+integral all the time. Take a look at Cappellari et al. 2002, Appendix A 
+for what I'm talking about (these are the equations are are in 
+mge_circular_velocity.pro). Cappellari's code runs faster than Ben's 
+integration code. So it might not be necessary to pull the v_c,star 
+calculation outside of the model iteration when using Cappellari's code.
+
+This brings me to the second way. You could simply call Cappellari's 
+code to calculate v_c,star for that particular M/L and gas disk 
+inclination angle (where again we are assuming that the gas disk 
+inclination angle matches the galaxy's inclination angle). I haven't 
+timed this, so I don't know if this second method is worse than the 
+first method. When I modeled STIS data in the past, we assumed a 
+spherical distribution for the stars at the center so the inclination 
+angle did not matter and we used method one.
+'''
+
+'''
+# From prospector.py:
+try:
+    from emcee.utils import MPIPool
+    pool = MPIPool(debug=False, loadbalance=True)
+    if not pool.is_master():
+        # Wait for instructions from the master process.
+        pool.wait()
+        sys.exit(0)
+except(ImportError, ValueError):
+    pool = None
+    print('Not using MPI')
+'''
