@@ -9,7 +9,16 @@ import argparse
 import matplotlib.pyplot as plt
 
 
-def test_dyn_m(theta, mod_ins=None, params=None, fixed_pars=None, files=None):
+def test_dyn_m(theta, mod_ins=None, params=None):
+    """
+    Get the chi squared of the model!
+
+    :param theta: the parameter(s) being varied --> in this case, mbh
+    :param mod_ins: constant input model things
+    :param params: all other model parameters (held fixed)
+
+    :return: chi^2 (NOT reduced chi^2)
+    """
     np.random.seed(123)
 
     lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise = mod_ins
@@ -50,69 +59,38 @@ def test_dyn_m(theta, mod_ins=None, params=None, fixed_pars=None, files=None):
         bl=params['bl'],
         xyrange=[params['xi'], params['xf'], params['yi'], params['yf']])
 
-    '''
-    chi2 = dg.model_grid(
-        # FREE PARAMETERS
-        x_loc=params['xloc'],
-        y_loc=params['yloc'],
-        mbh=theta[0],
-        inc=np.deg2rad(params['inc']),
-        inc_star=params['inc_star'],
-        vsys=params['vsys'],
-        theta=np.deg2rad(params['PAdisk']),
-        ml_ratio=params['ml_ratio'],
-        sig_params=[params['sig0'],
-                    params['r0'],
-                    params['mu'],
-                    params['sig1']],
-        f_w=params['f'],
-        # FIXED PARAMETERS
-        sig_type=fixed_pars['s_type'], menc_type=fixed_pars['mtype'] == True, ds=int(fixed_pars['ds']),
-        grid_size=fixed_pars['gsize'], x_fwhm=fixed_pars['x_fwhm'], y_fwhm=fixed_pars['y_fwhm'],
-        pa=fixed_pars['PAbeam'], dist=fixed_pars['dist'], resolution=fixed_pars['resolution'], s=fixed_pars['s'],
-        zrange=[int(fixed_pars['zi']), int(fixed_pars['zf'])], rfit=fixed_pars['rfit'],
-        xyrange=[fixed_pars['xi'], fixed_pars['xf'], fixed_pars['yi'], fixed_pars['yf']], lucy_it=fixed_pars['lucy_it'],
-        xyerr=[int(fixed_pars['xerr0']), int(fixed_pars['xerr1']), int(fixed_pars['yerr0']), int(fixed_pars['yerr1'])],
-        # FILES
-        mge_f=files['mge'], enclosed_mass=files['mass'], lucy_in=files['lucy_in'], lucy_output=files['lucy'],
-        lucy_b=files['lucy_b'], lucy_o=files['lucy_o'], lucy_mask=files['lucy_mask'], data_cube=files['data'],
-        data_mask=files['mask'],
-        # OTHER PARAMETERS
-        out_name=None, chi2=True)
-
-        chi2 = dm.model_grid(resolution=params['resolution'], s=params['s'], x_loc=params['xloc'], y_loc=params['yloc'],
-                      mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'], dist=params['dist'],
-                      theta=np.deg2rad(params['PAdisk']), input_data=input_data, lucy_out=lucy_out, out_name=out,
-                      beam=beam, rfit=params['rfit'], enclosed_mass=params['mass'], ml_ratio=params['ml_ratio'],
-                      sig_type=params['s_type'], zrange=[params['zi'], params['zf']], menc_type=params['mtype'],
-                      sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], f_w=params['f'],
-                      ds=params['ds'], noise=noise, chi2=True, reduced=True, freq_ax=freq_ax, q_ell=params['q_ell'],
-                      theta_ell=np.deg2rad(params['theta_ell']), fstep=fstep, f_0=f_0, bl=params['bl'],
-                      xyrange=[params['xi'], params['xf'], params['yi'], params['yf']])
-    '''
-
     return chi2
 
 
-def test_dyn(params=None, par_dict=None, mod_ins=None, fixed_pars=None, files=None):
+def test_dyn(theta, par_dict=None, mod_ins=None, params=None):
+    """
+    Get the chi squared of the model!
+
+    :param theta: the parameter(s) being varied --> in this case, all potentially free params
+    :param params: the parameter(s) being varied AND
+    :param mod_ins: constant input model things
+    :param params: all other model parameters (held fixed)
+
+    :return: chi^2 (NOT reduced chi^2)
+    """
     np.random.seed(123)
 
     lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise = mod_ins
 
     chi2 = dm.model_grid(
         # FREE PARAMETERS
-        x_loc=params[par_dict.keys().index('xloc')],
-        y_loc=params[par_dict.keys().index('yloc')],
-        mbh=params[par_dict.keys().index('mbh')],
-        inc=np.deg2rad(params[par_dict.keys().index('inc')]),
-        vsys=params[par_dict.keys().index('vsys')],
-        theta=np.deg2rad(params[par_dict.keys().index('PAdisk')]),
-        ml_ratio=params[par_dict.keys().index('ml_ratio')],
-        sig_params=[params[par_dict.keys().index('sig0')],
-                    params[par_dict.keys().index('r0')],
-                    params[par_dict.keys().index('mu')],
-                    params[par_dict.keys().index('sig1')]],
-        f_w=params[par_dict.keys().index('f')],
+        x_loc=theta[par_dict.keys().index('xloc')],
+        y_loc=theta[par_dict.keys().index('yloc')],
+        mbh=theta[par_dict.keys().index('mbh')],
+        inc=np.deg2rad(theta[par_dict.keys().index('inc')]),
+        vsys=theta[par_dict.keys().index('vsys')],
+        theta=np.deg2rad(theta[par_dict.keys().index('PAdisk')]),
+        ml_ratio=theta[par_dict.keys().index('ml_ratio')],
+        sig_params=[theta[par_dict.keys().index('sig0')],
+                    theta[par_dict.keys().index('r0')],
+                    theta[par_dict.keys().index('mu')],
+                    theta[par_dict.keys().index('sig1')]],
+        f_w=theta[par_dict.keys().index('f')],
         # FIXED PARAMETERS
         resolution=params['resolution'],
         s=params['s'],
@@ -136,47 +114,6 @@ def test_dyn(params=None, par_dict=None, mod_ins=None, fixed_pars=None, files=No
         fstep=fstep, f_0=f_0,
         bl=params['bl'],
         xyrange=[params['xi'], params['xf'], params['yi'], params['yf']])
-
-    '''
-    chi2 = dg.model_grid(
-        # FREE PARAMETERS
-        x_loc=params[par_dict.keys().index('xloc')],
-        y_loc=params[par_dict.keys().index('yloc')],
-        mbh=params[par_dict.keys().index('mbh')],
-        inc=np.deg2rad(params[par_dict.keys().index('inc')]),
-        inc_star=params[par_dict.keys().index('inc_star')],
-        vsys=params[par_dict.keys().index('vsys')],
-        theta=np.deg2rad(params[par_dict.keys().index('PAdisk')]),
-        ml_ratio=params[par_dict.keys().index('ml_ratio')],
-        sig_params=[params[par_dict.keys().index('sig0')],
-                    params[par_dict.keys().index('r0')],
-                    params[par_dict.keys().index('mu')],
-                    params[par_dict.keys().index('sig1')]],
-        f_w=params[par_dict.keys().index('f')],
-        # FIXED PARAMETERS
-        sig_type=fixed_pars['s_type'], menc_type=fixed_pars['mtype'] == True, ds=int(fixed_pars['ds']),
-        grid_size=fixed_pars['gsize'], x_fwhm=fixed_pars['x_fwhm'], y_fwhm=fixed_pars['y_fwhm'],
-        pa=fixed_pars['PAbeam'], dist=fixed_pars['dist'], resolution=fixed_pars['resolution'], s=fixed_pars['s'],
-        lucy_it=fixed_pars['lucy_it'], zrange=[int(fixed_pars['zi']), int(fixed_pars['zf'])],
-        xyrange=[fixed_pars['xi'], fixed_pars['xf'], fixed_pars['yi'], fixed_pars['yf']], rfit=fixed_pars['rfit'],
-        xyerr=[int(fixed_pars['xerr0']), int(fixed_pars['xerr1']), int(fixed_pars['yerr0']), int(fixed_pars['yerr1'])],
-        # FILES
-        mge_f=files['mge'], enclosed_mass=files['mass'], lucy_in=files['lucy_in'], lucy_output=files['lucy'],
-        lucy_b=files['lucy_b'], lucy_o=files['lucy_o'], lucy_mask=files['lucy_mask'], data_cube=files['data'],
-        data_mask=files['mask'],
-        # OTHER PARAMETERS
-        out_name=None, chi2=True, reduced=False)
-    
-        chi2 = dm.model_grid(resolution=params['resolution'], s=params['s'], x_loc=params['xloc'], y_loc=params['yloc'],
-                      mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'], dist=params['dist'],
-                      theta=np.deg2rad(params['PAdisk']), input_data=input_data, lucy_out=lucy_out, out_name=out,
-                      beam=beam, rfit=params['rfit'], enclosed_mass=params['mass'], ml_ratio=params['ml_ratio'],
-                      sig_type=params['s_type'], zrange=[params['zi'], params['zf']], menc_type=params['mtype'],
-                      sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], f_w=params['f'],
-                      ds=params['ds'], noise=noise, chi2=True, reduced=True, freq_ax=freq_ax, q_ell=params['q_ell'],
-                      theta_ell=np.deg2rad(params['theta_ell']), fstep=fstep, f_0=f_0, bl=params['bl'],
-                      xyrange=[params['xi'], params['xf'], params['yi'], params['yf']])
-    '''
 
     return chi2
 
@@ -217,15 +154,15 @@ def lnprior(theta, priors, param_names):
     return lnp
 
 
-def lnprob(theta, priors=None, param_names=None, fixed_pars=None, files=None):
+def lnprob(theta, mod_ins=None, priors=None, param_names=None, params=None):
     """
     Not computing full posterior probability, so just use chi squared (P propto exp(-chi^2/2) --> ln(P) ~ -chi^2 / 2
 
     :param theta: input parameter vector
+    :param mod_ins: constant input model things
     :param priors: prior boundary dictionary, with structure: {'param_name': [pri_min, pri_max]}
     :param param_names: list of parameter names
-    :param fixed_pars: dictionary of fixed input parameters (e.g. resolution, beam params, etc.)
-    :param files: dictionary containing names of files
+    :param params: dictionary of fixed input parameters (e.g. resolution, beam params, etc.)
 
     :return: -0.5 * chi^2 (ln likelihood)
     """
@@ -233,21 +170,21 @@ def lnprob(theta, priors=None, param_names=None, fixed_pars=None, files=None):
     if pri == -np.inf:
         chi2 = 1.  # doesn't matter, because -inf + (-0.5 * 1) = -inf
     else:
-        chi2 = test_dyn(params=theta, par_dict=priors, fixed_pars=fixed_pars, files=files)
+        chi2 = test_dyn(theta=theta, mod_ins=mod_ins, par_dict=priors, params=params)
 
     print('lnprob stuff', pri, chi2, pri + (-0.5 * chi2))
     return pri + (-0.5 * chi2)
 
 
-def chisq_m(theta, params=None, priors=None, param_names=None, fixed_pars=None, files=None):
+def lnprob_m(theta, mod_ins=None, params=None, priors=None, param_names=None):
     """
     Not computing full posterior probability, so just use chi squared (P propto exp(-chi^2/2) --> ln(P) ~ -chi^2 / 2
 
     :param theta: input parameter vector
+    :param mod_ins: constant input model things
+    :param params: dictionary of input parameters (e.g. resolution, beam params, etc.)
     :param priors: prior boundary dictionary, with structure: {'param_name': [pri_min, pri_max]}
     :param param_names: list of parameter names
-    :param fixed_pars: dictionary of fixed input parameters (e.g. resolution, beam params, etc.)
-    :param files: dictionary containing names of files
 
     :return: -0.5 * chi^2 (ln likelihood)
     """
@@ -255,7 +192,7 @@ def chisq_m(theta, params=None, priors=None, param_names=None, fixed_pars=None, 
     if pri == -np.inf:
         chi2 = 1.  # doesn't matter, because -inf + (-0.5 * 1) = -inf
     else:
-        chi2 = test_dyn_m(theta, params=params, fixed_pars=fixed_pars, files=files)
+        chi2 = test_dyn_m(theta, params=params, mod_ins=mod_ins)
 
     return pri + (-0.5 * chi2)
 
@@ -267,10 +204,18 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     # params, fixed_pars, files, priors, qobs = dg.par_dicts(parfile, q=True)  # get dicts of params and file names from parameter file
     # AVOID ERROR! --> all q^2 - cos(inc)^2 > 0 --> q^2 > cos(inc)^2 -> cos(inc) < q
     # priors['inc_star'][0] = np.amax([priors['inc_star'][0], np.rad2deg(np.arccos(np.amin(qobs)))])  # BUCKET TURN ON ONCE MGE WORKING
-    params, fixed_pars, files, priors = dg.par_dicts(parfile, q=False)  # get dicts of params and file names from parameter file
+    # params, fixed_pars, files, priors = dg.par_dicts(parfile, q=False)  # get dicts of params and file names from parameter file
+    params, priors = dm.par_dicts(args['parfile'], q=False)  # get dicts of params and file names from parameter file
+
     ndim = len(params)  # number of dimensions = number of free parameters
     direc = '/Users/jonathancohn/Documents/dyn_mod/emcee_out/'
 
+    mod_ins = dm.model_prep(data=params['data'], ds=params['ds'], lucy_out=params['lucy'], lucy_b=params['lucy_b'],
+                            lucy_mask=params['lucy_mask'], lucy_in=params['lucy_in'], lucy_o=params['lucy_o'],
+                            lucy_it=params['lucy_it'], data_mask=params['mask'], grid_size=params['gsize'],
+                            res=params['resolution'], x_std=params['x_fwhm'], y_std=params['y_fwhm'],
+                            pa=params['PAbeam'], zrange=[params['zi'], params['zf']],
+                            xyerr=[params['xerr0'], params['xerr1'], params['yerr0'], params['yerr1']])
 
     '''  #
     params, priors = par_dicts(args['parfile'])
@@ -329,8 +274,7 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
         p0 = walkers
 
         # main interface for emcee is EmceeSampler:
-        sampler = emcee.EnsembleSampler(nwalkers, ndim, chisq_m, args=[params, priors['mbh'], param_names, fixed_pars,
-                                                                       files])
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob_m, args=[params, mod_ins, priors['mbh'], param_names])
         print('p0', p0)
         print('Burning in!')
         pos, prob, state = sampler.run_mcmc(p0, burn)
@@ -412,7 +356,7 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     print('p0', p0)
 
     # main interface for emcee is EmceeSampler:
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=[priors, param_names, fixed_pars, files])
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=[mod_ins, priors, param_names, params])
                                                         #(p0_guess, priors=priors, param_names=param_names,
     #                                                      fixed_pars=fixed_pars, files=files))
     # ^don't need theta in lnprob() because of setup of EmceeSampler function, right?
