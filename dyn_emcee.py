@@ -1,4 +1,5 @@
 import dyn_general as dg
+import dyn_model as dm
 
 import numpy as np
 import emcee
@@ -8,9 +9,48 @@ import argparse
 import matplotlib.pyplot as plt
 
 
-def test_dyn_m(theta, params=None, fixed_pars=None, files=None):
+def test_dyn_m(theta, mod_ins=None, params=None, fixed_pars=None, files=None):
     np.random.seed(123)
 
+    lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise = mod_ins
+
+    chi2 = dm.model_grid(
+        # FREE
+        mbh=theta[0],
+        resolution=params['resolution'],
+        x_loc=params['xloc'],
+        y_loc=params['yloc'],
+        inc=np.deg2rad(params['inc']),
+        vsys=params['vsys'],
+        theta=np.deg2rad(params['PAdisk']),
+        ml_ratio=params['ml_ratio'],
+        sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']],
+        f_w=params['f'],
+        # FIXED
+        s=params['s'],
+        dist=params['dist'],
+        input_data=input_data,
+        lucy_out=lucy_out,
+        out_name=None,
+        beam=beam,
+        rfit=params['rfit'],
+        enclosed_mass=params['mass'],
+        sig_type=params['s_type'],
+        zrange=[params['zi'], params['zf']],
+        menc_type=params['mtype'],
+        ds=params['ds'],
+        noise=noise,
+        chi2=True,
+        reduced=False,
+        freq_ax=freq_ax,
+        q_ell=params['q_ell'],
+        theta_ell=np.deg2rad(params['theta_ell']),
+        fstep=fstep,
+        f_0=f_0,
+        bl=params['bl'],
+        xyrange=[params['xi'], params['xf'], params['yi'], params['yf']])
+
+    '''
     chi2 = dg.model_grid(
         # FREE PARAMETERS
         x_loc=params['xloc'],
@@ -40,12 +80,64 @@ def test_dyn_m(theta, params=None, fixed_pars=None, files=None):
         # OTHER PARAMETERS
         out_name=None, chi2=True)
 
+        chi2 = dm.model_grid(resolution=params['resolution'], s=params['s'], x_loc=params['xloc'], y_loc=params['yloc'],
+                      mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'], dist=params['dist'],
+                      theta=np.deg2rad(params['PAdisk']), input_data=input_data, lucy_out=lucy_out, out_name=out,
+                      beam=beam, rfit=params['rfit'], enclosed_mass=params['mass'], ml_ratio=params['ml_ratio'],
+                      sig_type=params['s_type'], zrange=[params['zi'], params['zf']], menc_type=params['mtype'],
+                      sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], f_w=params['f'],
+                      ds=params['ds'], noise=noise, chi2=True, reduced=True, freq_ax=freq_ax, q_ell=params['q_ell'],
+                      theta_ell=np.deg2rad(params['theta_ell']), fstep=fstep, f_0=f_0, bl=params['bl'],
+                      xyrange=[params['xi'], params['xf'], params['yi'], params['yf']])
+    '''
+
     return chi2
 
 
-def test_dyn(params=None, par_dict=None, fixed_pars=None, files=None):
+def test_dyn(params=None, par_dict=None, mod_ins=None, fixed_pars=None, files=None):
     np.random.seed(123)
 
+    lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise = mod_ins
+
+    chi2 = dm.model_grid(
+        # FREE PARAMETERS
+        x_loc=params[par_dict.keys().index('xloc')],
+        y_loc=params[par_dict.keys().index('yloc')],
+        mbh=params[par_dict.keys().index('mbh')],
+        inc=np.deg2rad(params[par_dict.keys().index('inc')]),
+        vsys=params[par_dict.keys().index('vsys')],
+        theta=np.deg2rad(params[par_dict.keys().index('PAdisk')]),
+        ml_ratio=params[par_dict.keys().index('ml_ratio')],
+        sig_params=[params[par_dict.keys().index('sig0')],
+                    params[par_dict.keys().index('r0')],
+                    params[par_dict.keys().index('mu')],
+                    params[par_dict.keys().index('sig1')]],
+        f_w=params[par_dict.keys().index('f')],
+        # FIXED PARAMETERS
+        resolution=params['resolution'],
+        s=params['s'],
+        dist=params['dist'],
+        input_data=input_data,
+        lucy_out=lucy_out,
+        out_name=None,
+        beam=beam,
+        rfit=params['rfit'],
+        enclosed_mass=params['mass'],
+        sig_type=params['s_type'],
+        zrange=[params['zi'], params['zf']],
+        menc_type=params['mtype'],
+        ds=params['ds'],
+        noise=noise,
+        chi2=True,
+        reduced=False,
+        freq_ax=freq_ax,
+        q_ell=params['q_ell'],
+        theta_ell=np.deg2rad(params['theta_ell']),
+        fstep=fstep, f_0=f_0,
+        bl=params['bl'],
+        xyrange=[params['xi'], params['xf'], params['yi'], params['yf']])
+
+    '''
     chi2 = dg.model_grid(
         # FREE PARAMETERS
         x_loc=params[par_dict.keys().index('xloc')],
@@ -74,6 +166,17 @@ def test_dyn(params=None, par_dict=None, fixed_pars=None, files=None):
         data_mask=files['mask'],
         # OTHER PARAMETERS
         out_name=None, chi2=True, reduced=False)
+    
+        chi2 = dm.model_grid(resolution=params['resolution'], s=params['s'], x_loc=params['xloc'], y_loc=params['yloc'],
+                      mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'], dist=params['dist'],
+                      theta=np.deg2rad(params['PAdisk']), input_data=input_data, lucy_out=lucy_out, out_name=out,
+                      beam=beam, rfit=params['rfit'], enclosed_mass=params['mass'], ml_ratio=params['ml_ratio'],
+                      sig_type=params['s_type'], zrange=[params['zi'], params['zf']], menc_type=params['mtype'],
+                      sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], f_w=params['f'],
+                      ds=params['ds'], noise=noise, chi2=True, reduced=True, freq_ax=freq_ax, q_ell=params['q_ell'],
+                      theta_ell=np.deg2rad(params['theta_ell']), fstep=fstep, f_0=f_0, bl=params['bl'],
+                      xyrange=[params['xi'], params['xf'], params['yi'], params['yf']])
+    '''
 
     return chi2
 
@@ -167,6 +270,41 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     params, fixed_pars, files, priors = dg.par_dicts(parfile, q=False)  # get dicts of params and file names from parameter file
     ndim = len(params)  # number of dimensions = number of free parameters
     direc = '/Users/jonathancohn/Documents/dyn_mod/emcee_out/'
+
+
+    '''  #
+    params, priors = par_dicts(args['parfile'])
+
+    # CREATE OUTNAME BASED ON INPUT PARS
+    pars_str = ''
+    for key in params:
+        pars_str += str(params[key]) + '_'
+    out = '/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_general_' + pars_str + '_subcube_ellmask_bl2.fits'
+
+    mod_ins = model_prep(data=params['data'], lucy_out=params['lucy'], lucy_mask=params['lucy_mask'],
+                         lucy_b=params['lucy_b'], lucy_in=params['lucy_in'], lucy_o=params['lucy_o'],
+                         lucy_it=params['lucy_it'], data_mask=params['mask'], grid_size=params['gsize'],
+                         res=params['resolution'], x_std=params['x_fwhm'], y_std=params['y_fwhm'], pa=params['PAbeam'])
+
+    lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data = mod_ins
+
+    # CREATE MODEL CUBE!
+    out = params['outname']  # '/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_general_' + pars_str + '_subcube_ellmask_bl2.fits'
+    chisq = model_grid(resolution=params['resolution'], s=params['s'], x_loc=params['xloc'],
+                       y_loc=params['yloc'], mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'],
+                       dist=params['dist'], theta=np.deg2rad(params['PAdisk']), input_data=input_data,
+                       lucy_out=lucy_out, out_name=out, beam=beam, inc_star=params['inc_star'],
+                       enclosed_mass=params['mass'], ml_ratio=params['ml_ratio'], sig_type=params['s_type'],
+                       sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], f_w=params['f'],
+                       rfit=params['rfit'], menc_type=params['mtype'], ds=int(params['ds']),
+                       chi2=True, zrange=[params['zi'], params['zf']], mge_f=params['mge'],
+                       xyrange=[params['xi'], params['xf'], params['yi'], params['yf']],
+                       xyerr=[params['xerr0'], params['xerr1'], params['yerr0'], params['yerr1']],
+                       reduced=True, freq_ax=freq_ax, f_0=f_0, fstep=fstep)
+    # '''  #
+
+
+
 
     if not all_free:
         direc = '/Users/jonathancohn/Documents/dyn_mod/emcee_out/'
@@ -273,25 +411,6 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     print(param_names)
     print('p0', p0)
 
-    '''
-    means = np.random.rand(ndim)  # returns random numbers between 0, 1 with shape ndim
-
-    cov = 0.5 - np.random.rand(ndim ** 2).reshape((ndim, ndim))  # NxN covariance matrix
-    cov = np.triu(cov)  # takes array, and returns just the upper triangle of the array
-    cov += cov.T - np.diag(cov.diagonal())
-    cov = np.dot(cov, cov)
-
-    icov = np.linalg.inv(cov)  # inverse of covariance matrix
-
-    # guess a starting point for each of the 250 walkers. position will be an ndim vector, so initial guess will be
-    # 250x(ndim) array (or list of 250 arrays each with ndim elements)
-    # nwalkers = 250
-    p0 = np.random.rand(ndim * nwalkers).reshape((nwalkers, ndim))  # initial (bad) guess: between 0 and 1 for each
-
-    # main interface for emcee is EmceeSampler:
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=[means, icov])
-    '''
-
     # main interface for emcee is EmceeSampler:
     sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=[priors, param_names, fixed_pars, files])
                                                         #(p0_guess, priors=priors, param_names=param_names,
@@ -313,14 +432,23 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     sampler.run_mcmc(pos, steps)  # production run of 1000 steps (probably overkill, for now)
     print("printing...")
 
+    '''  #
+    # look at how well things are burned in: http://dfm.io/emcee/current/user/line/#maximum-likelihood-estimation
+    # sampler.chain.shape = (nwalkers, steps, ndim)  # gives parameter values for each walker at each step in chaim
+    for i in ndim:
+        plt.plot(sampler.chain[:, :, i])  # maybe?
+        plt.show()
+    
+    # '''  #
+
     # sampler now has a property EnsembleSampler.chain that is a numpy array with shape (250, 1000, 50). More useful
     # object is the EnsembleSampler.flatchain which has the shape (250000, 50) and contains all samples reshaped into a
     # flat list. So we now have 250000 unbiased samples of the density p(x").
 
     # Another good test of whether or not sampling went well: check the mean acceptance fraction of the ensemble:
     #  EnsembleSampler.acceptance_fraction()
-    print("Mean acceptance fraction: {0:.3f}"
-          .format(np.mean(sampler.acceptance_fraction)))  # should be 0.25 to 0.5
+    print("Mean acceptance fraction: {0:.3f}".format(np.mean(sampler.acceptance_fraction)))
+    print('want between 0.25 and 0.5')  # should be 0.25 to 0.5
 
     for i in range(ndim):
         outfile = direc + 'flatchain_' + param_names[i] + '_' + str(nwalkers) + '_' + str(burn) + '_' + str(steps) + '.pkl'
@@ -330,8 +458,11 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
             print('pickle dumped!')
 
     # You can make histograms of these samples to get an estimate of the density that you were sampling
-    print('time in emcee ' + str(t0_mc - time.time()))
+    print('time in emcee ' + str(time.time() - t0_mc))
     if printer:
+        import corner
+        fig = corner.corner(samples, labels=params.keys(), truths=params.values())  # truths here is just input value
+        fig.savefig("triangle.png")
         # fig = plt.figure()
         # axes = [plt.subplot(221), plt.subplot(222), plt.subplot(223), plt.subplot(224)]
         fig, axes = plt.subplots(4, 4)  # 3 rows, 4 cols of subplots; because there are 12 free params (ahhh now 13)
@@ -382,7 +513,7 @@ if __name__ == "__main__":
     args = vars(parser.parse_args())
 
     # do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, parfile=None)
-    flatchain = do_emcee(nwalkers=100, burn=0, steps=50, printer=1, parfile=args['parfile'], all_free=True)
+    flatchain = do_emcee(nwalkers=100, burn=1, steps=50, printer=1, parfile=args['parfile'], all_free=True)
     # flatchain = do_emcee(nwalkers=100, burn=100, steps=100, printer=1, parfile=args['parfile'])
-    print(flatchain)
+    print(flatchain.shape)
     print('full time ' + str(time.time() - t0_full))
