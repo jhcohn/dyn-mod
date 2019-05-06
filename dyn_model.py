@@ -100,69 +100,6 @@ def get_sig(r=None, sig0=1., r0=1., mu=1., sig1=0.):
     return sigma
 
 
-def pvd(data_cube, theta, z_ax, x_arcsec, R, v_sys):  # BUCKET UNCONFIRMED
-    """
-    Build position-velocity diagram (PVD) from input data cube
-    :param data_cube: input data cube
-    :param theta: angle through which to rotate the data cube so that the disk semi-major axis is along the +y axis
-    :return: position velocity diagram (PVD)
-    """
-    hdu = fits.open(data_cube)
-    data = hdu[0].data[0]  # header = hdu[0].header
-
-    # REBIN IN GROUPS OF 4x4 PIXELS
-    rebinned = []  # np.zeros(shape=(len(z_ax), len(fluxes), len(fluxes[0])))
-    for z in range(len(data)):
-        subarrays = blockshaped(data[z, :, :], 4, 4)  # bin the data in groups of 4x4 pixels
-
-        # each pixel in the new, rebinned data cube is the mean of each 4x4 set of original pixels
-        reshaped = np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data[0]) / 4.),
-                                                                          int(len(data[0][0]) / 4.)))
-        rebinned.append(reshaped)
-    data = np.asarray(rebinned)
-
-    col = np.zeros_like(data[0])
-    for x in range(len(data[0, 0, :])):
-        for y in range(len(data[z, :, 0])):
-            if len(data[0, 0, :]) / 2. == x:  # if at center point, include  # BUCKET INCLUDE BH OFFSET
-                if len(data[z, :, 0]) / 2. == y:  # if at center point, include  # BUCKET INCLUDE BH OFFSET
-                    col[y, x] = 1.
-            # if x,y pixels are both before halfway point (to get bot-L quarter in python)
-            # elif x,y pixels are both after halfway point (to get top-R quarter in python)
-            elif (x < len(data[0, 0, :]) / 2. and y < len(data[0, :, 0]) / 2.) or \
-                    (x > len(data[0, 0, :]) / 2. and y > len(data[0, :, 0]) / 2.):
-                if (theta - 0.5) * np.pi / 180. <= \
-                        np.abs(np.arctan((len(data[0, :, 0]) / 2. - y) / (len(data[0, 0, :]) / 2. - x))) \
-                        <= (26.7 + 0.5) * np.pi / 180.:  # arbitrarily chose 0.5 degrees as tolerance on angle
-                    col[y, x] = 1.
-            else:
-                col[y, x] = 0.
-    # plt.imshow(col, origin='lower')
-    # plt.plot(80, 80, 'w*')
-    # plt.show()
-
-    data_masked = np.asarray([data[z][:, :] * col[:, :] for z in range(len(data))])
-    pvd_fill = np.zeros(shape=(len(data), len(data[0])))
-    for z in range(len(data_masked)):
-        for c in range(len(data_masked[0][0])):
-            pvd_fill[z, c] = np.sum(data_masked[z, :, c])  # sum each column, append results of sum to pvd_fill
-
-    # np.asarray(x_arcsec)[::2] keeps the 0th element of x_arcsec, & every other element after, e.g. 0th, 2nd, 4th, etc.
-
-    plt.contourf(np.asarray(x_arcsec)[::2], z_ax - v_sys, pvd_fill, 600, vmin=np.amin(pvd_fill),
-                 vmax=np.amax(pvd_fill), cmap='viridis')
-    plt.plot(0, 0, 'w*')
-    plt.xlabel(r'Offset [arcsec]', fontsize=20)  # BUCKET THIS IS NOT CORRECT (want offset on 26.7deg axis, not plain x)
-    plt.ylabel(r'velocity [km/s]', fontsize=20)  # BUCKET data doesn't match Barth+2016 quite perfectly right now
-    plt.colorbar()
-    plt.xlim(-2., 2.)
-    plt.ylim(-675., 675)
-    plt.show()
-    plt.close()
-
-    return data_masked, pvd_fill
-
-
 def get_fluxes(data_cube, data_mask, write_name=None):
     """
     Integrate over the frequency axis of a data cube to get a flux map!
@@ -174,19 +111,18 @@ def get_fluxes(data_cube, data_mask, write_name=None):
     :return: collapsed data cube (i.e. flux map), len(z_ax), intrinsic freq of observed line, input data cube
     """
     hdu = fits.open(data_cube)
-    data = hdu[0].data[0]  # data[0] --> z, y, x (121, 700, 700)
+    data = hdu[0].data[0]  # data[0] contains: z, y, x (121, 700, 700)
 
     hdu_m = fits.open(data_mask)
     mask = hdu_m[0].data  # this is hdu_m[0].data, NOT hdu[0].data[0], unlike the data_cube above
 
     z_len = len(hdu[0].data[0])  # store the number of velocity slices in the data cube
     freq1 = float(hdu[0].header['CRVAL3'])  # starting frequency in the data cube
-    f_step = float(hdu[0].header['CDELT3'])  # frequency step in the data cube
+    f_step = float(hdu[0].header['CDELT3'])  # frequency step in the data cube  # note: fstep is negative for NGC_3258
     f_0 = float(hdu[0].header['RESTFRQ'])
     freq_axis = np.arange(freq1, freq1 + (z_len * f_step), f_step)  # [bluest, ..., reddest]
-    # NOTE: For NGC1332, this includes endpoint (arange shouldn't be inclusive). However, when citting endpoint 1 fstep
-    # sooner, arange doesn't include the endpoint...So, for 1332, include the extra point above, then cutting it off:
-    # freq_axis = freq_axis[:-1]
+    # NOTE: For NGC1332, this includes endpoint (arange shouldn't). However, if cut endpoint at fstep-1, arange doesn't
+    # include it...So, for 1332, include the extra point above, then cutting it off: freq_axis = freq_axis[:-1]
     # NOTE: NGC_3258 DATA DOES *NOT* HAVE THIS ISSUE, SOOOOOOOOOO COMMENT OUT FOR NOW!
 
     # Collapse the fluxes! Sum over all slices, multiplying each slice by the slice's mask and by the frequency step
@@ -299,7 +235,6 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     :param enclosed_mass: file including data of the enclosed stellar mass of the galaxy (1st column should be radius
         r in kpc and second column should be M_stars(<r) or velocity_circ(R) due to stars within R)
     :param menc_type: Select how you incorporate enclosed stellar mass [0 for MGE; 1 for v(R) file; 2 for M(R) file]
-    :param mge_f: file including MGE fit parameters that you can use to create v_circ(R) due to stars, from mge_vcirc.py
     :param ml_ratio: The mass-to-light ratio of the galaxy
     :param sig_type: code for the type of sigma_turb we're using. Can be 'flat', 'exp', or 'gauss'
     :param sig_params: list of parameters to be plugged into the get_sig() function. Number needed varies by sig_type
@@ -455,30 +390,6 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     sigma_grid = np.zeros(shape=R.shape) + sigma  # make sigma (whether already R-shaped or constant) R-shaped
     delta_freq_obs = (f_0 / (1 + zred)) * (sigma_grid / constants.c_kms)  # convert sigma to delta_f
 
-    '''
-    for zi in range(zrange[0], zrange[1]):
-        plt.imshow(input_data[zi], origin='lower', vmax=np.amax(input_data[zi]), vmin=np.amin(input_data[zi]),
-                   cmap='viridis', extent=[np.amin(x_obs), np.amax(x_obs), np.amin(y_obs), np.amax(y_obs)])
-        cbar = plt.colorbar()
-        plt.xlabel(r'x [pc]')
-        plt.ylabel(r'y [pc]')
-        plt.xticks([-300, -200, -100, 0., 100., 200., 300.])
-        plt.yticks([-300, -200, -100, 0., 100., 200., 300.])
-        cbar.set_label(r'Jy/beam', rotation=0, labelpad=20)  # fontsize=20,
-        plt.show()
-
-    plt.imshow(v_los, origin='lower', vmax=np.amax(v_los), vmin=np.amin(v_los), cmap='RdBu_r',  # viridis
-               extent=[np.amin(x_obs), np.amax(x_obs), np.amin(y_obs), np.amax(y_obs)])
-    cbar = plt.colorbar()
-    plt.xlabel(r'x [pc]')
-    plt.ylabel(r'y [pc]')
-    plt.xticks([-300, -200, -100, 0., 100., 200., 300.])
-    plt.yticks([-300, -200, -100, 0., 100., 200., 300.])
-    cbar.set_label(r'km/s', rotation=0, labelpad=10)  # pc  # fontsize=20, 
-    plt.show()
-    print(oop)
-    '''
-
     # WEIGHTS FOR LINE PROFILES: apply weights to gaussian velocity profiles for each subpixel
     weight = subpix_deconvolved  # [Jy/beam Hz]
 
@@ -503,21 +414,6 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     else:
         intrinsic_cube = rebin(cube_model, s)  # intrinsic_cube = block_reduce(cube_model, s, np.mean)
 
-    '''
-    plt.imshow(intrinsic_cube[20] / np.amax(intrinsic_cube), origin='lower', vmax=1., vmin=0., cmap='viridis',
-               extent=[xyrange[0], xyrange[1], xyrange[2], xyrange[3]])
-    cbar = plt.colorbar()
-    #plt.xlabel(r'x [pc]')
-    #plt.ylabel(r'y [pc]')
-    #plt.xticks([-300, -200, -100, 0., 100., 200., 300.])
-    #plt.yticks([-300, -200, -100, 0., 100., 200., 300.])
-    plt.xlabel(r'x [pixels]')
-    plt.ylabel(r'y [pixels]')
-    #cbar.set_label(r'Jy/beam Hz', rotation=0, labelpad=10)  # pc  # fontsize=20,
-    plt.show()
-    print(oop)
-    #'''
-
     # CONVERT INTRINSIC TO OBSERVED (convolve each slice of intrinsic_cube with alma beam --> observed data cube)
     convolved_cube = np.zeros(shape=intrinsic_cube.shape)  # approx ~1e-6 to 3e-6s per pixel
     for z in range(len(z_ax)):
@@ -536,27 +432,6 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         data_4 = rebin(input_data_masked, ds)
         ap_4 = rebin(convolved_cube, ds)
         ell_4 = rebin(ell_mask, ds)
-
-        '''
-        #inds_to_try2 = np.asarray([[10, 10], [10, 15], [15, 10]])  # plot a few line profiles
-        #import test_dyn_funcs as tdf
-        #f_sys = f_0 / (1+zred)
-        #tdf.compare(input_data_masked, convolved_cube, freq_ax / 1e9, inds_to_try2, f_sys / 1e9, 4)  # plot them!
-        #print(oop)
-        #plt.imshow(ell_mask, origin='lower', vmax=1., vmin=0., cmap='viridis')
-        plt.imshow(data_4[20], origin='lower', vmax=np.amax(data_4[20]), vmin=np.amin(data_4[20]),
-                   cmap='viridis', extent=[xyrange[0] / 4., xyrange[1] / 4., xyrange[2] / 4., xyrange[3] / 4.])
-        cbar = plt.colorbar()
-        #plt.xlabel(r'x [pixels]')
-        #plt.ylabel(r'y [pixels]')
-        plt.xlabel(r'x [4x4 binned pixels]')
-        plt.ylabel(r'y [4x4 binned pixels]')
-        # plt.xticks([-300, -200, -100, 0., 100., 200., 300.])
-        # plt.yticks([-300, -200, -100, 0., 100., 200., 300.])
-        #cbar.set_label(r'Jy/beam', rotation=0, labelpad=10)  # pc  # fontsize=20,
-        plt.show()
-        print(oop)
-        #'''
 
         z_ind = 0  # the actual index for the model-data comparison cubes
         for z in range(zrange[0], zrange[1]):  # for each relevant freq slice (ignore slices with only noise)
@@ -633,66 +508,6 @@ def par_dicts(parfile, q=False):
 
     else:
         return params, priors
-
-
-def par_dicts2(parfile, q=False):
-    """
-    Return dictionaries that contain file names, parameter names, and initial guesses, for free and fixed parameters
-
-    :param parfile: the parameter file
-    :return: params (the free parameters), fixed_pars (fixed parameters), files (file names), and priors (prior
-        boundaries as {'param_name': [min, max]} dictionaries)
-    """
-
-    params = {}
-    fixed_pars = {}
-    files = {}
-    priors = {}
-
-    # READ IN PARAMS FORM THE PARAMETER FILE
-    with open(parfile, 'r') as pf:
-        for line in pf:
-            if line.startswith('Pa'):
-                par_names = line.split()[1:]  # ignore the "Param" str in the first column
-            elif line.startswith('Primax'):
-                primax = line.split()[1:]
-            elif line.startswith('Primin'):
-                primin = line.split()[1:]
-            elif line.startswith('V'):
-                par_vals = line.split()[1:]
-            elif line.startswith('Other_p'):
-                fixed_names = line.split()[1:]
-            elif line.startswith('Other_v'):
-                fixed_vals = line.split()[1:]
-            elif line.startswith('T'):
-                file_types = line.split()[1:]
-            elif line.startswith('F'):
-                file_names = line.split()[1:]
-
-    for n in range(len(par_names)):
-        params[par_names[n]] = float(par_vals[n])
-        priors[par_names[n]] = [float(primin[n]), float(primax[n])]
-
-    for n in range(len(fixed_names)):
-        if fixed_names[n] == 's_type' or fixed_names[n] == 'mtype':
-            fixed_pars[fixed_names[n]] = fixed_vals[n]
-        elif fixed_names[n] == 'gsize' or fixed_names[n] == 's':
-            fixed_pars[fixed_names[n]] = int(fixed_vals[n])
-        else:
-            fixed_pars[fixed_names[n]] = float(fixed_vals[n])
-
-    for n in range(len(file_types)):
-        files[file_types[n]] = file_names[n]
-
-    if q:
-        import sys
-        sys.path.insert(0, '/Users/jonathancohn/Documents/jam/')  # lets me import file from different folder/path
-        import mge_vcirc_mine as mvm
-        comp, surf_pots, sigma_pots, qobs = mvm.load_mge(files['mge'])
-
-        return params, fixed_pars, files, priors, qobs
-    else:
-        return params, fixed_pars, files, priors
 
 
 def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=None, lucy_it=None, data=None,
@@ -790,21 +605,6 @@ if __name__ == "__main__":
 
     lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise = mod_ins
 
-    '''
-    plt.imshow(lucy_out / np.amax(lucy_out), origin='lower', vmax=1., vmin=0., cmap='viridis',  # viridis
-               )
-    cbar = plt.colorbar()
-    #plt.xlabel(r'x [pc]')
-    #plt.ylabel(r'y [pc]')
-    plt.xlabel(r'x [pixels]')
-    plt.ylabel(r'y [pixels]')
-    #plt.xticks([-300, -200, -100, 0., 100., 200., 300.])
-    #plt.yticks([-300, -200, -100, 0., 100., 200., 300.])
-    # cbar.set_label(r'', rotation=0, labelpad=10)  # pc  # fontsize=20,  # Jy/beam Hz
-    plt.show()
-    print(oop)
-    #'''
-
     # CREATE MODEL CUBE!
     out = params['outname']
     chi2 = model_grid(resolution=params['resolution'], s=params['s'], x_loc=params['xloc'], y_loc=params['yloc'],
@@ -820,45 +620,13 @@ if __name__ == "__main__":
     print('True Total: ' + str(time.time() - t0_true))  # 3.93s YAY!  # 23s for 6 models (16.6 for 4 models)
     print(chi2)  # NOTE: right now, chi^2_nu (with my lucy + v(R)) = 1.9, chi^2_nu (with my lucy + mge) = 9.98
 
-    '''
-    params, priors = par_dicts(args['parfile'])
-    # CREATE THINGS THAT ONLY NEED TO BE CALCULATED ONCE
-    mod_ins = model_prep(data=params['data'], lucy_out=params['lucy'], lucy_mask=params['lucy_mask'],
-                         lucy_b=params['lucy_b'], lucy_in=params['lucy_in'], lucy_o=params['lucy_o'],
-                         lucy_it=params['lucy_it'], data_mask=params['mask'], grid_size=params['gsize'],
-                         res=params['resolution'], x_std=params['x_fwhm'], y_std=params['y_fwhm'], pa=params['PAbeam'])
-    lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data = mod_ins
-    
-    chi2 = dg.model_grid(
-        # FREE PARAMETERS (entered as list of params because these change each iteration)
-        x_loc=params[pars.keys().index('xloc')],
-        y_loc=params[pars.keys().index('yloc')],
-        mbh=params[pars.keys().index('mbh')],
-        inc=params[pars.keys().index('inc')],
-        vsys=params[pars.keys().index('vsys')],
-        theta=np.deg2rad(params[pars.keys().index('PAdisk')]),
-        ml_ratio=params[pars.keys().index('ml_ratio')],
-        sig_params=[params[pars.keys().index('sig0')], params[pars.keys().index('r0')],
-                    params[pars.keys().index('mu')], params[pars.keys().index('sig1')]],
-        f_w=params[pars.keys().index('f')],
-        # FIXED PARAMETERS
-        resolution=pars['resolution'], sig_type=pars['s_type'], dist=pars['dist'], s=pars['s'], rfit=pars['rfit'],
-        xyrange=[pars['xi'], pars['xf'], pars['yi'], pars['yf']], zrange=[pars['zi'], pars['zf']], ds=pars['ds'],
-        bl=pars['bl'],
-        # FILES ETC.
-        enclosed_mass=pars['mass'], menc_type=pars['mtype'], data_cube=pars['data'], data_mask=pars['mask'],
-        # OTHER PARAMETERS
-        input_data=input_data, lucy_out=lucy_out, beam=beam, noise=noise, freq_ax=freq_ax, f_0=f_0, fstep=fstep,
-        out_name=None, chi2=True, reduced=False)
-    '''
-
 # TO DO:
 # MAIN. Implement MGE as Jonelle requested[X], explore number of pixels in ellipse issue[ ], start playing with UGC[ ]
-# update dyn_emcee to use dyn_model instead of dyn_general format![ ]
+# update dyn_emcee to use dyn_model instead of dyn_general format![X]
 # read up on convergence, implement convergence checks![ ]
 # Do Parallelization![ ]
-# add model_prep to dyn_emcee[ ]
-# Tighten all the priors![ ]
+# add model_prep to dyn_emcee[X]
+# Tighten all the priors![X]
 # Later (after done matching with Ben): prevent mu from going negative![ ]
 # play with softening parameter?[ ]
 # maybe put noise calc in model_prep function?[ ]

@@ -29,12 +29,13 @@ def compare(data, model, z_ax, inds_to_try2, v_sys, n):
 
     for i in range(len(inds_to_try2)):
         print(inds_to_try2[i][0], inds_to_try2[i][1])
-
-        plt.plot(z_ax, ap_4[:, inds_to_try2[i][1], inds_to_try2[i][0]], 'r-', label=r'Astropy conv')
-        plt.plot(z_ax, data_4[:, inds_to_try2[i][1], inds_to_try2[i][0]], 'b:', label=r'Data')
-        plt.axvline(x=v_sys, color='k')
-        plt.title(str(inds_to_try2[i][0]) + ', ' + str(inds_to_try2[i][1]))  # ('no x,y offset')
+        plt.plot(z_ax, ap_4[:, inds_to_try2[i][1], inds_to_try2[i][0]], 'r+', label=r'Model')  # r-
+        plt.plot(z_ax, data_4[:, inds_to_try2[i][1], inds_to_try2[i][0]], 'b+', label=r'Data')  # b:
+        plt.axvline(x=v_sys, color='k', label=r'v$_{\text{sys}}$')
+        # plt.title(str(inds_to_try2[i][0]) + ', ' + str(inds_to_try2[i][1]))  # ('no x,y offset')
         plt.legend()
+        plt.xlabel(r'Frequency [GHz]')
+        plt.ylabel(r'Flux Density [Jy/beam]')
         plt.show()
         plt.close()
 
@@ -42,6 +43,45 @@ def compare(data, model, z_ax, inds_to_try2, v_sys, n):
 if __name__ == "__main__":
 
     base = '/Users/jonathancohn/Documents/dyn_mod/'
+
+    import pickle
+
+    import dyn_model as dm
+    params, priors = dm.par_dicts(base + 'param_files/ngc_3258bl_params.txt', q=False)  # get dicts of params and file names from parameter file
+
+    ax_lab = [r'$\log_{10}$(M$_{\odot}$)', 'deg', 'deg', 'pixels', 'pixels', 'km/s', 'km/s', 'km/s', 'pc', 'pc', 'unitless', r'M$_{\odot}$/L$_{\odot}$']
+    pars = ['mbh', 'inc', 'PAdisk', 'xloc', 'yloc', 'vsys', 'sig1', 'sig0', 'mu', 'r0', 'f', 'ml_ratio']
+    for par in range(len(pars)):
+        chains = 'emcee_out/flatchain_' + pars[par] + '_100_1_50.pkl'
+
+        with open(base + chains, 'rb') as pk:
+            u = pickle._Unpickler(pk)
+            u.encoding = 'latin1'
+            chain = u.load()
+
+            if pars[par] == 'mbh':
+                plt.hist(np.log10(chain), 100, color="k", histtype="step")  # axes[i]
+                percs = np.percentile(np.log10(chain), [16., 50., 84.])
+                plt.axvline(np.log10(params[pars[par]]), ls='-', color='k')
+            else:
+                plt.hist(chain, 100, color="k", histtype="step")  # axes[i]
+                percs = np.percentile(chain, [16., 50., 84.])
+                print(params[pars[par]])
+                plt.axvline(params[pars[par]], ls='-', color='k')
+
+            plt.axvline(percs[1], ls='-', color='b')  # axes[i]
+            plt.axvline(percs[0], ls='--', color='b')  # axes[i]
+            plt.axvline(percs[2], ls='--', color='b')  #
+            plt.tick_params('both', labelsize=16)
+            plt.xlabel(ax_lab[par])
+            # plt.title("Dimension {0:d}".format(i))
+            plt.title(pars[par] + ': ' + str(round(percs[1],4)) + ' (+'
+                                     + str(round(percs[2] - percs[1], 2)) + ', -'
+                                     + str(round(percs[1] - percs[0], 2)) + ')', fontsize=16)
+            plt.show()
+    print(oop)
+
+
     # hdu = fits.open(base + 'NGC_1332_newfiles/NGC1332_CO21_C3_MS_bri_20kms.pbcor.fits')
     hdu = fits.open(base + 'ngc_3258/ngc3258_CO21_bri.pbcor.fits')
     data_in = hdu[0].data[0]
