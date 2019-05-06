@@ -455,6 +455,30 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     sigma_grid = np.zeros(shape=R.shape) + sigma  # make sigma (whether already R-shaped or constant) R-shaped
     delta_freq_obs = (f_0 / (1 + zred)) * (sigma_grid / constants.c_kms)  # convert sigma to delta_f
 
+    '''
+    for zi in range(zrange[0], zrange[1]):
+        plt.imshow(input_data[zi], origin='lower', vmax=np.amax(input_data[zi]), vmin=np.amin(input_data[zi]),
+                   cmap='viridis', extent=[np.amin(x_obs), np.amax(x_obs), np.amin(y_obs), np.amax(y_obs)])
+        cbar = plt.colorbar()
+        plt.xlabel(r'x [pc]')
+        plt.ylabel(r'y [pc]')
+        plt.xticks([-300, -200, -100, 0., 100., 200., 300.])
+        plt.yticks([-300, -200, -100, 0., 100., 200., 300.])
+        cbar.set_label(r'Jy/beam', rotation=0, labelpad=20)  # fontsize=20,
+        plt.show()
+
+    plt.imshow(v_los, origin='lower', vmax=np.amax(v_los), vmin=np.amin(v_los), cmap='RdBu_r',  # viridis
+               extent=[np.amin(x_obs), np.amax(x_obs), np.amin(y_obs), np.amax(y_obs)])
+    cbar = plt.colorbar()
+    plt.xlabel(r'x [pc]')
+    plt.ylabel(r'y [pc]')
+    plt.xticks([-300, -200, -100, 0., 100., 200., 300.])
+    plt.yticks([-300, -200, -100, 0., 100., 200., 300.])
+    cbar.set_label(r'km/s', rotation=0, labelpad=10)  # pc  # fontsize=20, 
+    plt.show()
+    print(oop)
+    '''
+
     # WEIGHTS FOR LINE PROFILES: apply weights to gaussian velocity profiles for each subpixel
     weight = subpix_deconvolved  # [Jy/beam Hz]
 
@@ -479,6 +503,21 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     else:
         intrinsic_cube = rebin(cube_model, s)  # intrinsic_cube = block_reduce(cube_model, s, np.mean)
 
+    '''
+    plt.imshow(intrinsic_cube[20] / np.amax(intrinsic_cube), origin='lower', vmax=1., vmin=0., cmap='viridis',
+               extent=[xyrange[0], xyrange[1], xyrange[2], xyrange[3]])
+    cbar = plt.colorbar()
+    #plt.xlabel(r'x [pc]')
+    #plt.ylabel(r'y [pc]')
+    #plt.xticks([-300, -200, -100, 0., 100., 200., 300.])
+    #plt.yticks([-300, -200, -100, 0., 100., 200., 300.])
+    plt.xlabel(r'x [pixels]')
+    plt.ylabel(r'y [pixels]')
+    #cbar.set_label(r'Jy/beam Hz', rotation=0, labelpad=10)  # pc  # fontsize=20,
+    plt.show()
+    print(oop)
+    #'''
+
     # CONVERT INTRINSIC TO OBSERVED (convolve each slice of intrinsic_cube with alma beam --> observed data cube)
     convolved_cube = np.zeros(shape=intrinsic_cube.shape)  # approx ~1e-6 to 3e-6s per pixel
     for z in range(len(z_ax)):
@@ -497,6 +536,27 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         data_4 = rebin(input_data_masked, ds)
         ap_4 = rebin(convolved_cube, ds)
         ell_4 = rebin(ell_mask, ds)
+
+        '''
+        #inds_to_try2 = np.asarray([[10, 10], [10, 15], [15, 10]])  # plot a few line profiles
+        #import test_dyn_funcs as tdf
+        #f_sys = f_0 / (1+zred)
+        #tdf.compare(input_data_masked, convolved_cube, freq_ax / 1e9, inds_to_try2, f_sys / 1e9, 4)  # plot them!
+        #print(oop)
+        #plt.imshow(ell_mask, origin='lower', vmax=1., vmin=0., cmap='viridis')
+        plt.imshow(data_4[20], origin='lower', vmax=np.amax(data_4[20]), vmin=np.amin(data_4[20]),
+                   cmap='viridis', extent=[xyrange[0] / 4., xyrange[1] / 4., xyrange[2] / 4., xyrange[3] / 4.])
+        cbar = plt.colorbar()
+        #plt.xlabel(r'x [pixels]')
+        #plt.ylabel(r'y [pixels]')
+        plt.xlabel(r'x [4x4 binned pixels]')
+        plt.ylabel(r'y [4x4 binned pixels]')
+        # plt.xticks([-300, -200, -100, 0., 100., 200., 300.])
+        # plt.yticks([-300, -200, -100, 0., 100., 200., 300.])
+        #cbar.set_label(r'Jy/beam', rotation=0, labelpad=10)  # pc  # fontsize=20,
+        plt.show()
+        print(oop)
+        #'''
 
         z_ind = 0  # the actual index for the model-data comparison cubes
         for z in range(zrange[0], zrange[1]):  # for each relevant freq slice (ignore slices with only noise)
@@ -729,6 +789,21 @@ if __name__ == "__main__":
                          zrange=[params['zi'], params['zf']])
 
     lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise = mod_ins
+
+    '''
+    plt.imshow(lucy_out / np.amax(lucy_out), origin='lower', vmax=1., vmin=0., cmap='viridis',  # viridis
+               )
+    cbar = plt.colorbar()
+    #plt.xlabel(r'x [pc]')
+    #plt.ylabel(r'y [pc]')
+    plt.xlabel(r'x [pixels]')
+    plt.ylabel(r'y [pixels]')
+    #plt.xticks([-300, -200, -100, 0., 100., 200., 300.])
+    #plt.yticks([-300, -200, -100, 0., 100., 200., 300.])
+    # cbar.set_label(r'', rotation=0, labelpad=10)  # pc  # fontsize=20,  # Jy/beam Hz
+    plt.show()
+    print(oop)
+    #'''
 
     # CREATE MODEL CUBE!
     out = params['outname']
