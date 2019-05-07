@@ -409,6 +409,29 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
         fig.savefig("triangle.png")
         # fig = plt.figure()
         # axes = [plt.subplot(221), plt.subplot(222), plt.subplot(223), plt.subplot(224)]
+        # PLOT CONVERGENCE TEST
+        for i in range(ndim):
+            print("{0:3d}\t{1: 5.4f}\t\t{2:5.4f}\t\t{3:3.2f}".format(
+                ndim,
+                sampler.flatchain[:, i].reshape(-1, sampler.flatchain[:, i].shape[-1]).mean(axis=0)[0],
+                sampler.flatchain[:, i].reshape(-1, sampler.flatchain[:, i].shape[-1]).std(axis=0)[0],
+                gelman_rubin(sampler.flatchain[:, i])[0]))
+
+            xmin = 500
+            chain_length = sampler.flatchain[:, i].shape[1]
+            step_sampling = np.arange(xmin, chain_length, 50)
+            rhat = np.array([gelman_rubin(sampler.flatchain[:, i][:, :steps, :])[0] for steps in step_sampling])
+            plt.plot(step_sampling, rhat, label="{:d}-dim".format(ndim), linewidth=2)
+
+            ax = plt.gca()
+            xmax = ax.get_xlim()[1]
+            plt.hlines(1.1, xmin, xmax, linestyles="--")
+            plt.ylabel("$\hat R$")
+            plt.xlabel("chain length")
+            plt.ylim(1, 2)
+            plt.show()
+
+        # PLOT POSTERIORS
         fig, axes = plt.subplots(4, 4)  # 3 rows, 4 cols of subplots; because there are 12 free params (ahhh now 13)
         row = 0
         col = 0
@@ -447,6 +470,21 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
             plt.show()
 
     return sampler.flatchain
+
+
+def gelman_rubin(chain):
+    # http://joergdietrich.github.io/emcee-convergence.html
+    # http://www.stat.columbia.edu/~gelman/research/published/itsim.pdf
+    ssq = np.var(chain, axis=1, ddof=1)
+    W_avg = np.mean(ssq, axis=0)
+    tb = np.mean(chain, axis=1)
+    tbb = np.mean(tb, axis=0)
+    cm = chain.shape[0]
+    cn = chain.shape[1]
+    B_var = cn / (cm - 1) * np.sum((tbb - tb)**2, axis=0)
+    var_t_sq = W_avg * (cn - 1) / cn + B_var / cn
+    Rhat = np.sqrt(var_t_sq / W_avg)
+    return Rhat
 
 
 if __name__ == "__main__":
