@@ -197,7 +197,7 @@ def lnprob_m(theta, mod_ins=None, params=None, priors=None, param_names=None):
     return pri + (-0.5 * chi2)
 
 
-def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfile=None):
+def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfile=None, save=True):
 
     t0_mc = time.time()
     # BUCKET set q=True once mge working
@@ -205,9 +205,9 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     # AVOID ERROR! --> all q^2 - cos(inc)^2 > 0 --> q^2 > cos(inc)^2 -> cos(inc) < q
     # priors['inc_star'][0] = np.amax([priors['inc_star'][0], np.rad2deg(np.arccos(np.amin(qobs)))])  # BUCKET TURN ON ONCE MGE WORKING
     # params, fixed_pars, files, priors = dg.par_dicts(parfile, q=False)  # get dicts of params and file names from parameter file
-    params, priors = dm.par_dicts(args['parfile'], q=False)  # get dicts of params and file names from parameter file
+    params, priors = dm.par_dicts(parfile, q=False)  # get dicts of params and file names from parameter file
 
-    ndim = len(params)  # number of dimensions = number of free parameters
+    ndim = len(priors)  # number of dimensions = number of free parameters
     direc = '/Users/jonathancohn/Documents/dyn_mod/emcee_out/'
 
     mod_ins = dm.model_prep(data=params['data'], ds=params['ds'], lucy_out=params['lucy'], lucy_b=params['lucy_b'],
@@ -323,7 +323,7 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
 
     p0_guess = [] # initialize parameter vector
     param_names = []  # initialize parameter names vector
-    for key in params:  # for each parameter
+    for key in priors:  # for each parameter
         p0_guess.append(params[key])  # initial guess
         param_names.append(key)  # parameter name
     p0_guess = np.asarray(p0_guess)
@@ -337,6 +337,7 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
             # adjuster = np.random.choice(np.concatenate((np.linspace(-0.2, 0.2, 200), np.linspace(-0.9, -0.2, 10),
             #                                             np.linspace(0.2, 0.9, 10))))
             adjuster = np.random.choice(np.linspace(-0.02, 0.02, 200))
+            print(walkers.shape, w, p, p0_guess.shape, p0_guess[p], adjuster, ndim)
             walkers[w, p] = p0_guess[p] * (1 + adjuster)
             '''
             if param_names[p] == 'mbh':
@@ -394,12 +395,14 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     print("Mean acceptance fraction: {0:.3f}".format(np.mean(sampler.acceptance_fraction)))
     print('want between 0.25 and 0.5')  # should be 0.25 to 0.5
 
-    for i in range(ndim):
-        outfile = direc + 'flatchain_' + param_names[i] + '_' + str(nwalkers) + '_' + str(burn) + '_' + str(steps) + '.pkl'
-        print(outfile)
-        with open(outfile, 'wb') as newfile:  # 'wb' because binary format
-            pickle.dump(sampler.flatchain[:, i], newfile, pickle.HIGHEST_PROTOCOL)
-            print('pickle dumped!')
+    if save:
+        for i in range(ndim):
+            outfile = direc + 'flatchain_' + param_names[i] + '_' + str(nwalkers) + '_' + str(burn) + '_' + str(steps)\
+                      + '.pkl'
+            print(outfile)
+            with open(outfile, 'wb') as newfile:  # 'wb' because binary format
+                pickle.dump(sampler.flatchain[:, i], newfile, pickle.HIGHEST_PROTOCOL)
+                print('pickle dumped!')
 
     # You can make histograms of these samples to get an estimate of the density that you were sampling
     print('time in emcee ' + str(time.time() - t0_mc))
@@ -495,7 +498,7 @@ if __name__ == "__main__":
     args = vars(parser.parse_args())
 
     # do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, parfile=None)
-    flatchain = do_emcee(nwalkers=100, burn=1, steps=50, printer=1, parfile=args['parfile'], all_free=True)
+    flatchain = do_emcee(nwalkers=26, burn=1, steps=10, printer=1, parfile=args['parfile'], all_free=True, save=False)
     # flatchain = do_emcee(nwalkers=100, burn=100, steps=100, printer=1, parfile=args['parfile'])
     print(flatchain.shape)
     print('full time ' + str(time.time() - t0_full))
