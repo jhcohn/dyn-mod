@@ -339,7 +339,6 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
 
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
         vel = np.sqrt((constants.G_pc * mbh / R) + v_c_r(R_ac)**2)
-        print(np.amin(vel), np.amax(vel), np.median(vel))
     elif menc_type == 1:  # elif using a file with v_circ(R) due to stellar mass
         print('v(r)')
         radii = []
@@ -633,8 +632,10 @@ if __name__ == "__main__":
 # switch to using scikit-image (instead of iraf27) --> can do everything in python 3![ ]
 # LONG-TERM: Do reading![ ]
 
+# CONVERGENCE: http://joergdietrich.github.io/emcee-convergence.html
 '''
-# From prospector.py:
+# PARALLELIZATION: from prospector.py:
+
 try:
     from emcee.utils import MPIPool
     pool = MPIPool(debug=False, loadbalance=True)
@@ -647,6 +648,7 @@ except(ImportError, ValueError):
     print('Not using MPI')
 '''
 
+# emcee paper: https://arxiv.org/pdf/1202.3665.pdf
 # https://en.wikipedia.org/wiki/Reduced_chi-squared_statistic
 # https://en.wikipedia.org/wiki/Variance
 # https://en.wikipedia.org/wiki/Standard_deviation
