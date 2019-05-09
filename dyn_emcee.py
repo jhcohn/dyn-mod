@@ -172,7 +172,7 @@ def lnprob(theta, mod_ins=None, priors=None, param_names=None, params=None):
     else:
         chi2 = test_dyn(theta=theta, mod_ins=mod_ins, par_dict=priors, params=params)
 
-    print('lnprob stuff', pri, chi2, pri + (-0.5 * chi2))
+    # print('lnprob stuff', pri, chi2, pri + (-0.5 * chi2))
     return pri + (-0.5 * chi2)
 
 
@@ -197,15 +197,15 @@ def lnprob_m(theta, mod_ins=None, params=None, priors=None, param_names=None):
     return pri + (-0.5 * chi2)
 
 
-def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfile=None, save=True):
+def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfile=None, pool=None, save=True):
 
     t0_mc = time.time()
     # BUCKET set q=True once mge working
     # params, fixed_pars, files, priors, qobs = dg.par_dicts(parfile, q=True)  # get dicts of params and file names from parameter file
     # AVOID ERROR! --> all q^2 - cos(inc)^2 > 0 --> q^2 > cos(inc)^2 -> cos(inc) < q
-    # priors['inc_star'][0] = np.amax([priors['inc_star'][0], np.rad2deg(np.arccos(np.amin(qobs)))])  # BUCKET TURN ON ONCE MGE WORKING
     # params, fixed_pars, files, priors = dg.par_dicts(parfile, q=False)  # get dicts of params and file names from parameter file
-    params, priors = dm.par_dicts(parfile, q=False)  # get dicts of params and file names from parameter file
+    params, priors, qobs = dm.par_dicts(parfile, q=True)  # get dicts of params and file names from parameter file
+    priors['inc'][0] = np.amax([priors['inc'][0], np.rad2deg(np.arccos(np.amin(qobs)))])  # BUCKET TURN ON ONCE MGE WORKING
 
     ndim = len(priors)  # number of dimensions = number of free parameters
     direc = '/Users/jonathancohn/Documents/dyn_mod/emcee_out/'
@@ -252,8 +252,6 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
 
 
     if not all_free:
-        direc = '/Users/jonathancohn/Documents/dyn_mod/emcee_out/'
-
         ndim = 1
         param_names = ['mbh']
         p0_guess = np.asarray([params['mbh']])  # initial guess
@@ -274,7 +272,9 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
         p0 = walkers
 
         # main interface for emcee is EmceeSampler:
-        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob_m, args=[params, mod_ins, priors['mbh'], param_names])
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob_m, args=[params, mod_ins, priors['mbh'], param_names],
+                                        pool=pool)
+        pool.close()
         print('p0', p0)
         print('Burning in!')
         pos, prob, state = sampler.run_mcmc(p0, burn)
@@ -323,9 +323,11 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
 
     p0_guess = [] # initialize parameter vector
     param_names = []  # initialize parameter names vector
+    free_p = {}
     for key in priors:  # for each parameter
         p0_guess.append(params[key])  # initial guess
         param_names.append(key)  # parameter name
+        free_p[key] = params[key]
     p0_guess = np.asarray(p0_guess)
     # print('p0', p0_guess)
 
@@ -357,10 +359,12 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     print('p0', p0)
 
     # main interface for emcee is EmceeSampler:
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=[mod_ins, priors, param_names, params])
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=[mod_ins, priors, param_names, params], pool=pool)
                                                         #(p0_guess, priors=priors, param_names=param_names,
     #                                                      fixed_pars=fixed_pars, files=files))
     # ^don't need theta in lnprob() because of setup of EmceeSampler function, right?
+
+    # pool.close()  # BUCKET REMEMBER THIS
 
     # call lbprob as lnprob(p, means, icov) [where p is the position of a single walker. If no args parameter provided,
     # the calling sequence would be lnprob(p) instead.]
@@ -397,7 +401,7 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
 
     if save:
         for i in range(ndim):
-            outfile = direc + 'flatchain_' + param_names[i] + '_' + str(nwalkers) + '_' + str(burn) + '_' + str(steps)\
+            outfile = direc + str(nwalkers) + '_' + str(burn) + '_' + str(steps) + '_flatchain_' + param_names[i]\
                       + '.pkl'
             print(outfile)
             with open(outfile, 'wb') as newfile:  # 'wb' because binary format
@@ -408,22 +412,30 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     print('time in emcee ' + str(time.time() - t0_mc))
     if printer:
         import corner
-        fig = corner.corner(samples, labels=params.keys(), truths=params.values())  # truths here is just input value
-        fig.savefig("triangle.png")
+        samples = sampler.flatchain.reshape((-1, ndim))  # .chain[:, 50:, :]
+        fig = corner.corner(samples, labels=free_p.keys(), truths=free_p.values())  # truths here is just input value
+        fig.savefig(direc + str(nwalkers) + '_' + str(burn) + '_' + str(steps) + "_triangle.png")
         # fig = plt.figure()
         # axes = [plt.subplot(221), plt.subplot(222), plt.subplot(223), plt.subplot(224)]
         # PLOT CONVERGENCE TEST
         for i in range(ndim):
             print("{0:3d}\t{1: 5.4f}\t\t{2:5.4f}\t\t{3:3.2f}".format(
                 ndim,
-                sampler.flatchain[:, i].reshape(-1, sampler.flatchain[:, i].shape[-1]).mean(axis=0)[0],
-                sampler.flatchain[:, i].reshape(-1, sampler.flatchain[:, i].shape[-1]).std(axis=0)[0],
-                gelman_rubin(sampler.flatchain[:, i])[0]))
+                sampler.chain[:, i].reshape(-1, sampler.chain[:, i].shape[-1]).mean(axis=0)[0],
+                sampler.chain[:, i].reshape(-1, sampler.chain[:, i].shape[-1]).std(axis=0)[0],
+                gelman_rubin(sampler.chain[:, :, i], 1)))  # gelman_rubin(sampler.chain[:, :, i], 1)[0]))
+            # sampler.chain has shape (nwalkers, niters, ndim)
 
             xmin = 500
-            chain_length = sampler.flatchain[:, i].shape[1]
+            chain_length = sampler.chain[:, :, i].shape[1]
             step_sampling = np.arange(xmin, chain_length, 50)
-            rhat = np.array([gelman_rubin(sampler.flatchain[:, i][:, :steps, :])[0] for steps in step_sampling])
+            rhat = np.array([gelman_rubin(sampler.chain[:, :, i][:, :steps, :], 1)[0] for steps in step_sampling])
+            # print(np.amax(rhat), np.amin(rhat))
+            # if not numpy.isnan(rhat).any():
+            #     plt.plot(step_sampling, rhat)
+            #     plt.show()
+
+            '''  #
             plt.plot(step_sampling, rhat, label="{:d}-dim".format(ndim), linewidth=2)
 
             ax = plt.gca()
@@ -433,17 +445,18 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
             plt.xlabel("chain length")
             plt.ylim(1, 2)
             plt.show()
+            # '''  #
 
         # PLOT POSTERIORS
-        fig, axes = plt.subplots(4, 4)  # 3 rows, 4 cols of subplots; because there are 12 free params (ahhh now 13)
+        fig, axes = plt.subplots(3, 4)  # 3 rows, 4 cols of subplots; because there are 12 free params
         row = 0
         col = 0
         for i in range(ndim):
-            if i == 4 or i == 8 or i == 12:
+            if i == 4 or i == 8:  # or i == 12:
                 row += 1
                 col = 0
 
-            if params.keys()[i] == 'mbh':
+            if free_p.keys()[i] == 'mbh':
                 axes[row, col].hist(np.log10(sampler.flatchain[:, i]), 100, color="k", histtype="step")  # axes[i]
                 percs = np.percentile(np.log10(sampler.flatchain[:, i]), [16., 50., 84.])
                 threepercs = np.percentile(np.log10(sampler.flatchain[:, i]), [0.15, 50., 99.85])  # 3sigma
@@ -458,16 +471,16 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
             axes[row, col].axvline(percs[2], ls='--')  #
             axes[row, col].tick_params('both', labelsize=8)
             # plt.title("Dimension {0:d}".format(i))
-            axes[row, col].set_title(params.keys()[i] + ': ' + str(round(percs[1],4)) + ' (+'
-                                     + str(round(percs[2] - percs[1], 2)) + ', -'
-                                     + str(round(percs[1] - percs[0], 2)) + ')', fontsize=8)
+            axes[row, col].set_title(free_p.keys()[i] + ': ' + str(round(percs[1],4)) + ' (+'
+                                     + str(round(percs[2] - percs[1], 4)) + ', -'
+                                     + str(round(percs[1] - percs[0], 4)) + ')', fontsize=8)
             col += 1
 
         plt.show()
         plt.close()
         for i in range(ndim):
             plt.plot(sampler.flatchain[:, i])
-            plt.title(params.keys()[i])
+            plt.title(free_p.keys()[i])
             plt.xlabel(r'Iteration')
             plt.ylabel('Value')
             plt.show()
@@ -475,10 +488,10 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     return sampler.flatchain
 
 
-def gelman_rubin(chain):
+def gelman_rubin(chain, ndim):
     # http://joergdietrich.github.io/emcee-convergence.html
     # http://www.stat.columbia.edu/~gelman/research/published/itsim.pdf
-    ssq = np.var(chain, axis=1, ddof=1)
+    ssq = np.var(chain, axis=1, ddof=ndim)
     W_avg = np.mean(ssq, axis=0)
     tb = np.mean(chain, axis=1)
     tbb = np.mean(tb, axis=0)
@@ -487,6 +500,7 @@ def gelman_rubin(chain):
     B_var = cn / (cm - 1) * np.sum((tbb - tb)**2, axis=0)
     var_t_sq = W_avg * (cn - 1) / cn + B_var / cn
     Rhat = np.sqrt(var_t_sq / W_avg)
+    print(Rhat.shape, 'Rhat shape')
     return Rhat
 
 
@@ -497,8 +511,36 @@ if __name__ == "__main__":
     parser.add_argument('--parfile')
     args = vars(parser.parse_args())
 
+    '''  #
+    import emcee
+    from emcee.utils import MPIPool
+
+    pool = MPIPool()
+    if not pool.is_master():
+        print('a')
+        pool.wait()
+        sys.exit(0)
+    print('hi')
+
+    try:
+        print('b')
+        from emcee.utils import MPIPool
+
+        pool = MPIPool(debug=False, loadbalance=True)
+        print('pool')
+        if not pool.is_master():
+            # Wait for instructions from the master process.
+            print('c')
+            pool.wait()
+            sys.exit(0)
+    except(ImportError, ValueError):
+        pool = None
+        print('Not using MPI')
+    # '''  #
+
     # do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, parfile=None)
-    flatchain = do_emcee(nwalkers=26, burn=1, steps=10, printer=1, parfile=args['parfile'], all_free=True, save=False)
+    flatchain = do_emcee(nwalkers=150, burn=1, steps=100, printer=1, parfile=args['parfile'], all_free=True, pool=None,
+                         save=True)
     # flatchain = do_emcee(nwalkers=100, burn=100, steps=100, printer=1, parfile=args['parfile'])
     print(flatchain.shape)
     print('full time ' + str(time.time() - t0_full))
