@@ -445,10 +445,10 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         n_pts = len(masked_pix) * len(z_ax)  # (zrange[1] - zrange[0])  # total number of pixels being compared
         # print(n_pts, len(masked_pix))  # rfit=1.2 --> 6440 (140/slice); 6716 (146/slice) for fully inclusive ellipse
         n_params = 12  # number of free parameters
-        print(r'Reduced chi^2=', chi_sq / (n_pts - n_params))  # 4284.80414208  # 12300204.6088
         print('total model constructed in {0} seconds'.format(time.time() - t_begin))  # ~213s
 
         if reduced:
+            print(r'Reduced chi^2=', chi_sq / (n_pts - n_params))  # 4284.80414208  # 12300204.6088
             chi_sq /= (n_pts - n_params)  # convert to reduced chi^2; else just return full chi^2
         if n_pts == 0.:
             print('n_pts = ' + str(n_pts))
@@ -553,6 +553,7 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=
     # DECONVOLVE FLUXES WITH BEAM PSF
     if not Path(lucy_out).exists():  # to use iraf, must "source activate iraf27" on command line
         t_pyraf = time.time()
+        '''  #
         import pyraf
         from pyraf import iraf
         from iraf import stsdas, analysis, restore
@@ -560,6 +561,22 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=
         print('lucy process done in ' + str(time.time() - t_pyraf) + 's')  # ~10.6s
         if lucy_out is None:  # lucy_output should be defined, but just in case:
             lucy_out = lucy_o[:-3]  # don't include "[0]" on the file name ("[0]" is required for lucy process)
+        # '''  #
+        from skimage import restoration  # need to be in "three" environment (source activate three == tres)
+        hduin = fits.open(lucy_in)
+        l_in = hduin[0].data
+        hdub = fits.open(lucy_b)
+        l_b = hdub[0].data
+        hduin.close()
+        hdub.close()
+        # https://github.com/scikit-image/scikit-image/issues/2551 (it was returning nans)
+        # add to skimage/restoration/deconvolution.py (before line 389): relative_blur[np.isnan(relative_blur)] = 0
+        l_o = restoration.richardson_lucy(l_in, l_b, lucy_it, clip=False)
+        print('lucy process done in ' + str(time.time() - t_pyraf) + 's')  # ~1s
+
+        hdu1 = fits.PrimaryHDU(l_o)
+        hdul1 = fits.HDUList([hdu1])
+        hdul1.writeto(lucy_out)  # write out to lucy_out file
 
     hdu = fits.open(lucy_out)
     lucy_out = hdu[0].data
@@ -604,6 +621,8 @@ if __name__ == "__main__":
 
     lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise = mod_ins
 
+    print(oop)
+
     # CREATE MODEL CUBE!
     out = params['outname']
     chi2 = model_grid(resolution=params['resolution'], s=params['s'], x_loc=params['xloc'], y_loc=params['yloc'],
@@ -622,8 +641,22 @@ if __name__ == "__main__":
 # TO DO:
 # MAIN. Implement MGE as Jonelle requested[X], explore number of pixels in ellipse issue[ ], start playing with UGC[ ]
 # update dyn_emcee to use dyn_model instead of dyn_general format![X]
-# read up on convergence, implement convergence checks![ ]
-# Do Parallelization![ ]
+# read up on convergence, implement convergence checks![?]
+# Do Parallelization![ ] --> install mpi4py first!!!
+## pip install mpi4py --> error: "error: Cannot compile MPI programs. Check your configuration!!!"
+###https://stackoverflow.com/questions/28440834/error-when-installing-mpi4py --> brew install mpich
+####sudo find / -name mpicc [returned two lines]: /usr/local/bin/mpicc ; /usr/local/Cellar/mpich/3.3/bin/mpicc
+#####pip install mpi4py --> worked!
+######NOW import mpi4py works, but from mpi4py import MPI returns an error:
+#
+#  Traceback (most recent call last):
+#  File "<stdin>", line 1, in <module>
+# ImportError: dlopen(/Users/jonathancohn/anaconda3/envs/iraf27/lib/python2.7/site-packages/mpi4py/MPI.so, 2): Symbol not found: ___addtf3
+#  Referenced from: /usr/local/opt/gcc/lib/gcc/8/libquadmath.0.dylib
+#  Expected in: /usr/lib/libSystem.B.dylib
+# in /usr/local/opt/gcc/lib/gcc/8/libquadmath.0.dylib
+#
+#######Tried uninstalling/reinstalling, no success.
 # add model_prep to dyn_emcee[X]
 # Tighten all the priors![X]
 # Later (after done matching with Ben): prevent mu from going negative![ ]
