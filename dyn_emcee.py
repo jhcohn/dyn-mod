@@ -67,7 +67,7 @@ def test_dyn(theta, par_dict=None, mod_ins=None, params=None):
     Get the chi squared of the model!
 
     :param theta: the parameter(s) being varied --> in this case, all potentially free params
-    :param params: the parameter(s) being varied AND
+    :param par_dict: the parameter(s) being varied
     :param mod_ins: constant input model things
     :param params: all other model parameters (held fixed)
 
@@ -79,18 +79,18 @@ def test_dyn(theta, par_dict=None, mod_ins=None, params=None):
 
     chi2 = dm.model_grid(
         # FREE PARAMETERS
-        x_loc=theta[par_dict.keys().index('xloc')],
-        y_loc=theta[par_dict.keys().index('yloc')],
-        mbh=theta[par_dict.keys().index('mbh')],
-        inc=np.deg2rad(theta[par_dict.keys().index('inc')]),
-        vsys=theta[par_dict.keys().index('vsys')],
-        theta=np.deg2rad(theta[par_dict.keys().index('PAdisk')]),
-        ml_ratio=theta[par_dict.keys().index('ml_ratio')],
-        sig_params=[theta[par_dict.keys().index('sig0')],
-                    theta[par_dict.keys().index('r0')],
-                    theta[par_dict.keys().index('mu')],
-                    theta[par_dict.keys().index('sig1')]],
-        f_w=theta[par_dict.keys().index('f')],
+        x_loc=theta[par_dict.index('xloc')],  # par_dict.keys().index('xloc') (and etc beneath)
+        y_loc=theta[par_dict.index('yloc')],
+        mbh=theta[par_dict.index('mbh')],
+        inc=np.deg2rad(theta[par_dict.index('inc')]),
+        vsys=theta[par_dict.index('vsys')],
+        theta=np.deg2rad(theta[par_dict.index('PAdisk')]),
+        ml_ratio=theta[par_dict.index('ml_ratio')],
+        sig_params=[theta[par_dict.index('sig0')],
+                    theta[par_dict.index('r0')],
+                    theta[par_dict.index('mu')],
+                    theta[par_dict.index('sig1')]],
+        f_w=theta[par_dict.index('f')],
         # FIXED PARAMETERS
         resolution=params['resolution'],
         s=params['s'],
@@ -170,7 +170,7 @@ def lnprob(theta, mod_ins=None, priors=None, param_names=None, params=None):
     if pri == -np.inf:
         chi2 = 1.  # doesn't matter, because -inf + (-0.5 * 1) = -inf
     else:
-        chi2 = test_dyn(theta=theta, mod_ins=mod_ins, par_dict=priors, params=params)
+        chi2 = test_dyn(theta=theta, mod_ins=mod_ins, par_dict=param_names, params=params)
 
     # print('lnprob stuff', pri, chi2, pri + (-0.5 * chi2))
     return pri + (-0.5 * chi2)
@@ -205,7 +205,17 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     # AVOID ERROR! --> all q^2 - cos(inc)^2 > 0 --> q^2 > cos(inc)^2 -> cos(inc) < q
     # params, fixed_pars, files, priors = dg.par_dicts(parfile, q=False)  # get dicts of params and file names from parameter file
     params, priors, qobs = dm.par_dicts(parfile, q=True)  # get dicts of params and file names from parameter file
+    print(priors['inc'])
+    print(qobs)
+    print(np.amax(np.rad2deg(np.arccos(np.sqrt((400*qobs**2 - 1.)/399.)))))
+    qint_pri = np.amax(np.rad2deg(np.arccos(np.sqrt((400*qobs**2 - 1.)/399.))))
     priors['inc'][0] = np.amax([priors['inc'][0], np.rad2deg(np.arccos(np.amin(qobs)))])  # BUCKET TURN ON ONCE MGE WORKING
+    priors['inc'][0] = np.amax([priors['inc'][0], qint_pri])
+    print(priors['inc'])
+    # np.sqrt(qobs**2 - np.cos(inc)**2)/np.sin(inc) > 0.05 --> sin(inc) < sqrt(qobs**2 - np.cos(inc)**2)/.05
+    # --> sin^2(inc) < qobs^2/0.05 - cos^2(inc)/0.05 --> sin^2(inc) + cos^2(inc)/0.05^2 < qobs^2/0.05^2
+    # NOTE: sin^2(x) + C*cos^2(x) = 0.5*(C*cos(2x) + C + 1 - cos(2x)) = 0.5(cos(2x)(C-1) + (C+1))
+    # --> 0.5(19*cos(2inc) + 21) < 20*qobs^2 --> 399cos^2(inc)+1 < 400*q^2 --> inc < arccos(sqrt[(400q^2 - 1)/399])
 
     ndim = len(priors)  # number of dimensions = number of free parameters
     direc = '/Users/jonathancohn/Documents/dyn_mod/emcee_out/'
@@ -247,9 +257,6 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
                        xyerr=[params['xerr0'], params['xerr1'], params['yerr0'], params['yerr1']],
                        reduced=True, freq_ax=freq_ax, f_0=f_0, fstep=fstep)
     # '''  #
-
-
-
 
     if not all_free:
         ndim = 1
@@ -339,7 +346,7 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
             # adjuster = np.random.choice(np.concatenate((np.linspace(-0.2, 0.2, 200), np.linspace(-0.9, -0.2, 10),
             #                                             np.linspace(0.2, 0.9, 10))))
             adjuster = np.random.choice(np.linspace(-0.02, 0.02, 200))
-            print(walkers.shape, w, p, p0_guess.shape, p0_guess[p], adjuster, ndim)
+            # print(walkers.shape, w, p, p0_guess.shape, p0_guess[p], adjuster, ndim)
             walkers[w, p] = p0_guess[p] * (1 + adjuster)
             '''
             if param_names[p] == 'mbh':
@@ -357,6 +364,10 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     p0 = walkers
     print(param_names)
     print('p0', p0)
+    print(param_names.index('xloc'))
+    print(p0[param_names.index('mbh')])
+    print(p0[:, param_names.index('mbh')])
+    # print(oop)
 
     # main interface for emcee is EmceeSampler:
     sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=[mod_ins, priors, param_names, params], pool=pool)
@@ -400,6 +411,14 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     print('want between 0.25 and 0.5')  # should be 0.25 to 0.5
 
     if save:
+        out_chain = direc + str(nwalkers) + '_' + str(burn) + '_' + str(steps) + '_fullchain.pkl'
+        with open(out_chain, 'wb') as newfile:  # 'wb' because binary format
+            pickle.dump(sampler.chain, newfile, pickle.HIGHEST_PROTOCOL)
+            print('full chain pickle dumped!')
+        out_flatchain = direc + str(nwalkers) + '_' + str(burn) + '_' + str(steps) + '_full_flatchain.pkl'
+        with open(out_flatchain, 'wb') as newfile:  # 'wb' because binary format
+            pickle.dump(sampler.chain, newfile, pickle.HIGHEST_PROTOCOL)
+            print('flatchain pickle dumped!')
         for i in range(ndim):
             outfile = direc + str(nwalkers) + '_' + str(burn) + '_' + str(steps) + '_flatchain_' + param_names[i]\
                       + '.pkl'
@@ -499,17 +518,25 @@ def gelman_rubin(chain, ndim):
     cn = chain.shape[1]
     B_var = cn / (cm - 1) * np.sum((tbb - tb)**2, axis=0)
     var_t_sq = W_avg * (cn - 1) / cn + B_var / cn
-    Rhat = np.sqrt(var_t_sq / W_avg)
-    print(Rhat.shape, 'Rhat shape')
+    Rhat = np.sqrt(var_t_sq / W_avg)  # just a number (at least, if ndim=1, i.e. if chain=sampler.chain[:,:,i])
     return Rhat
 
 
 if __name__ == "__main__":
-    # MAKE SURE I HAVE ACTIVATED THE iraf27 ENVIRONMENT!!!
+    # MAKE SURE I HAVE ACTIVATED THE three ENVIRONMENT!!!
     t0_full = time.time()
     parser = argparse.ArgumentParser(argument_default=argparse.SUPPRESS)
     parser.add_argument('--parfile')
     args = vars(parser.parse_args())
+
+    #from multiprocessing import Pool
+    #
+    #with Pool() as pool:
+    #    flatchain = do_emcee(nwalkers=26, burn=1, steps=1, printer=1, parfile=args['parfile'], all_free=True,
+    #                         pool=pool, save=True)
+    #    print("Multiprocessing took {0:.1f} seconds".format(multi_time))
+    #    print("{0:.1f} times faster than serial".format(serial_time / multi_time))
+
 
     '''  #
     import emcee
@@ -539,7 +566,7 @@ if __name__ == "__main__":
     # '''  #
 
     # do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, parfile=None)
-    flatchain = do_emcee(nwalkers=150, burn=1, steps=100, printer=1, parfile=args['parfile'], all_free=True, pool=None,
+    flatchain = do_emcee(nwalkers=26, burn=1, steps=1, printer=1, parfile=args['parfile'], all_free=True, pool=None,
                          save=True)
     # flatchain = do_emcee(nwalkers=100, burn=100, steps=100, printer=1, parfile=args['parfile'])
     print(flatchain.shape)

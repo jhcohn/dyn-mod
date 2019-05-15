@@ -571,7 +571,7 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=
         hdub.close()
         # https://github.com/scikit-image/scikit-image/issues/2551 (it was returning nans)
         # add to skimage/restoration/deconvolution.py (before line 389): relative_blur[np.isnan(relative_blur)] = 0
-        l_o = restoration.richardson_lucy(l_in, l_b, lucy_it, clip=False)
+        l_o = restoration.richardson_lucy(l_in, l_b, lucy_it, clip=False)  # need clip=False
         print('lucy process done in ' + str(time.time() - t_pyraf) + 's')  # ~1s
 
         hdu1 = fits.PrimaryHDU(l_o)
@@ -621,8 +621,6 @@ if __name__ == "__main__":
 
     lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise = mod_ins
 
-    print(oop)
-
     # CREATE MODEL CUBE!
     out = params['outname']
     chi2 = model_grid(resolution=params['resolution'], s=params['s'], x_loc=params['xloc'], y_loc=params['yloc'],
@@ -660,7 +658,7 @@ if __name__ == "__main__":
 # add model_prep to dyn_emcee[X]
 # Tighten all the priors![X]
 # Later (after done matching with Ben): prevent mu from going negative![ ]
-# play with softening parameter?[ ]
+# play with softening parameter?[X] --> don't worry about it anymore!
 # maybe put noise calc in model_prep function?[ ]
 # switch to using scikit-image (instead of iraf27) --> can do everything in python 3![ ]
 # LONG-TERM: Do reading![ ]
@@ -685,3 +683,68 @@ except(ImportError, ValueError):
 # https://en.wikipedia.org/wiki/Reduced_chi-squared_statistic
 # https://en.wikipedia.org/wiki/Variance
 # https://en.wikipedia.org/wiki/Standard_deviation
+
+'''
+(three) Jonathans-MacBook-Pro:~ jonathancohn$ brew install wget
+Warning: wget 1.20.3 is already installed, it's just not linked
+You can use `brew link wget` to link this version.
+(three) Jonathans-MacBook-Pro:~ jonathancohn$ brew link wget
+Linking /usr/local/Cellar/wget/1.20.3... 
+Error: Could not symlink share/locale/be/LC_MESSAGES/wget.mo
+/usr/local/share/locale/be/LC_MESSAGES is not writable.
+
+Finally this worked: https://github.com/Homebrew/legacy-homebrew/issues/13276
+(three) Jonathans-MacBook-Pro:~ jonathancohn$ sudo chown -R $USER:admin /usr/local/share
+(three) Jonathans-MacBook-Pro:~ jonathancohn$ brew link wget
+Linking /usr/local/Cellar/wget/1.20.3... 42 symlinks created
+(Went ahead and ran brew reinstall wget [not sure if doing so was necessary tho])
+wget --version now returns something sensible!
+
+Followed instructions here: https://mpi4py.readthedocs.io/en/stable/install.html for wget (except downloaded manually,
+because link listed with wget didn't work --> https://bitbucket.org/mpi4py/mpi4py/downloads/)
+Once downloaded manually, I did the tar step and so on as shown in the link. The mpiexec test worked, but can only use
+n=2. Using n=3 or more resulted in the following error:
+    There are not enough slots available in the system to satisfy the 3 slots
+    that were requested by the application:
+        python
+
+    Either request fewer slots for your application, or make more slots available
+    for use.
+Also got new error now when from emcee.utils import MPIPool() ; pool = MPIPool():
+  File "<stdin>", line 1, in <module>
+  File "/Users/jonathancohn/anaconda3/envs/three/lib/python3.6/site-packages/emcee/mpi_pool.py", line 66, in __init__
+    raise ValueError("Tried to create an MPI pool, but there "
+ValueError: Tried to create an MPI pool, but there was only one MPI process available. Need at least two.
+
+From here: https://emcee.readthedocs.io/en/stable/_modules/emcee/mpi_pool.html --> self.comm.Get_size() = 1 -->
+self.size = 0 --> returns the above "Tried to create..." error
+
+Hmm doing this: https://superuser.com/questions/1101311/how-many-cores-does-my-mac-have -->
+Jonathans-MacBook-Pro:~ jonathancohn$ sysctl hw.physicalcpu hw.logicalcpu
+hw.physicalcpu: 2
+hw.logicalcpu: 4
+
+OKAY, bc emcee notes some issues with MPIPool that may be fixed in their newest version:
+I have done: conda uninstall emcee
+And followed github isntructions here: https://emcee.readthedocs.io/en/latest/user/install/ to install latest version
+# Note: "conda install -c conda-forge emcee" still installed the old version (2.2.1)
+# Github installed new version! (3.0rc)
+Then, installed schwimmbad using: conda install -c conda-forge schwimmbad
+# (see here: https://schwimmbad.readthedocs.io/en/latest/install.html)
+
+Made emcee_test.py using multiprocessing (see https://emcee.readthedocs.io/en/latest/tutorials/parallel/)
+# It works!
+
+In the meantime I broke something... had to reinstall astropy (also had to reinstall numpy earlier)
+# also matplotlib & scipy
+# Now emcee appears to be running again!
+# However...doesn't appear to be faster. Each model is taking ~3.5+ seconds to construct
+# multiprocessing --> time in emcee 382.5468270778656
+# WITHOUT multiprocessing --> time in emcee 197.06733584403992
+# Note: https://emcee.readthedocs.io/en/latest/tutorials/parallel/ suggests overhead in parallelization is to blame for
+# lack of 4x better computing time (note: printing the cpu count thing shows I have 4 CPUs too)
+
+DO HPRC account request!
+
+Prioritize parallelization on cluster
+'''
