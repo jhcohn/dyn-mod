@@ -197,7 +197,7 @@ def lnprob_m(theta, mod_ins=None, params=None, priors=None, param_names=None):
     return pri + (-0.5 * chi2)
 
 
-def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfile=None, pool=None, save=True):
+def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfile=None, pool=None, save=True, nthr=4):
 
     t0_mc = time.time()
     # BUCKET set q=True once mge working
@@ -280,7 +280,7 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
 
         # main interface for emcee is EmceeSampler:
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob_m, args=[params, mod_ins, priors['mbh'], param_names],
-                                        pool=pool)
+                                        pool=pool, nthreads=nthr)
         pool.close()
         print('p0', p0)
         print('Burning in!')
@@ -342,12 +342,17 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     walkers = np.zeros(shape=(nwalkers, len(p0_guess)))  # initialize walkers; there are nwalkers for each parameter
     for w in range(nwalkers):  # for each walker
         for p in range(len(p0_guess)):  # for each parameter
+            if param_names[p] == 'mbh':  # BUCKET I think this worked
+                print('mbh here', p0_guess[p])
+                adjuster = np.random.choice(np.logspace(-1., 1., 200.))
+                walkers[w, p] = p0_guess[p] * adjuster
             # select random number, within 20% of param value (except for a few possible large steps)
             # adjuster = np.random.choice(np.concatenate((np.linspace(-0.2, 0.2, 200), np.linspace(-0.9, -0.2, 10),
             #                                             np.linspace(0.2, 0.9, 10))))
-            adjuster = np.random.choice(np.linspace(-0.02, 0.02, 200))
-            # print(walkers.shape, w, p, p0_guess.shape, p0_guess[p], adjuster, ndim)
-            walkers[w, p] = p0_guess[p] * (1 + adjuster)
+            else:
+                adjuster = np.random.choice(np.linspace(-0.02, 0.02, 200))
+                # print(walkers.shape, w, p, p0_guess.shape, p0_guess[p], adjuster, ndim)
+                walkers[w, p] = p0_guess[p] * (1 + adjuster)
             '''
             if param_names[p] == 'mbh':
                 stepper_full[w, p] = np.random.choice(np.logspace(-1., 1., 200))
@@ -567,7 +572,7 @@ if __name__ == "__main__":
 
     # do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, parfile=None)
     flatchain = do_emcee(nwalkers=26, burn=1, steps=1, printer=1, parfile=args['parfile'], all_free=True, pool=None,
-                         save=True)
+                         save=True, nthr=8)  # 250 100 100
     # flatchain = do_emcee(nwalkers=100, burn=100, steps=100, printer=1, parfile=args['parfile'])
     print(flatchain.shape)
     print('full time ' + str(time.time() - t0_full))
