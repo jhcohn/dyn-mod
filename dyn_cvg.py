@@ -415,30 +415,6 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
         else:
             pass
 
-    outfile = direc + str(nwalkers) + '_' + str(burn) + '_' + str(steps) + '_fullchain.npy'
-    nsamples = steps  # BUCKET WHAT IS
-    for i, result in enumerate(sampler.sample(pos, prob, state, iterations=nsamples)):
-        isteps = i + 1
-        # if isteps % 10 == 0:
-            # logger.info("%i steps ..." % isteps)
-        chain = sampler.chain
-        if (i == 0) or (isteps % 10 == 0):  # isteps % nchunk
-            samples = np.ndarray.flatten(chain)  # chain.reshape(-1, len(params), order='F')
-            # self.samples = Samples(samples.T, names=self.params)
-            if outfile is not None:
-                print("Writing %i steps to %s..." % (steps, outfile))
-                # logger.info("Writing %i steps to %s..." % (steps, outfile))
-                write_samples(samples, outfile)
-
-    chain = sampler.chain
-    samples = np.ndarray.flatten(chain)  # chain.reshape(-1, len(params), order='F')
-    # self.samples = Samples(samples.T, names=self.params)
-    if outfile is not None:
-        write_samples(samples, outfile)
-
-    sampler.run_mcmc(pos, steps)
-    print("printing...")
-
     '''  #
     # look at how well things are burned in: http://dfm.io/emcee/current/user/line/#maximum-likelihood-estimation
     # sampler.chain.shape = (nwalkers, steps, ndim)  # gives parameter values for each walker at each step in chaim
@@ -457,6 +433,7 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     print("Mean acceptance fraction: {0:.3f}".format(np.mean(sampler.acceptance_fraction)))
     print('want between 0.25 and 0.5')  # should be 0.25 to 0.5
 
+    print('saving...')
     if save:
         out_chain = direc + str(nwalkers) + '_' + str(burn) + '_' + str(steps) + '_fullchain.pkl'
         with open(out_chain, 'wb') as newfile:  # 'wb' because binary format
