@@ -199,12 +199,21 @@ def ellipse_fitting(cube, rfit, x0_sub, y0_sub, res, pa_disk, q):
     # Define the Fitting Ellipse
     a = rfit / res  # size of semimajor axis, in pixels
     b = (rfit / res) * q  # size of semiminor axis, in pixels
+    print(a, b, 'axis ratios')
 
     ell = Ellipse2D(amplitude=1., x_0=x0_sub, y_0=y0_sub, a=a, b=b, theta=pa_disk)  # create elliptical region
     y_e, x_e = np.mgrid[0:len(cube[0]), 0:len(cube[0][0])]  # make sure this grid is the size of the downsampled cube!
 
     # Select the regions of the ellipse we want to fit
+    from matplotlib.patches import Ellipse
+    plt.figure()
+    ax = plt.gca()
+    ellipse = Ellipse(xy=(x0_sub, y0_sub), width=2*a, height=2*b, angle=pa_disk*180./np.pi, edgecolor='r', fc='None', lw=2)
+    ax.add_patch(ellipse)
     ellipse_mask = ell(x_e, y_e)
+    plt.imshow(ellipse_mask, origin='lower')
+    plt.colorbar()
+    plt.show()
 
     return ellipse_mask
 
@@ -213,7 +222,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
                theta=np.deg2rad(200.), input_data=None, lucy_out=None, out_name=None, beam=None, q_ell=1., theta_ell=0.,
                bl=False, enclosed_mass=None, menc_type=False, ml_ratio=1., sig_type='flat', sig_params=None, f_w=1.,
                noise=None, rfit=1., ds=None, chi2=False, zrange=None, xyrange=None, reduced=False, freq_ax=None, f_0=0.,
-               fstep=0., opt=True):
+               fstep=0., opt=True, quiet=False):
     """
     Build grid for dynamical modeling!
 
@@ -251,6 +260,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     :param fstep: frequency step in the frequency axis [Hz]
     :param bl: lucy weight map unit indicator (bl=False or 0 --> Jy/beam * Hz; bl=True or 1 --> Jy/beam km/s)
     :param opt: frequency axis velocity convention; if opt=True, optical velocity; if opt=False, radio velocity
+    :param quiet: suppress printing out stuff!
 
     :return: convolved model cube (if chi2 is False); chi2 (if chi2 is True)
     """
@@ -260,7 +270,8 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     constants = Constants()
 
     # SUBPIXELS (reshape deconvolved flux map [lucy_out] sxs subpixels, so subpix has flux=(real pixel flux)/s**2)
-    print('start')
+    if not quiet:
+        print('start')
     if s == 1:  # subpix_deconvolved is identical to lucy_out, with sxs subpixels per pixel & total flux conserved
         subpix_deconvolved = lucy_out
     else:
@@ -330,7 +341,8 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
 
     # CALCULATE KEPLERIAN VELOCITY DUE TO ENCLOSED STELLAR MASS
     if menc_type == 0:  # if calculating v(R) due to stars directly from MGE parameters
-        print('mge')
+        if not quiet:
+            print('mge')
         test_rad = np.linspace(np.amin(R_ac), np.amax(R_ac), 100)
 
         comp, surf_pots, sigma_pots, qobs = mvm.load_mge(enclosed_mass)  # load the MGE parameters
@@ -340,7 +352,8 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
         vel = np.sqrt((constants.G_pc * mbh / R) + v_c_r(R_ac)**2)
     elif menc_type == 1:  # elif using a file with v_circ(R) due to stellar mass
-        print('v(r)')
+        if not quiet:
+            print('v(r)')
         radii = []
         v_circ = []
         with open(enclosed_mass) as em:  # note: current file has units v_circ^2/(M/L) --> v_circ = np.sqrt(col * (M/L))
@@ -353,7 +366,8 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
         vel = np.sqrt(v_c_r(R) * ml_ratio + (constants.G_pc * mbh / R))  # velocities sum in quadrature
     elif menc_type == 2:  # elif using a file directly with stellar mass as a function of R
-        print('M(R)')
+        if not quiet:
+            print('M(R)')
         radii = []
         m_stellar = []
         with open(enclosed_mass) as em:
@@ -443,9 +457,11 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         all_pix = np.ndarray.flatten(ell_4)  # all fitted pixels in each slice [len = 625 (yep)] [525 masked, 100 not]
         masked_pix = all_pix[all_pix != 0]  # all_pix, but this time only the pixels that are actually inside ellipse
         n_pts = len(masked_pix) * len(z_ax)  # (zrange[1] - zrange[0])  # total number of pixels being compared
-        # print(n_pts, len(masked_pix))  # rfit=1.2 --> 6440 (140/slice); 6716 (146/slice) for fully inclusive ellipse
+        print(n_pts, len(masked_pix))  # rfit=1.2 --> 6440 (140/slice); 6716 (146/slice) for fully inclusive ellipse
+        # print(oop)  # rfit=1.05 --> 4968 (108/slice)  # rfit=1.136 --> 5704 (124/slice) (see 16 April 2018 meeting)
         n_params = 12  # number of free parameters
-        print('total model constructed in {0} seconds'.format(time.time() - t_begin))  # ~213s
+        if not quiet:
+            print('total model constructed in {0} seconds'.format(time.time() - t_begin))  # ~213s
 
         if reduced:
             print(r'Reduced chi^2=', chi_sq / (n_pts - n_params))  # 4284.80414208  # 12300204.6088
@@ -455,7 +471,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
             chi_sq = np.inf
         return chi_sq  # / (n_pts - n_params)
 
-    else:  #if outputting actual cube itself
+    else:  # if outputting actual cube itself
         inds_to_try2 = np.asarray([[10, 10], [10, 15], [15, 10]])  # plot a few line profiles
         import test_dyn_funcs as tdf
         f_sys = f_0 / (1+zred)
@@ -732,6 +748,45 @@ And followed github isntructions here: https://emcee.readthedocs.io/en/latest/us
 Then, installed schwimmbad using: conda install -c conda-forge schwimmbad
 # (see here: https://schwimmbad.readthedocs.io/en/latest/install.html)
 
+
+Note: MPI mac links I was using:
+https://stackoverflow.com/questions/28440834/error-when-installing-mpi4py/39886686
+https://webcache.googleusercontent.com/search?q=cache:ACFACM98t7sJ:https://stackoverflow.com/questions/49621061/python-fails-to-import-mpi4py%3Frq%3D1+&cd=3&hl=en&ct=clnk&gl=us
+https://mpi4py.readthedocs.io/en/stable/install.html
+https://stackoverflow.com/questions/42703861/how-to-use-mpi-on-mac-os-x
+
+Gelman-Rubin:
+http://www.stat.columbia.edu/~gelman/research/published/itsim.pdf
+http://joergdietrich.github.io/emcee-convergence.html
+
+Rhats from 100 1 100 (using bl param file)
+((), 'Rhat shape')
+ 12	 7.4115		0.0786		1.13
+((), 'Rhat shape')
+ 12	 7.4110		0.0741		1.20
+((), 'Rhat shape')
+ 12	 7.4135		0.0693		1.14
+((), 'Rhat shape')
+ 12	 7.4163		0.0660		1.13
+((), 'Rhat shape')
+ 12	 7.4168		0.0648		1.09
+((), 'Rhat shape')
+ 12	 7.4159		0.0633		1.10
+((), 'Rhat shape')
+ 12	 7.4168		0.0632		1.18
+((), 'Rhat shape')
+ 12	 7.4160		0.0587		1.12
+((), 'Rhat shape')
+ 12	 7.4174		0.0562		1.09
+((), 'Rhat shape')
+ 12	 7.4154		0.0528		1.18
+((), 'Rhat shape')
+ 12	 7.4153		0.0498		1.12
+((), 'Rhat shape')
+ 12	 7.4191		0.0479		1.12
+
+
+
 Made emcee_test.py using multiprocessing (see https://emcee.readthedocs.io/en/latest/tutorials/parallel/)
 # It works!
 
@@ -741,6 +796,14 @@ In the meantime I broke something... had to reinstall astropy (also had to reins
 # However...doesn't appear to be faster. Each model is taking ~3.5+ seconds to construct
 # multiprocessing --> time in emcee 382.5468270778656
 # WITHOUT multiprocessing --> time in emcee 197.06733584403992
+
+# with nthreads=8 in emcee --> time in emcee 86.91327118873596
+# with nthreads=6 in emcee --> time in emcee 108.76913213729858
+# with nthreads=4 in emcee --> time in emcee 122.8170599937439
+# with nthreads=2 in emcee --> time in emcee 98.797208070755
+# with nthreads=None in emcee --> time in emcee 99.95753860473633
+# with no nthreads parameter in emcee --> time in emcee 107.43310499191284
+
 # Note: https://emcee.readthedocs.io/en/latest/tutorials/parallel/ suggests overhead in parallelization is to blame for
 # lack of 4x better computing time (note: printing the cpu count thing shows I have 4 CPUs too)
 
