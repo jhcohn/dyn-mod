@@ -2,18 +2,18 @@
 
 Dynamical Modeling git repo
 
-dyn_cluster/ - files I'm using on the cluster
+dyn_cluster/ - files I'm using on the cluster<br/>
     dyn_qcvg.py - file to run emcee with q=True
 
-param_files/ - parameter files to run with dyn_general.py
-    ngc1332_params.txt - defunct
-    ngc3258* - defunct
-    *params.txt - param files for input into dyn_model.py (to run 1 model) or dyn_emcee.py/etc. (to optimize galaxy parameters)
-    *mge.txt - files to input into mge_vcirc_mine.py, to use for calculating the stellar contribution in dyn_model.py
-    *bl_params.txt - param file using Ben's files for the B1 model from Boizelle+2019, using the B1 best-fit parameter input
-    *inex_params.txt - param file using my own fluxmap, lucy files, etc., also using an inexact "educated guess" input
-    *binex_params.txt - param file using Ben's files for the B1 model from Boizelle+2019, but using my "educated guess" for input
-    *out_params.txt - param file with input parameters as the best-fits from specific emcee runs
+param_files/ - parameter files to run with dyn_general.py<br/>
+    ngc1332_params.txt - defunct<br/>
+    ngc3258* - defunct<br/>
+    *params.txt - param files for input into dyn_model.py (to run 1 model) or dyn_emcee.py/etc. (to optimize galaxy parameters)<br/>
+    *mge.txt - files to input into mge_vcirc_mine.py, to use for calculating the stellar contribution in dyn_model.py<br/>
+    *bl_params.txt - param file using Ben's files for the B1 model from Boizelle+2019, using the B1 best-fit parameter input<br/>
+    *inex_params.txt - param file using my own fluxmap, lucy files, etc., also using an inexact "educated guess" input<br/>
+    *binex_params.txt - param file using Ben's files for the B1 model from Boizelle+2019, but using my "educated guess" for input<br/>
+    *out_params.txt - param file with input parameters as the best-fits from specific emcee runs<br/>
 
 dyn.py - defunct
 
