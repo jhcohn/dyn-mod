@@ -5,7 +5,7 @@ Dynamical Modeling git repo
 dyn_cluster/ - files I'm using on the cluster<br/>
 <p>dyn_qcvg.py - file to run emcee with q=True</p>
 
-param_files/ - parameter files to run with dyn_general.py</p><br/>
+param_files/ - parameter files to run with dyn_general.py<br/>
 <p>ngc1332_params.txt - defunct</p><br/>
 <p>ngc3258* - defunct</p><br/>
 <p>*params.txt - param files for input into dyn_model.py (to run 1 model) or dyn_emcee.py/etc. (to optimize galaxy parameters)</p><br/>
