@@ -1,19 +1,20 @@
 # TYPE PARAMETER VALUE PRIOR_MIN PRIOR_MAX
 # FREE PARAMS
-free mbh 2.386e9 0. 1e12
-free xloc 362.04 357 367
-free yloc 354.89 350 360
-free sig0 4.75 0 1e4
-free r0 0.14 0 100
-free mu -0.46 -100 100
-free sig1 7.42 0 1e4
-free inc 46 30 60
-free PAdisk 166.8 145 190
-free vsys 2760.76 1000 3000
-free ml_ratio 3.16 0.1 20
-free f 1.02 0.5 1.5
+free mbh 2.2191e9 0. 1e12
+free xloc 362.0217 357 367
+free yloc 354.8815 350 360
+free sig0 2.0793 0 1e4
+free r0 0.1721 0 100 #0.2759 #0.1721
+free mu 1.8 -100 100 #1.5232 #1.8
+free sig1 11.07 0 1e4
+free inc 47.65 30 60 #47.486 #47.65
+free PAdisk 166.5849 145 190
+free vsys 2760.8554 1000 3000
+free ml_ratio 3.16 0.1 20 #3.2965 #3.36[bad] #3.16
+free f 1.0085 0.5 1.5
+# Using clip=400
 
-# FIXED PARAMS
+# FIXED FLOATS
 float theta_ell 166.8
 float q_ell 0.67
 float inc_star 48
@@ -37,21 +38,20 @@ int yerr1 120
 int s 4
 int ds 4
 int gsize 31
-int mtype 1
-int bl 1
+int mtype 0
+int bl 0
 str s_type gauss
 
 # FILES
 str data /Users/jonathancohn/Documents/dyn_mod/ngc_3258/NGC3258_CO21_bri.pbcor.fits
 str mask /Users/jonathancohn/Documents/dyn_mod/ngc_3258/NGC3258_CO21_bri.mask.fits
-str lucy /Users/jonathancohn/Documents/dyn_mod/ngc_3258/coflux_lucy.fits
-str lucy_in /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_summed_fluxmap.fits
-str lucy_b /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_beam.fits
-str lucy_o /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_general_lucyout_n10.fits[0]
+str lucy /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_scikit_lucyout_n10.fits #ngc3258_model_lucyout_n10.fits #ngc3258_model_lucyout_n10.fits #testscikit_ngc3258_model_lucyout_n10.fits #
+str lucy_in /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_summed_model_fluxmap.fits
+str lucy_b /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_beam31.fits
+str lucy_o /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_model_lucyout_n10.fits[0]
 str lucy_mask /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_collapsed_mask.fits
-str mass /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_wfc3mge_vc2mlr.txt #param_files/ngc_3258_mge.txt  #
-str outname /Users/jonathancohn/Documents/dyn_mod/outputs/ngc_3258bl_outcube.fits
-str mge /Users/jonathancohn/Documents/dyn_mod/param_files/ngc_3258_mge.txt
+str mass /Users/jonathancohn/Documents/dyn_mod/param_files/ngc_3258_mge.txt #ngc_3258/ngc3258_wfc3mge_vc2mlr.txt #
+str outname /Users/jonathancohn/Documents/dyn_mod/outputs/ngc_3258_outcube.fits
 
 # INFO TYPES:
 # free=float [also, line includes priors]
@@ -74,7 +74,6 @@ str mge /Users/jonathancohn/Documents/dyn_mod/param_files/ngc_3258_mge.txt
 # f=gaussian_line_profile_normalization_constant
 
 # INFO FIXED PARAMS
-# theta_ell=PA_of_fitting_ellipse [
 # q_ell=axis_ratio_of_fitting_ellipse [unitless, based on disk inc]
 # resolution=pixel_scale [arcsec/pix]
 # rfit=disk_radius_within_which_we_will_compare_model_and_data [arcsec]
@@ -90,7 +89,7 @@ str mge /Users/jonathancohn/Documents/dyn_mod/param_files/ngc_3258_mge.txt
 # zf=slice_number_in_input_data_where_data_stops_showing_up [python, so first slice is 0, and zstop is NOT included]
 # ds=downsampling_factor [int]
 # bl=units_on_collapsed_flux [0=Jy/beam * Hz, 1=Jy/beam * km/s]
-# mtype=type_of_file_describing_enclosed_stellar_mass [0=mge parameters, 1=circular velocity as function of radius; 2=mass as function of radius]
+# mtype=type_of_file_describing_enclosed_stellar_mass [0=mge parameters, 1=mass as function of radius; 2=circular velocity as function of radius]
 
 # INFO FILES
 # data=data_cube

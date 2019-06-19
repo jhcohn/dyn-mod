@@ -1,17 +1,17 @@
 # TYPE PARAMETER VALUE PRIOR_MIN PRIOR_MAX
 # FREE PARAMS
-free mbh 2.386e9 0. 1e12
-free xloc 362.04 357 367
-free yloc 354.89 350 360
-free sig0 4.75 0 1e4
-free r0 0.14 0 100
-free mu -0.46 -100 100
-free sig1 7.42 0 1e4
-free inc 46 30 60
-free PAdisk 166.8 145 190
-free vsys 2760.76 1000 3000
-free ml_ratio 3.16 0.1 20
-free f 1.02 0.5 1.5
+free mbh 2.412e9 0. 1e12
+free xloc 362.0414 357 367
+free yloc 354.8935 350 360
+free sig0 95.3554 0 1e4
+free r0 5.8572 0 100
+free mu -9.894 -100 100
+free sig1 9.715 0 1e4
+free inc 45.5937 30 60
+free PAdisk 166.6754 145 190
+free vsys 2760.75 1000 3000
+free ml_ratio 3.216 0.1 20
+free f 1.0197 0.5 1.5
 
 # FIXED PARAMS
 float theta_ell 166.8

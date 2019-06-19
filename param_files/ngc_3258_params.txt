@@ -1,19 +1,20 @@
 # TYPE PARAMETER VALUE PRIOR_MIN PRIOR_MAX
 # FREE PARAMS
-free mbh 2.386e9 1e3 1e12
-free xloc 362.04 1 699
-free yloc 354.89 1 699
-free sig0 4.75 0 1e4
+free mbh 2.386e9 0. 1e12
+free xloc 362.04 357 367
+free yloc 354.89 350 360
+free sig0 4.75 0 100
 free r0 0.14 0 100
 free mu -0.46 -100 100
-free sig1 7.42 0 1e4
-free inc 46 0 360
-free PAdisk 166.8 0 360
-free vsys 2760.76 500 1e4
-free ml_ratio 3.16 0.1 20
-free f 1.02 0.1 10
+free sig1 7.42 0 100
+free inc 46 30 60
+free PAdisk 166.8 145 190.
+free vsys 2760.76 1000 3000
+free ml_ratio 3.16 1. 20
+free f 1.02 0.5 1.5
 
 # FIXED FLOATS
+float theta_ell 166.8
 float q_ell 0.67
 float inc_star 48
 float resolution 0.04
@@ -22,7 +23,7 @@ float dist 31.3
 float x_fwhm 0.47938
 float y_fwhm 0.3996
 float PAbeam -76.985
-float lucy_it 10
+int lucy_it 10
 int zi 38
 int zf 84
 int xi 310
@@ -36,18 +37,19 @@ int yerr1 120
 int s 4
 int ds 4
 int gsize 31
-int mtype 1
+int mtype 0
+int bl 0
 str s_type gauss
 
 # FILES
 str data /Users/jonathancohn/Documents/dyn_mod/ngc_3258/NGC3258_CO21_bri.pbcor.fits
 str mask /Users/jonathancohn/Documents/dyn_mod/ngc_3258/NGC3258_CO21_bri.mask.fits
-str lucy /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_model_lucyout_n10.fits
+str lucy /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_scikit_lucyout_n10.fits #ngc3258_model_lucyout_n10.fits #ngc3258_model_lucyout_n10.fits #testscikit_ngc3258_model_lucyout_n10.fits #
 str lucy_in /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_summed_model_fluxmap.fits
 str lucy_b /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_beam31.fits
 str lucy_o /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_model_lucyout_n10.fits[0]
 str lucy_mask /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_collapsed_mask.fits
-str mass /Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_wfc3mge_vc2mlr.txt #param_files/ngc_3258_mge.txt #
+str mass /Users/jonathancohn/Documents/dyn_mod/param_files/ngc_3258_mge.txt #ngc_3258/ngc3258_wfc3mge_vc2mlr.txt #
 str outname /Users/jonathancohn/Documents/dyn_mod/outputs/ngc_3258_outcube.fits
 
 # INFO TYPES:
@@ -84,7 +86,8 @@ str outname /Users/jonathancohn/Documents/dyn_mod/outputs/ngc_3258_outcube.fits
 # inc_star=inclination_of_stars_in_galaxy [deg]
 # zi=slice_number_in_input_data_where_data_starts_showing_up [python, so first slice is 0]
 # zf=slice_number_in_input_data_where_data_stops_showing_up [python, so first slice is 0, and zstop is NOT included]
-# ds=downsampling factor [int]
+# ds=downsampling_factor [int]
+# bl=units_on_collapsed_flux [0=Jy/beam * Hz, 1=Jy/beam * km/s]
 # mtype=type_of_file_describing_enclosed_stellar_mass [0=mge parameters, 1=mass as function of radius; 2=circular velocity as function of radius]
 
 # INFO FILES
