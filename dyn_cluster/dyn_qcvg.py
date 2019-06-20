@@ -413,6 +413,16 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
 
     # RUN EMCEE, SAVING PROGRESS AND CHECKING CONVERGENCE!
     print('Running MCMC!')
+
+    unds = 0
+    pf = ''
+    for i in parfile:
+        if i == '_':
+            unds += 1
+        elif unds == 2:
+            pf += i
+    direc += 'qcvg' + pf + '_'
+
     tempchain = direc + str(nwalkers) + '_' + str(burn) + '_' + str(steps) + 'tempchain.pkl'
     # https://stackoverflow.com/questions/50294428/implement-early-stopping-in-emcee-given-a-convergence-criterion
 
@@ -487,14 +497,14 @@ def do_emcee(nwalkers=250, burn=100, steps=1000, printer=0, all_free=True, parfi
     print('want between 0.25 and 0.5')  # should be 0.25 to 0.5
 
     if save:
-	unds = 0
-        pf = ''
-        for i in parfile:
-            if i == '_':
-                unds += 1
-            elif unds == 2:
-                pf += i
-        direc += 'mpi' + pf + '_'
+        unds = 0
+            pf = ''
+            for i in parfile:
+                if i == '_':
+                    unds += 1
+                elif unds == 2:
+                    pf += i
+        # direc += 'mpi' + pf + '_'
         out_chain = direc + str(nwalkers) + '_' + str(burn) + '_' + str(steps) + '_fullchain.pkl'
         with open(out_chain, 'wb') as newfile:  # 'wb' because binary format
             pickle.dump(sampler.chain, newfile, pickle.HIGHEST_PROTOCOL)
