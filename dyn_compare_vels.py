@@ -39,8 +39,8 @@ def make_beam(grid_size=99, res=1., amp=1., x0=0., y0=0., x_std=1., y_std=1., ro
     :param amp: amplitude of the 2d gaussian
     :param x0: mean of x axis of 2d gaussian
     :param y0: mean of y axis of 2d gaussian
-    :param x_std: FWHM of beam in x [beam major axis] (to use for standard deviation of Gaussian) (in arcsec)
-    :param y_std: FWHM of beam in y [beam minor axis] (to use for standard deviation of Gaussian) (in arcsec)
+    :param x_std: FWHM of beam in x (to use for standard deviation of Gaussian) (in arcsec)
+    :param y_std: FWHM of beam in y (to use for standard deviation of Gaussian) (in arcsec)
     :param rot: rotation angle in radians
     :param fits_name: this name will be the filename to which the beam fits file is written (if None, write no file)
 
@@ -133,8 +133,6 @@ def get_fluxes(data_cube, data_mask, write_name=None):
     hdu.close()  # close data
     hdu_m.close()  # close mask
 
-    collapsed_fluxes[collapsed_fluxes < 0] = 0.
-
     if not Path(write_name).exists():
         hdu = fits.PrimaryHDU(collapsed_fluxes)
         hdul = fits.HDUList([hdu])
@@ -213,9 +211,9 @@ def ellipse_fitting(cube, rfit, x0_sub, y0_sub, res, pa_disk, q):
 
 def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=np.deg2rad(60.), vsys=None, dist=17.,
                theta=np.deg2rad(200.), input_data=None, lucy_out=None, out_name=None, beam=None, q_ell=1., theta_ell=0.,
-               xell=360., yell=350., bl=False, enclosed_mass=None, menc_type=False, ml_ratio=1., sig_type='flat',
-               sig_params=None, f_w=1., noise=None, rfit=1., ds=None, chi2=False, zrange=None, xyrange=None,
-               reduced=False, freq_ax=None, f_0=0., fstep=0., opt=True, quiet=False):
+               bl=False, enclosed_mass=None, menc_type=False, ml_ratio=1., sig_type='flat', sig_params=None, f_w=1.,
+               noise=None, rfit=1., ds=None, chi2=False, zrange=None, xyrange=None, reduced=False, freq_ax=None, f_0=0.,
+               fstep=0., opt=True, quiet=False):
     """
     Build grid for dynamical modeling!
 
@@ -234,8 +232,6 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     :param beam: synthesized alma beam (output from model_ins)
     :param q_ell: axis ratio q of fitting ellipse [unitless]
     :param theta_ell: same as theta above, but held fixed during model fitting; used for the ellipse fitting region
-    :param xell: same as x_loc above, but held fixed during model fitting; used for the ellipse fitting region
-    :param yell: same as y_loc above, but held fixed during model fitting; used for the ellipse fitting region
     :param enclosed_mass: file including data of the enclosed stellar mass of the galaxy (1st column should be radius
         r in kpc and second column should be M_stars(<r) or velocity_circ(R) due to stars within R)
     :param menc_type: Select how you incorporate enclosed stellar mass [0 for MGE; 1 for v(R) file; 2 for M(R) file]
@@ -289,9 +285,6 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     # RESCALE x_loc, y_loc PIXEL VALUES TO CORRESPOND TO SUB-CUBE PIXEL LOCATIONS!
     x_loc = x_loc - xyrange[0]  # x_loc - xi
     y_loc = y_loc - xyrange[2]  # y_loc - yi
-
-    xell = xell - xyrange[0]
-    yell = yell - xyrange[2]
 
     # SET UP OBSERVATION AXES: initialize x,y axes at 0., with lengths = s * len(input data cube axes)
     y_obs_ac = np.asarray([0.] * len(subpix_deconvolved))
@@ -408,7 +401,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     weight = subpix_deconvolved  # [Jy/beam Hz]
 
     # WEIGHT CURRENTLY IN UNITS OF Jy/beam * Hz --> need to get it in units of Jy/beam to match data
-    weight *=  f_w / np.sqrt(2 * np.pi * delta_freq_obs**2)  # divide to get correct units
+    weight *= f_w / np.sqrt(2 * np.pi * delta_freq_obs**2)  # divide to get correct units
     # NOTE: MAYBE multiply by fstep here, after collapsing and lucy process, rather than during collapse
     # NOTE: would then need to multiply by ~1000 factor or something else large there, bc otherwise lucy cvg too fast
 
@@ -434,59 +427,42 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         convolved_cube[z, :, :] = convolution.convolve(intrinsic_cube[z, :, :], beam)  # CONVOLVE CUBE WITH BEAM
 
     # ONLY WANT TO FIT WITHIN ELLIPTICAL REGION! APPLY ELLIPTICAL MASK TO MODEL CUBE & INPUT DATA
-    print(x_loc, xell, y_loc, yell, 'hi')
-    ell_mask = ellipse_fitting(convolved_cube, rfit, xell, yell, resolution, theta_ell, q_ell)  # create ellipse mask
+    ell_mask = ellipse_fitting(convolved_cube, rfit, x_loc, y_loc, resolution, theta_ell, q_ell)  # create ellipse mask
     convolved_cube *= ell_mask
     input_data_masked = input_data[zrange[0]:zrange[1], xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask
 
-    if chi2:  # if outputting chi^2
-        chi_sq = 0.  # initialize chi^2
-        cs = []  # chi^2 per slice
+    # compare the data to the model by binning each in groups of dsxds pixels (separate from s)
+    ell_4 = rebin(ell_mask, ds)
+    data_4 = rebin(input_data_masked, ds)
+    model_4 = rebin(convolved_cube, ds)
+    indices = [[11,13], [13, 11]]
+    #            [12, 20], [20,12], [10, 10], [int(len(data_4[1]) / 2.), int(len(data_4[1]) / 2.)],
+    #            [int(len(data_4[1]) / 2.) + 1, int(len(data_4[1]) / 2.) + 1]]
+    # compare(data_4, model_4, freq_ax / (10**9), indices, f_0 / (10**9 * (1+zred)), str(x_loc + xyrange[0]), noise)
 
-        # compare the data to the model by binning each in groups of dsxds pixels (separate from s)
-        data_4 = rebin(input_data_masked, ds)
-        ap_4 = rebin(convolved_cube, ds)
-        ell_4 = rebin(ell_mask, ds)
+    all_pix = np.ndarray.flatten(ell_4)  # all fitted pixels in each slice [len = 625 (yep)] [525 masked, 100 not]
+    masked_pix = all_pix[all_pix != 0]  # all_pix, but this time only the pixels that are actually inside ellipse
+    n_pts = len(masked_pix) * len(z_ax)  # (zrange[1] - zrange[0])  # total number of pixels being compared
+    print(n_pts)
+    print(len(masked_pix))
 
-        z_ind = 0  # the actual index for the model-data comparison cubes
-        for z in range(zrange[0], zrange[1]):  # for each relevant freq slice (ignore slices with only noise)
-            chi_sq += np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise[z_ind]**2)  # calculate chisq!
-            cs.append(np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise[z_ind]**2))  # chisq per slice
+    chi_sq = 0.  # initialize chi^2
+    cs = []  # chi^2 per slice
+    cs_unsum = []
+    z_ind = 0  # the actual index for the model-data comparison cubes
+    for z in range(zrange[0], zrange[1]):  # for each relevant freq slice (ignore slices with only noise)
+        chi_sq += np.sum((model_4[z_ind] - data_4[z_ind]) ** 2 / noise[z_ind] ** 2)  # calculate chisq!
+        cs.append(np.sum((model_4[z_ind] - data_4[z_ind]) ** 2 / noise[z_ind] ** 2))  # chisq per slice
+        cs_unsum.append((model_4[z_ind] - data_4[z_ind]) ** 2 / noise[z_ind] ** 2)
+        z_ind += 1
+    print(chi_sq)
+    print(np.sum(ell_4))
 
-            z_ind += 1  # the actual index for the model-data comparison cubes
+    v_los = block_reduce(v_los, s, np.mean)
+    v_los = block_reduce(v_los, ds, np.mean)
+    #v_los *= ell_4[0]
 
-        # CALCULATE REDUCED CHI^2
-        all_pix = np.ndarray.flatten(ell_4)  # all fitted pixels in each slice [len = 625 (yep)] [525 masked, 100 not]
-        masked_pix = all_pix[all_pix != 0]  # all_pix, but this time only the pixels that are actually inside ellipse
-        n_pts = len(masked_pix) * len(z_ax)  # (zrange[1] - zrange[0])  # total number of pixels being compared
-        print(n_pts, len(masked_pix))  # rfit=1.2 --> 6440 (140/slice); 6716 (146/slice) for fully inclusive ellipse
-        # print(oop)  # rfit=1.05 --> 4968 (108/slice)  # rfit=1.136 --> 5704 (124/slice) (see 16 April 2018 meeting)
-        n_params = 12  # number of free parameters
-        if not quiet:
-            print('total model constructed in {0} seconds'.format(time.time() - t_begin))  # ~213s
-
-        if reduced:
-            print(r'chi^2=', chi_sq)  # 4284.80414208  # 12300204.6088
-            print(r'Reduced chi^2=', chi_sq / (n_pts - n_params))  # 4284.80414208  # 12300204.6088
-            chi_sq /= (n_pts - n_params)  # convert to reduced chi^2; else just return full chi^2
-        if n_pts == 0.:
-            print('n_pts = ' + str(n_pts))
-            chi_sq = np.inf
-        return chi_sq  # / (n_pts - n_params)
-
-    else:  # if outputting actual cube itself
-        inds_to_try2 = np.asarray([[10, 10], [10, 15], [15, 10]])  # plot a few line profiles
-        import test_dyn_funcs as tdf
-        f_sys = f_0 / (1+zred)
-        tdf.compare(input_data_masked, convolved_cube, freq_ax / 1e9, inds_to_try2, f_sys / 1e9, 4)  # plot them!
-
-        if not Path(out_name).exists():  # WRITE OUT RESULTS TO FITS FILE
-            hdu = fits.PrimaryHDU(convolved_cube)
-            hdul = fits.HDUList([hdu])
-            hdul.writeto(out_name)
-            print('written!')
-
-        return convolved_cube
+    return v_los, x_obs_ac, y_obs_ac, cs, freq_ax, cs_unsum
 
 
 def par_dicts(parfile, q=False):
@@ -562,7 +538,6 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=
         hdu1 = fits.PrimaryHDU(collapsed_mask)
         hdul1 = fits.HDUList([hdu1])
         hdul1.writeto(lucy_mask)  # write out to mask file
-        print('mask created!')
 
     # MAKE ALMA BEAM  x_std=major; y_std=minor; rot=90-PA; auto-create the beam file lucy_b if it doesn't yet exist
     beam = make_beam(grid_size=grid_size, res=res, x_std=x_std, y_std=y_std, rot=np.deg2rad(90. - pa), fits_name=lucy_b)
@@ -589,7 +564,6 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=
         l_b = hdub[0].data
         hduin.close()
         hdub.close()
-        l_in[l_in < 0.] = 0.
         # https://github.com/scikit-image/scikit-image/issues/2551 (it was returning nans)
         # add to skimage/restoration/deconvolution.py (before line 389): relative_blur[np.isnan(relative_blur)] = 0
         l_o = restoration.richardson_lucy(l_in, l_b, lucy_it, clip=False)  # need clip=False
@@ -611,22 +585,24 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=
     return lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise
 
 
-def test_qell(input_data, params, l_in, q_ell):
-    ell_mask = ellipse_fitting(input_data, params['rfit'], params['xell'], params['yell'], params['resolution'],
-                               params['theta_ell'], q_ell)  # create ellipse mask
-    fig = plt.figure()
-    ax = plt.gca()
-    plt.imshow(l_in, origin='lower')
-    plt.colorbar()
-    from matplotlib import patches
-    e1 = patches.Ellipse((params['xell'], params['yell']), 2 * params['rfit'] / params['resolution'],
-                         2 * params['rfit'] / params['resolution'] * q_ell,
-                         angle=params['theta_ell'], linewidth=2, edgecolor='w',
-                         fill=False)  # np.rad2deg(params['theta_ell'])
-    ax.add_patch(e1)
-    plt.title(r'q = ' + str(q_ell) + r', PA = ' + str(params['theta_ell']) + ' deg, rfit = ' + str(params['rfit'])
-              + ' arcsec')
-    plt.show()
+def compare(data, model, z_ax, inds_to_try2, v_sys, title, noise):
+
+    for i in range(len(inds_to_try2)):
+        print(inds_to_try2[i][0], inds_to_try2[i][1])
+        plt.plot(z_ax, model[:, inds_to_try2[i][1], inds_to_try2[i][0]], 'r+', label=r'Model')  # r-
+        plt.plot(z_ax, data[:, inds_to_try2[i][1], inds_to_try2[i][0]], 'b+', label=r'Data')  # b:
+        plt.axvline(x=v_sys, color='k', label=r'v$_{\text{sys}}$')
+        # plt.title(str(inds_to_try2[i][0]) + ', ' + str(inds_to_try2[i][1]))  # ('no x,y offset')
+        plt.legend()
+        plt.xlabel(r'Frequency [GHz]')
+        plt.ylabel(r'Flux Density [Jy/beam]')
+        chisq = np.sum((model[:, inds_to_try2[i][1], inds_to_try2[i][0]] - data[:, inds_to_try2[i][1], inds_to_try2[i][0]])**2
+                       / np.asarray(noise)**2)  # calculate chisq!
+
+        plt.title('xloc = ' + title + ', at 4x4-binned pixel (' + str(inds_to_try2[i][0]) + ',' + str(inds_to_try2[i][1]) +
+                  ') with ' + r'$\chi^2 = $' + str(chisq))
+        plt.show()
+        plt.close()
 
 
 if __name__ == "__main__":
@@ -660,185 +636,73 @@ if __name__ == "__main__":
 
     lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise = mod_ins
 
-    hduin = fits.open(params['lucy_in'])
-    l_in = hduin[0].data
-    hduin.close()
-
-    # print(np.amax(lucy_out), np.amin(lucy_out), np.amax(l_in), np.amin(l_in))
-    # for q_ell in [0.3, 0.35, 0.4, 0.45]:
-    #     test_qell(input_data, params, l_in, q_ell)
-
     # CREATE MODEL CUBE!
     out = params['outname']
-    chi2 = model_grid(resolution=params['resolution'], s=params['s'], x_loc=params['xloc'], y_loc=params['yloc'],
+    outs = model_grid(resolution=params['resolution'], s=params['s'], x_loc=params['xloc'], y_loc=params['yloc'],
                       mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'], dist=params['dist'],
                       theta=np.deg2rad(params['PAdisk']), input_data=input_data, lucy_out=lucy_out, out_name=out,
                       beam=beam, rfit=params['rfit'], enclosed_mass=params['mass'], ml_ratio=params['ml_ratio'],
                       sig_type=params['s_type'], zrange=[params['zi'], params['zf']], menc_type=params['mtype'],
                       sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], f_w=params['f'],
                       ds=params['ds'], noise=noise, chi2=True, reduced=True, freq_ax=freq_ax, q_ell=params['q_ell'],
-                      theta_ell=np.deg2rad(params['theta_ell']), xell=params['xell'], yell=params['yell'], fstep=fstep,
-                      f_0=f_0, bl=params['bl'], xyrange=[params['xi'], params['xf'], params['yi'], params['yf']])
+                      theta_ell=np.deg2rad(params['theta_ell']), fstep=fstep, f_0=f_0, bl=params['bl'],
+                      xyrange=[params['xi'], params['xf'], params['yi'], params['yf']])
+    vlos, x_obs, y_obs, cs, f_ax, cs_unsum = outs
 
-    print('True Total: ' + str(time.time() - t0_true))  # 3.93s YAY!  # 23s for 6 models (16.6 for 4 models)
-    print(chi2)  # NOTE: right now, chi^2_nu (with my lucy + v(R)) = 1.9, chi^2_nu (with my lucy + mge) = 9.98
+    # 362.0412  # 362.0228
+    out2 = model_grid(resolution=params['resolution'], s=params['s'], x_loc=362.0228, y_loc=params['yloc'],
+                      mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'], dist=params['dist'],
+                      theta=np.deg2rad(params['PAdisk']), input_data=input_data, lucy_out=lucy_out, out_name=out,
+                      beam=beam, rfit=params['rfit'], enclosed_mass=params['mass'], ml_ratio=params['ml_ratio'],
+                      sig_type=params['s_type'], zrange=[params['zi'], params['zf']], menc_type=params['mtype'],
+                      sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], f_w=params['f'],
+                      ds=params['ds'], noise=noise, chi2=True, reduced=True, freq_ax=freq_ax, q_ell=params['q_ell'],
+                      theta_ell=np.deg2rad(params['theta_ell']), fstep=fstep, f_0=f_0, bl=params['bl'],
+                      xyrange=[params['xi'], params['xf'], params['yi'], params['yf']])
+    vlos2, x_obs, y_obs, cs2, f_ax, cs_unsum2 = out2
 
-# TO DO:
-# MAIN. Implement MGE as Jonelle requested[X], explore number of pixels in ellipse issue[ ], start playing with UGC[ ]
-# update dyn_emcee to use dyn_model instead of dyn_general format![X]
-# read up on convergence, implement convergence checks![?]
-# Do Parallelization![ ] --> install mpi4py first!!!
-## pip install mpi4py --> error: "error: Cannot compile MPI programs. Check your configuration!!!"
-###https://stackoverflow.com/questions/28440834/error-when-installing-mpi4py --> brew install mpich
-####sudo find / -name mpicc [returned two lines]: /usr/local/bin/mpicc ; /usr/local/Cellar/mpich/3.3/bin/mpicc
-#####pip install mpi4py --> worked!
-######NOW import mpi4py works, but from mpi4py import MPI returns an error:
-#
-#  Traceback (most recent call last):
-#  File "<stdin>", line 1, in <module>
-# ImportError: dlopen(/Users/jonathancohn/anaconda3/envs/iraf27/lib/python2.7/site-packages/mpi4py/MPI.so, 2): Symbol not found: ___addtf3
-#  Referenced from: /usr/local/opt/gcc/lib/gcc/8/libquadmath.0.dylib
-#  Expected in: /usr/lib/libSystem.B.dylib
-# in /usr/local/opt/gcc/lib/gcc/8/libquadmath.0.dylib
-#
-#######Tried uninstalling/reinstalling, no success.
-# add model_prep to dyn_emcee[X]
-# Tighten all the priors![X]
-# Later (after done matching with Ben): prevent mu from going negative![ ]
-# play with softening parameter?[X] --> don't worry about it anymore!
-# maybe put noise calc in model_prep function?[ ]
-# switch to using scikit-image (instead of iraf27) --> can do everything in python 3![ ]
-# LONG-TERM: Do reading![ ]
+    vdiff = vlos - vlos2
+    maxes = []
+    argm = []
+    for i in range(len(vdiff)):
+        maxes.append(np.amax(vdiff[i]))
+        argm.append(np.argmax(vdiff[i]))
+    j = np.argmax(maxes)
+    print(argm[j], j)
 
-# CONVERGENCE: http://joergdietrich.github.io/emcee-convergence.html
-'''
-# PARALLELIZATION: from prospector.py:
+    print(np.amax(vdiff), 'look')
+    print(vdiff[11, 13], 'look')
 
-try:
-    from emcee.utils import MPIPool
-    pool = MPIPool(debug=False, loadbalance=True)
-    if not pool.is_master():
-        # Wait for instructions from the master process.
-        pool.wait()
-        sys.exit(0)
-except(ImportError, ValueError):
-    pool = None
-    print('Not using MPI')
-'''
+    print(np.amax(cs_unsum[16] - cs_unsum2[16]), np.amin(cs_unsum[16] - cs_unsum2[16]))
+    cdiff = (cs_unsum[16] - cs_unsum2[16])
+    huh = cdiff > 0.0
+    hm = cdiff == 0.0
+    print(np.sum(huh), np.sum(hm))
 
-# emcee paper: https://arxiv.org/pdf/1202.3665.pdf
-# https://en.wikipedia.org/wiki/Reduced_chi-squared_statistic
-# https://en.wikipedia.org/wiki/Variance
-# https://en.wikipedia.org/wiki/Standard_deviation
+    plt.title(r'median xloc $\chi^2$ - lower CL xloc $\chi^2$ (at $\nu = $' + str(round(f_ax[16] / 10**9, 4)) + ' GHz)')
+    plt.imshow(cs_unsum[16] - cs_unsum2[16], origin='lower')
+    cbar = plt.colorbar()
+    cbar.set_label(r'$\Delta$[(model - data)$^2 / $ noise$^2$]', fontsize=20, rotation=90, labelpad=20)
+    plt.xlabel(r'x [4x4 binned pixels]', fontsize=20)  # x [arcsec]  # x [4x4 binned pixels]
+    plt.ylabel(r'y [4x4 binned pixels]', fontsize=20)  # y [arcsec]  # y [4x4 binned pixels]
+    plt.show()
 
-'''
-(three) Jonathans-MacBook-Pro:~ jonathancohn$ brew install wget
-Warning: wget 1.20.3 is already installed, it's just not linked
-You can use `brew link wget` to link this version.
-(three) Jonathans-MacBook-Pro:~ jonathancohn$ brew link wget
-Linking /usr/local/Cellar/wget/1.20.3... 
-Error: Could not symlink share/locale/be/LC_MESSAGES/wget.mo
-/usr/local/share/locale/be/LC_MESSAGES is not writable.
+    plt.plot(f_ax / 10**9, np.asarray(cs) - np.asarray(cs2), 'b*', label=r'median xloc $\chi^2 - $ lower CL xloc $\chi^2$')
+    # plt.plot(f_ax / 10**9, cs, 'b*', label='median xloc')
+    # plt.plot(f_ax / 10**9, cs2, 'k+', label='0.0016 offset xloc')
+    plt.axhline(y=np.median(np.asarray(cs) - np.asarray(cs2)), color='r', label='median difference')
+    plt.axhline(y=np.mean(np.asarray(cs) - np.asarray(cs2)), color='k', label='mean difference')
+    plt.legend(loc='lower left')
+    plt.xlabel(r'Frequency [GHz]')
+    plt.ylabel(r'$\Delta \chi^2$ per slice')
+    plt.show()
 
-Finally this worked: https://github.com/Homebrew/legacy-homebrew/issues/13276
-(three) Jonathans-MacBook-Pro:~ jonathancohn$ sudo chown -R $USER:admin /usr/local/share
-(three) Jonathans-MacBook-Pro:~ jonathancohn$ brew link wget
-Linking /usr/local/Cellar/wget/1.20.3... 42 symlinks created
-(Went ahead and ran brew reinstall wget [not sure if doing so was necessary tho])
-wget --version now returns something sensible!
+    plt.imshow(vlos - vlos2, origin='lower', cmap='RdBu_r', vmax=np.amax([np.amax(vlos - vlos2), -np.amin(vlos - vlos2)]),
+               vmin=-np.amax([np.amax(vlos - vlos2), -np.amin(vlos - vlos2)]),
+               )
+    cbar = plt.colorbar()
+    cbar.set_label(r'km/s', fontsize=20, rotation=0, labelpad=20)
+    plt.xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
+    plt.ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+    plt.show()
 
-Followed instructions here: https://mpi4py.readthedocs.io/en/stable/install.html for wget (except downloaded manually,
-because link listed with wget didn't work --> https://bitbucket.org/mpi4py/mpi4py/downloads/)
-Once downloaded manually, I did the tar step and so on as shown in the link. The mpiexec test worked, but can only use
-n=2. Using n=3 or more resulted in the following error:
-    There are not enough slots available in the system to satisfy the 3 slots
-    that were requested by the application:
-        python
-
-    Either request fewer slots for your application, or make more slots available
-    for use.
-Also got new error now when from emcee.utils import MPIPool() ; pool = MPIPool():
-  File "<stdin>", line 1, in <module>
-  File "/Users/jonathancohn/anaconda3/envs/three/lib/python3.6/site-packages/emcee/mpi_pool.py", line 66, in __init__
-    raise ValueError("Tried to create an MPI pool, but there "
-ValueError: Tried to create an MPI pool, but there was only one MPI process available. Need at least two.
-
-From here: https://emcee.readthedocs.io/en/stable/_modules/emcee/mpi_pool.html --> self.comm.Get_size() = 1 -->
-self.size = 0 --> returns the above "Tried to create..." error
-
-Hmm doing this: https://superuser.com/questions/1101311/how-many-cores-does-my-mac-have -->
-Jonathans-MacBook-Pro:~ jonathancohn$ sysctl hw.physicalcpu hw.logicalcpu
-hw.physicalcpu: 2
-hw.logicalcpu: 4
-
-OKAY, bc emcee notes some issues with MPIPool that may be fixed in their newest version:
-I have done: conda uninstall emcee
-And followed github isntructions here: https://emcee.readthedocs.io/en/latest/user/install/ to install latest version
-# Note: "conda install -c conda-forge emcee" still installed the old version (2.2.1)
-# Github installed new version! (3.0rc)
-Then, installed schwimmbad using: conda install -c conda-forge schwimmbad
-# (see here: https://schwimmbad.readthedocs.io/en/latest/install.html)
-
-
-Note: MPI mac links I was using:
-https://stackoverflow.com/questions/28440834/error-when-installing-mpi4py/39886686
-https://webcache.googleusercontent.com/search?q=cache:ACFACM98t7sJ:https://stackoverflow.com/questions/49621061/python-fails-to-import-mpi4py%3Frq%3D1+&cd=3&hl=en&ct=clnk&gl=us
-https://mpi4py.readthedocs.io/en/stable/install.html
-https://stackoverflow.com/questions/42703861/how-to-use-mpi-on-mac-os-x
-
-Gelman-Rubin:
-http://www.stat.columbia.edu/~gelman/research/published/itsim.pdf
-http://joergdietrich.github.io/emcee-convergence.html
-
-Rhats from 100 1 100 (using bl param file)
-((), 'Rhat shape')
- 12	 7.4115		0.0786		1.13
-((), 'Rhat shape')
- 12	 7.4110		0.0741		1.20
-((), 'Rhat shape')
- 12	 7.4135		0.0693		1.14
-((), 'Rhat shape')
- 12	 7.4163		0.0660		1.13
-((), 'Rhat shape')
- 12	 7.4168		0.0648		1.09
-((), 'Rhat shape')
- 12	 7.4159		0.0633		1.10
-((), 'Rhat shape')
- 12	 7.4168		0.0632		1.18
-((), 'Rhat shape')
- 12	 7.4160		0.0587		1.12
-((), 'Rhat shape')
- 12	 7.4174		0.0562		1.09
-((), 'Rhat shape')
- 12	 7.4154		0.0528		1.18
-((), 'Rhat shape')
- 12	 7.4153		0.0498		1.12
-((), 'Rhat shape')
- 12	 7.4191		0.0479		1.12
-
-
-
-Made emcee_test.py using multiprocessing (see https://emcee.readthedocs.io/en/latest/tutorials/parallel/)
-# It works!
-
-In the meantime I broke something... had to reinstall astropy (also had to reinstall numpy earlier)
-# also matplotlib & scipy
-# Now emcee appears to be running again!
-# However...doesn't appear to be faster. Each model is taking ~3.5+ seconds to construct
-# multiprocessing --> time in emcee 382.5468270778656
-# WITHOUT multiprocessing --> time in emcee 197.06733584403992
-
-# with nthreads=8 in emcee --> time in emcee 86.91327118873596
-# with nthreads=6 in emcee --> time in emcee 108.76913213729858
-# with nthreads=4 in emcee --> time in emcee 122.8170599937439
-# with nthreads=2 in emcee --> time in emcee 98.797208070755
-# with nthreads=None in emcee --> time in emcee 99.95753860473633
-# with no nthreads parameter in emcee --> time in emcee 107.43310499191284
-
-# Note: https://emcee.readthedocs.io/en/latest/tutorials/parallel/ suggests overhead in parallelization is to blame for
-# lack of 4x better computing time (note: printing the cpu count thing shows I have 4 CPUs too)
-
-DO HPRC account request!
-
-Prioritize parallelization on cluster
-'''
