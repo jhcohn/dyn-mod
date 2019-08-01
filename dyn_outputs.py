@@ -529,11 +529,18 @@ def compare_sigs(pfile1, pfile2, q1=True, q2=False):
     plt.show()
 
 
-def plot_all(fullchain, clip, end, pfile_true, init_guess, flatsig=False, save=False):
+def plot_all(fullchain, clip, end, pfile_true, init_guess, flatsig=False, save=False, xcl=False):
 
     params, priors = dm.par_dicts(init_guess, q=False)  # get dicts of params and file names from parameter file
 
-    if flatsig:
+    if xcl and flatsig:
+        fig, axes = plt.subplots(2, 4, figsize=(18, 9))  # 3 rows, 3 cols of subplots; because there are 9 free params
+        # BUCKET NEED TO FIND OUT HOW TO AUTOMATE GETTING THIS ORDER RIGHT!
+        pars = ['mbh', 'f', 'PAdisk', 'yloc', 'sig0', 'vsys', 'ml_ratio', 'inc']
+        ax_lab = [r'$\log_{10}$(M$_{\odot}$)', 'unitless', 'deg', 'pixels', 'km/s', 'km/s',
+                  r'M$_{\odot}$/L$_{\odot}$', 'deg']
+        axes_order = [[0, 0], [0, 2], [1, 0], [1, 3], [1, 2], [1, 1], [0, 1], [0, 3]]
+    elif flatsig:
         fig, axes = plt.subplots(3, 3, figsize=(16, 12))  # 3 rows, 3 cols of subplots; because there are 9 free params
         # BUCKET NEED TO FIND OUT HOW TO AUTOMATE GETTING THIS ORDER RIGHT!
         pars = ['mbh', 'f', 'PAdisk', 'yloc', 'xloc', 'sig0', 'vsys', 'ml_ratio', 'inc']
@@ -730,17 +737,40 @@ if __name__ == "__main__":
     # '''  #
 
     # '''  #
+    direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'xcl_3258binexc_1564617972.15_'
+    pf = base + 'param_files/ngc_3258binexc_xcl_params.txt'  # pf = base + 'param_files/ngc_3258inex2_params.txt'
+    bl = base + 'param_files/ngc_3258bl_params.txt'
+    plot_all(direct + '500_0_1000_fullchain.pkl', clip=500, end=1000, pfile_true=bl, init_guess=pf, flatsig=True, xcl=True,
+             save=False)
+    print(oop)
+    # '''  #
+
+    # ''' #
+    direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'flat3258binexc_1564523818.43_'
+    pf = base + 'param_files/ngc_3258binexc_params.txt'  # pf = base + 'param_files/ngc_3258inex2_params.txt'
+    bl = base + 'param_files/ngc_3258bl_params.txt'
+    plot_all(direct + '500_0_500_fullchain.pkl', clip=400, end=500, pfile_true=bl, init_guess=pf, flatsig=True, save=False)
+    print(oop)
+    # ''' #
+
+    # '''  #
     direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'flat3258binexc_'
+    direct_ok = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'old_flat3258binexc_'
     pf = base + 'param_files/ngc_3258binexc_params.txt'  #     pf = base + 'param_files/ngc_3258inex2_params.txt'
     bl = base + 'param_files/ngc_3258bl_params.txt'
+    directr = direct + '500_0_20000tempchain.pkl'
+    #temp_out(directr, clip=0, end=-1, pfile_true=base + 'param_files/ngc_3258bl_params.txt', init_guess=pf)
+    plot_all(directr, clip=1000, end=4000, pfile_true=bl, init_guess=pf, flatsig=True, save=False)
+    plot_all(direct_ok + '500_0_20000tempchain.pkl', clip=1000, end=4000, pfile_true=bl, init_guess=pf, flatsig=True, save=False)
+
     # ends = [700, 800, 870, 900, 1000, 1500, 2000]  # 500, 600,
     # param_changes(direct + '500_0_20000_fullchain.pkl', clips=np.asarray(ends) - 500, ends=ends)
     # for end in [7500, 10000, 15000, 18000, 20001]:
     #for end in [200, 300, 400, 500, 1000]:
     #    plot_all(direct + '500_0_20000_fullchain.pkl', clip=end - 100, end=end, pfile_true=bl, init_guess=pf, flatsig=True,
     #             save=False)  # clip=4000, clip=end-5000
-    plot_all(direct + '500_0_20000_fullchain.pkl', clip=4000, end=20001, pfile_true=bl, init_guess=pf, flatsig=True,
-             save=False)
+    plot_all(direct_ok + '500_0_20000_fullchain.pkl', clip=0, end=4000, pfile_true=bl, init_guess=pf, flatsig=True,
+             save=False)  # clip=4000, end=20001
     outcorner(pf, direct + '500_0_20000_fullchain.pkl', 19950)
     cvg(direct + '500_0_20000_fullchain.pkl', clip=0, end=-1, vline=[15000])
     # output_clipped(pf, 500, 0, 20000, direct, clip=1600, pfile_true=bl, init_guess=pf)

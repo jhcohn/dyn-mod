@@ -213,7 +213,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
                theta=np.deg2rad(200.), input_data=None, lucy_out=None, out_name=None, beam=None, q_ell=1., theta_ell=0.,
                bl=False, enclosed_mass=None, menc_type=False, ml_ratio=1., sig_type='flat', sig_params=None, f_w=1.,
                noise=None, rfit=1., ds=None, chi2=False, zrange=None, xyrange=None, reduced=False, freq_ax=None, f_0=0.,
-               fstep=0., opt=True, quiet=False):
+               fstep=0., opt=True, quiet=False, xell=360., yell=350.):
     """
     Build grid for dynamical modeling!
 
@@ -232,6 +232,8 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     :param beam: synthesized alma beam (output from model_ins)
     :param q_ell: axis ratio q of fitting ellipse [unitless]
     :param theta_ell: same as theta above, but held fixed during model fitting; used for the ellipse fitting region
+    :param xell: same as x_loc above, but held fixed during model fitting; used for the ellipse fitting region
+    :param yell: same as y_loc above, but held fixed during model fitting; used for the ellipse fitting region
     :param enclosed_mass: file including data of the enclosed stellar mass of the galaxy (1st column should be radius
         r in kpc and second column should be M_stars(<r) or velocity_circ(R) due to stars within R)
     :param menc_type: Select how you incorporate enclosed stellar mass [0 for MGE; 1 for v(R) file; 2 for M(R) file]
@@ -285,6 +287,9 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     # RESCALE x_loc, y_loc PIXEL VALUES TO CORRESPOND TO SUB-CUBE PIXEL LOCATIONS!
     x_loc = x_loc - xyrange[0]  # x_loc - xi
     y_loc = y_loc - xyrange[2]  # y_loc - yi
+
+    xell = xell - xyrange[0]
+    yell = yell - xyrange[2]
 
     # SET UP OBSERVATION AXES: initialize x,y axes at 0., with lengths = s * len(input data cube axes)
     y_obs_ac = np.asarray([0.] * len(subpix_deconvolved))
@@ -427,7 +432,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         convolved_cube[z, :, :] = convolution.convolve(intrinsic_cube[z, :, :], beam)  # CONVOLVE CUBE WITH BEAM
 
     # ONLY WANT TO FIT WITHIN ELLIPTICAL REGION! APPLY ELLIPTICAL MASK TO MODEL CUBE & INPUT DATA
-    ell_mask = ellipse_fitting(convolved_cube, rfit, x_loc, y_loc, resolution, theta_ell, q_ell)  # create ellipse mask
+    ell_mask = ellipse_fitting(convolved_cube, rfit, xell, yell, resolution, theta_ell, q_ell)  # create ellipse mask
     convolved_cube *= ell_mask
     input_data_masked = input_data[zrange[0]:zrange[1], xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask
 
@@ -459,7 +464,8 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     print(np.sum(ell_4))
 
     v_los = block_reduce(v_los, s, np.mean)
-    v_los = block_reduce(v_los, ds, np.mean)
+    v_los = block_reduce(v_los, ds, np.mean) * ell_4[0]
+    print(v_los.shape)
     #v_los *= ell_4[0]
 
     return v_los, x_obs_ac, y_obs_ac, cs, freq_ax, cs_unsum
@@ -646,11 +652,21 @@ if __name__ == "__main__":
                       sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], f_w=params['f'],
                       ds=params['ds'], noise=noise, chi2=True, reduced=True, freq_ax=freq_ax, q_ell=params['q_ell'],
                       theta_ell=np.deg2rad(params['theta_ell']), fstep=fstep, f_0=f_0, bl=params['bl'],
-                      xyrange=[params['xi'], params['xf'], params['yi'], params['yf']])
+                      xyrange=[params['xi'], params['xf'], params['yi'], params['yf']], xell=params['xell'],
+                      yell=params['yell'])
     vlos, x_obs, y_obs, cs, f_ax, cs_unsum = outs
 
+    params, priors = par_dicts('/Users/jonathancohn/Documents/dyn_mod/param_files/ngc_3258binexc_xcl_params.txt')
+    # CREATE THINGS THAT ONLY NEED TO BE CALCULATED ONCE (collapse fluxes, lucy, noise)
+    mod_ins = model_prep(data=params['data'], ds=params['ds'], lucy_out=params['lucy'], lucy_mask=params['lucy_mask'],
+                         lucy_b=params['lucy_b'], lucy_in=params['lucy_in'], lucy_o=params['lucy_o'],
+                         lucy_it=params['lucy_it'], data_mask=params['mask'], grid_size=params['gsize'],
+                         res=params['resolution'], x_std=params['x_fwhm'], y_std=params['y_fwhm'], pa=params['PAbeam'],
+                         xyerr=[params['xerr0'], params['xerr1'], params['yerr0'], params['yerr1']],
+                         zrange=[params['zi'], params['zf']])
+
     # 362.0412  # 362.0228
-    out2 = model_grid(resolution=params['resolution'], s=params['s'], x_loc=362.0228, y_loc=params['yloc'],
+    out2 = model_grid(resolution=params['resolution'], s=params['s'], x_loc=params['xloc'], y_loc=params['yloc'],
                       mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'], dist=params['dist'],
                       theta=np.deg2rad(params['PAdisk']), input_data=input_data, lucy_out=lucy_out, out_name=out,
                       beam=beam, rfit=params['rfit'], enclosed_mass=params['mass'], ml_ratio=params['ml_ratio'],
@@ -658,10 +674,15 @@ if __name__ == "__main__":
                       sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], f_w=params['f'],
                       ds=params['ds'], noise=noise, chi2=True, reduced=True, freq_ax=freq_ax, q_ell=params['q_ell'],
                       theta_ell=np.deg2rad(params['theta_ell']), fstep=fstep, f_0=f_0, bl=params['bl'],
-                      xyrange=[params['xi'], params['xf'], params['yi'], params['yf']])
+                      xyrange=[params['xi'], params['xf'], params['yi'], params['yf']],  xell=params['xell'],
+                      yell=params['yell'])
     vlos2, x_obs, y_obs, cs2, f_ax, cs_unsum2 = out2
 
     vdiff = vlos - vlos2
+    plt.imshow(vdiff, origin='lower')
+    plt.colorbar()
+    plt.show()
+
     maxes = []
     argm = []
     for i in range(len(vdiff)):
@@ -679,8 +700,17 @@ if __name__ == "__main__":
     hm = cdiff == 0.0
     print(np.sum(huh), np.sum(hm))
 
-    plt.title(r'median xloc $\chi^2$ - lower CL xloc $\chi^2$ (at $\nu = $' + str(round(f_ax[16] / 10**9, 4)) + ' GHz)')
-    plt.imshow(cs_unsum[16] - cs_unsum2[16], origin='lower')
+    cd = []
+    for i in range(len(cs_unsum)):
+        cd.append(cs_unsum[i] - cs_unsum2[i])
+    cd = np.asarray(cd)
+    print(cd.shape)
+    cd = np.sum(cd, axis=0)
+    print(cd.shape)
+
+    plt.title(r'median xloc $\chi^2$ - lower CL xloc $\chi^2$, total $\Delta \chi^2 = $' + str(round(np.sum(cd), 4)))
+    #  (at $\nu = $' + str(round(f_ax[16] / 10**9, 4)) + ' GHz)'
+    plt.imshow(cd, origin='lower')  # cs_unsum[16] - cs_unsum2[16]
     cbar = plt.colorbar()
     cbar.set_label(r'$\Delta$[(model - data)$^2 / $ noise$^2$]', fontsize=20, rotation=90, labelpad=20)
     plt.xlabel(r'x [4x4 binned pixels]', fontsize=20)  # x [arcsec]  # x [4x4 binned pixels]
