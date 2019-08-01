@@ -439,6 +439,23 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     convolved_cube *= ell_mask
     input_data_masked = input_data[zrange[0]:zrange[1], xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask
 
+    plt.imshow(weight, origin='lower')
+    plt.show()
+
+    print(theta_ell)
+    print(np.sum(ell_mask))
+    fig = plt.figure()
+    ax = plt.gca()
+    plt.imshow(ell_mask, origin='lower')
+    plt.colorbar()
+    from matplotlib import patches
+    e1 = patches.Ellipse((xell, yell), 2 * rfit / resolution, 2 * rfit / resolution * q_ell, angle=np.rad2deg(theta_ell),
+                         linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
+    ax.add_patch(e1)
+    plt.title(r'q = ' + str(q_ell) + r', PA = ' + str(params['theta_ell']) + ' deg, rfit = ' + str(params['rfit'])
+              + ' arcsec')
+    plt.show()
+
     if chi2:  # if outputting chi^2
         chi_sq = 0.  # initialize chi^2
         cs = []  # chi^2 per slice
