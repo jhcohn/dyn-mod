@@ -539,7 +539,7 @@ def plot_all(fullchain, clip, end, pfile_true, init_guess, flatsig=False, save=F
         pars = ['mbh', 'f', 'PAdisk', 'yloc', 'sig0', 'vsys', 'ml_ratio', 'inc']
         ax_lab = [r'$\log_{10}$(M$_{\odot}$)', 'unitless', 'deg', 'pixels', 'km/s', 'km/s',
                   r'M$_{\odot}$/L$_{\odot}$', 'deg']
-        axes_order = [[0, 0], [0, 2], [1, 0], [1, 3], [1, 2], [1, 1], [0, 1], [0, 3]]
+        axes_order = [[0, 0], [0, 2], [1, 0], [1, 2], [1, 3], [1, 1], [0, 1], [0, 3]]
     elif flatsig:
         fig, axes = plt.subplots(3, 3, figsize=(16, 12))  # 3 rows, 3 cols of subplots; because there are 9 free params
         # BUCKET NEED TO FIND OUT HOW TO AUTOMATE GETTING THIS ORDER RIGHT!
@@ -590,7 +590,7 @@ def plot_all(fullchain, clip, end, pfile_true, init_guess, flatsig=False, save=F
         row, col = axes_order[par]
         fs = 11
         if pars[par] == 'mbh':
-            axes[row, col].hist(np.log10(chain), 200, color="b", histtype="step")  # axes[i]
+            axes[row, col].hist(np.log10(chain), 2000, color="b", histtype="step")  # axes[i]
             percs = np.percentile(np.log10(chain), [16., 50., 84.])
             threepercs = np.percentile(np.log10(chain), [0.15, 50., 99.85])  # 3sigma
             if flatsig:
@@ -602,7 +602,13 @@ def plot_all(fullchain, clip, end, pfile_true, init_guess, flatsig=False, save=F
                 axes[row, col].axvline(np.log10(vax), ls='-', color='k')
             # axes[row, col].axvline(np.log10(vax_init), ls='--', color='r')
         else:
-            axes[row, col].hist(chain, 200, color="b", histtype="step")  # axes[i]
+            if pars[par] == 'xloc' or pars[par] == 'yloc' or pars[par] == 'vsys':
+                bin = 4000
+            elif pars[par] == 'PAdisk':
+                bin = 2000
+            else:
+                bin = 200
+            axes[row, col].hist(chain, bin, color="b", histtype="step")  # axes[i]
             percs = np.percentile(chain, [16., 50., 84.])
             threepercs = np.percentile(chain, [0.15, 50., 99.85])  # 3sigma
             if flatsig:
@@ -625,8 +631,10 @@ def plot_all(fullchain, clip, end, pfile_true, init_guess, flatsig=False, save=F
         axes[row, col].set_xlabel(ax_lab[par], fontsize=fs)
         print(percs[0] - (percs[1] - percs[0]), percs[2] + (percs[2] - percs[1]))
         # '''  #  Comment here to remove xlims
-        if pars[par] == 'vsys' or pars[par] == 'xloc' or pars[par] == 'yloc':
-            axes[row, col].set_xlim(percs[0] - 50 * (percs[1] - percs[0]), percs[2] + 50 * (percs[2] - percs[1]))
+        if pars[par] == 'vsys' or pars[par] == 'yloc':
+            axes[row, col].set_xlim(percs[0] - 14 * (percs[1] - percs[0]), percs[2] + 14 * (percs[2] - percs[1]))
+        elif pars[par] == 'xloc':
+            axes[row, col].set_xlim(percs[0] - 40 * (percs[1] - percs[0]), percs[2] + 40 * (percs[2] - percs[1]))
         elif flatsig and pars[par] == 'sig0':
             axes[row, col].set_xlim(7., 10.)
         elif pars[par] == 'sig0' or pars[par] == 'r0' or pars[par] == 'mu':
@@ -736,7 +744,8 @@ if __name__ == "__main__":
     print(oop)
     # '''  #
 
-    # '''  #
+    '''  #
+    # xcl run!
     direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'xcl_3258binexc_1564617972.15_'
     pf = base + 'param_files/ngc_3258binexc_xcl_params.txt'  # pf = base + 'param_files/ngc_3258inex2_params.txt'
     bl = base + 'param_files/ngc_3258bl_params.txt'
@@ -745,7 +754,8 @@ if __name__ == "__main__":
     print(oop)
     # '''  #
 
-    # ''' #
+    ''' #
+    # not sure (500walk 500steps)
     direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'flat3258binexc_1564523818.43_'
     pf = base + 'param_files/ngc_3258binexc_params.txt'  # pf = base + 'param_files/ngc_3258inex2_params.txt'
     bl = base + 'param_files/ngc_3258bl_params.txt'
@@ -754,14 +764,16 @@ if __name__ == "__main__":
     # ''' #
 
     # '''  #
+    # binexc run and binexc fixed ellipse run
     direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'flat3258binexc_'
     direct_ok = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'old_flat3258binexc_'
     pf = base + 'param_files/ngc_3258binexc_params.txt'  #     pf = base + 'param_files/ngc_3258inex2_params.txt'
     bl = base + 'param_files/ngc_3258bl_params.txt'
-    directr = direct + '500_0_20000tempchain.pkl'
+    directr = direct + '1564759210.8_500_0_20000_fullchain.pkl'  # '500_0_20000tempchain.pkl'
+    cvg(directr, clip=0, end=-1, vline=[14750])
     #temp_out(directr, clip=0, end=-1, pfile_true=base + 'param_files/ngc_3258bl_params.txt', init_guess=pf)
-    plot_all(directr, clip=1000, end=4000, pfile_true=bl, init_guess=pf, flatsig=True, save=False)
-    plot_all(direct_ok + '500_0_20000tempchain.pkl', clip=1000, end=4000, pfile_true=bl, init_guess=pf, flatsig=True, save=False)
+    plot_all(directr, clip=2000, end=20000, pfile_true=bl, init_guess=pf, flatsig=True, save=False)
+    plot_all(direct_ok + '500_0_20000tempchain.pkl', clip=2000, end=20000, pfile_true=bl, init_guess=pf, flatsig=True, save=False)
 
     # ends = [700, 800, 870, 900, 1000, 1500, 2000]  # 500, 600,
     # param_changes(direct + '500_0_20000_fullchain.pkl', clips=np.asarray(ends) - 500, ends=ends)

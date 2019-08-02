@@ -1,0 +1,102 @@
+# TYPE PARAMETER VALUE PRIOR_MIN PRIOR_MAX
+# FREE PARAMS
+free mbh 8.e8 0. 1e12 #???
+free xloc 150 140 160 #135cubex,150cubey_to_125cubex,150cubey
+free yloc 130 120 140 #cubexy_swap_so_x_about_150_and_y_125_to_135
+free sig0 2. 0 100 #???
+free r0 0.5 0 100 #???
+free mu 0.5 0 100 #???
+free sig1 5. 0 100 #???
+free inc 48. 30 60 #todo_look_at_ellipse_map_see_what_q_best
+free PAdisk 199. 185 240 #based_on_theta_ell
+free vsys 6421. 6000 7000 #Table1_pg326_https://iopscience.iop.org/article/10.1086/313194/pdf_found_from_ned
+free ml_ratio 1. 0.1 10 #todo
+free f 1. 0.5 1.5
+
+# FIXED FLOATS
+float theta_ell 199.08 #19.08 #109.08 #from_galfitmge_file_meas_from_+xobs_counterclockwise_to_blueshifted_side
+float q_ell 0.35 #todo_modify_during_ellipse_fitting
+float xell 127.5 #135cubex,150cubey_to_125cubex,150cubey
+float yell 151. #cubexy_swap_so_x_about_150_and_y_125_to_135
+float resolution 0.02 #CDELT2_OR_CDELT3_x_3600arcsec/deg_=_pixel_resolution
+float rfit 0.7 #modify_during_ellipse_fitting
+float dist 89. #from_galfitmge_file
+float x_fwhm 0.197045 #BMAJ_x_3600arcsec/deg=x_fwhm_(OR_IS_IT_BMIN???)
+float y_fwhm 0.103544 #BMIN_x_3600arcsec/deg=y_fwhm_(OR_IS_IT_BMAJ???)
+float PAbeam 9.271 #BPA_in_header
+int lucy_it 10 #5_10_15_make_a_bunch???
+int zi 23 #based_on_mask.fits
+int zf 71 #based_on_mask.fits
+int xi 84 #see_summed_model_fluxmap_swap_cubexy(swapback!)
+int xf 174 #see_summed_model_fluxmap_swap_cubexy(swapback!)
+int yi 118 #see_summed_model_fluxmap_swap_cubexy(swapback!)
+int yf 188 #see_summed_model_fluxmap_swap_cubexy(swapback!)
+int xerr0 125 #choose_origin_near_emission_but_not_contaminated
+int xerr1 145 #so_choose_origin_xcube135_ycube_110_and_then_swap_cubexy
+int yerr0 100 #so_x_100_to_120(nope_swapback)
+int yerr1 120 #and_y_125_to_145(nope_swapback)
+int s 4 #???
+int ds 4 #???
+int gsize 31 #???
+int mtype 0
+int bl 0
+str s_type flat #start_with_flat
+
+# FILES
+str data /Users/jonathancohn/Documents/dyn_mod/ugc_2698/UGC2698_C4_CO21_bri_20kms.pbcor.fits
+str mask /Users/jonathancohn/Documents/dyn_mod/ugc_2698/UGC2698_C4_CO21_bri_20kms.mask.fits
+str lucy /Users/jonathancohn/Documents/dyn_mod/ugc_2698/ugc_2698_scikit_lucyout_n10.fits
+str lucy_in /Users/jonathancohn/Documents/dyn_mod/ugc_2698/ugc_2698_summed_model_fluxmap.fits
+str lucy_b /Users/jonathancohn/Documents/dyn_mod/ugc_2698/ugc_2698_beam31.fits
+str lucy_o /Users/jonathancohn/Documents/dyn_mod/ugc_2698/ugc_2698_model_lucyout_n10.fits[0]
+str lucy_mask /Users/jonathancohn/Documents/dyn_mod/ugc_2698/ugc_2698_collapsed_mask.fits
+str mass /Users/jonathancohn/Documents/dyn_mod/ugc_2698/ugc_2698_mge.txt
+str outname /Users/jonathancohn/Documents/dyn_mod/emcee_out/ugc_2698_outcube.fits
+
+# INFO TYPES:
+# free=float [also, line includes priors]
+# float=float
+# int=int
+# str=string
+
+# INFO FREE PARAMS:
+# mbh=black_hole_mass [solar masses]
+# xloc=x_position_of_BH [pixels]
+# yloc=y_position_of_BH [pixels]
+# sig0=sigma_velocity_dispersion [km/s]
+# r0=sigma_scale_radius [pc]
+# mu=sigma_variance [pc]
+# sig1=sigma_offset [km/s]
+# inc=inclination_angle [deg]
+# PAdisk=disk_PA_from_xobs_axis_to_blueshifted_axis [deg]
+# vsys=systemic_velocity [km/s]
+# ml_ratio=mass_to_light_ratio [solar]
+# f=gaussian_line_profile_normalization_constant
+
+# INFO FIXED PARAMS
+# q_ell=axis_ratio_of_fitting_ellipse [unitless, based on disk inc]
+# resolution=pixel_scale [arcsec/pix]
+# rfit=disk_radius_within_which_we_will_compare_model_and_data [arcsec]
+# s_type=type_of_sigma ['flat', 'gauss', or 'exp']
+# dist=galaxy_angular_size_distance [Mpc]
+# s=oversampling_factor [number]
+# gsize=grid_size_for_beam [pixel number; must be odd]
+# x_fwhm=fwhm_of_beam_in_x_direction [arcsec]
+# y_fwhm=fwhm_of_beam_in_y_direction [arcsec]
+# PAbeam=beam_position_angle [deg]
+# inc_star=inclination_of_stars_in_galaxy [deg]
+# zi=slice_number_in_input_data_where_data_starts_showing_up [python, so first slice is 0]
+# zf=slice_number_in_input_data_where_data_stops_showing_up [python, so first slice is 0, and zstop is NOT included]
+# ds=downsampling_factor [int]
+# bl=units_on_collapsed_flux [0=Jy/beam * Hz, 1=Jy/beam * km/s]
+# mtype=type_of_file_describing_enclosed_stellar_mass [0=mge parameters, 1=mass as function of radius; 2=circular velocity as function of radius]
+
+# INFO FILES
+# data=data_cube
+# mask=mask_cube
+# lucy=output_from_lucy [Lucy output file]
+# lucy_in=lucy_input_flux_map [if no output_from_lucy]
+# lucy_b=beam_to_use_with_lucy [if no output_from_lucy]
+# lucy_o=filename_to_save_lucy_output [if no output_from_lucy]
+# lucy_mask=mask_cube_collapsed_to_2d [if no output_from_lucy]
+# mass=file_describing_enclosed_stellar_mass [m(R) if mtype=2, v(R) if mtype=1, mge parameters if mtype=0]

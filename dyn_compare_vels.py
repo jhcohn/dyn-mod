@@ -440,10 +440,10 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     ell_4 = rebin(ell_mask, ds)
     data_4 = rebin(input_data_masked, ds)
     model_4 = rebin(convolved_cube, ds)
-    indices = [[11,13], [13, 11]]
+    indices = [[13, 11]]  # [11, 13]
     #            [12, 20], [20,12], [10, 10], [int(len(data_4[1]) / 2.), int(len(data_4[1]) / 2.)],
     #            [int(len(data_4[1]) / 2.) + 1, int(len(data_4[1]) / 2.) + 1]]
-    # compare(data_4, model_4, freq_ax / (10**9), indices, f_0 / (10**9 * (1+zred)), str(x_loc + xyrange[0]), noise)
+    compare(data_4, model_4, freq_ax / (10**9), indices, f_0 / (10**9 * (1+zred)), str(x_loc + xyrange[0]), noise)
 
     all_pix = np.ndarray.flatten(ell_4)  # all fitted pixels in each slice [len = 625 (yep)] [525 masked, 100 not]
     masked_pix = all_pix[all_pix != 0]  # all_pix, but this time only the pixels that are actually inside ellipse
@@ -463,8 +463,8 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     print(chi_sq)
     print(np.sum(ell_4))
 
-    v_los = block_reduce(v_los, s, np.mean)
-    v_los = block_reduce(v_los, ds, np.mean) * ell_4[0]
+    #v_los = block_reduce(v_los, s, np.mean)
+    #v_los = block_reduce(v_los, ds, np.mean) * ell_4[0]
     print(v_los.shape)
     #v_los *= ell_4[0]
 
@@ -679,10 +679,14 @@ if __name__ == "__main__":
     vlos2, x_obs, y_obs, cs2, f_ax, cs_unsum2 = out2
 
     vdiff = vlos - vlos2
-    plt.imshow(vdiff, origin='lower')
-    plt.colorbar()
+    plt.imshow(vdiff, origin='lower', cmap='RdBu_r', vmax=np.amax([np.amax(vdiff), -np.amin(vdiff)]),
+               vmin=-np.amax([np.amax(vdiff), -np.amin(vdiff)]))
+    cbar = plt.colorbar()
+    plt.title(r'vlos (median xloc) - vlos (lower CL xloc)')
+    cbar.set_label(r'km/s', fontsize=20, rotation=0, labelpad=20)
+    plt.xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
+    plt.ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
     plt.show()
-
     maxes = []
     argm = []
     for i in range(len(vdiff)):
