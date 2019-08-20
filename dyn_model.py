@@ -348,6 +348,22 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         v_c = mvm.mge_vcirc(surf_pots * ml_ratio, sigma_pots, qobs, np.rad2deg(inc), 0., dist, test_rad)  # v_c,star
         v_c_r = interpolate.interp1d(test_rad, v_c, kind='cubic', fill_value='extrapolate')
 
+        # '''  #
+        print(v_c_r(0.), 'hey')
+        plt.plot(test_rad, v_c, 'k+')
+        plt.plot(test_rad, v_c_r(test_rad), 'b-')
+        plt.xlabel('Radius [arcsec]')
+        plt.ylabel(r'$v_{c*}$ [km/s]')
+        plt.title('MGE')
+        plt.show()
+        # '''  #
+        print(np.amax(R_ac), np.amin(R_ac), 'hey')
+        plt.imshow(v_c_r(R_ac), origin='lower')
+        cbar = plt.colorbar()
+        cbar.set_label(r'km/s', fontsize=20, rotation=0, labelpad=20)
+        plt.show()
+        # '''  #
+
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
         vel = np.sqrt((constants.G_pc * mbh / R) + v_c_r(R_ac)**2)
     elif menc_type == 1:  # elif using a file with v_circ(R) due to stellar mass
@@ -393,12 +409,22 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     center = (R == 0.)  # Doing this is only relevant if we have pixel located exactly at the center
     v_los[center] = 0.  # if any point is at x_disk, y_disk = (0., 0.), set velocity there = 0.
 
+    plt.imshow(v_los, origin='lower')
+    cbar = plt.colorbar()
+    cbar.set_label(r'km/s', fontsize=20, rotation=0, labelpad=20)
+    plt.show()
+
     # CALCULATE VELOCITY PROFILES
     sigma = get_sig(r=R, sig0=sig_params[0], r0=sig_params[1], mu=sig_params[2], sig1=sig_params[3])[sig_type]
 
     # CONVERT v_los TO OBSERVED FREQUENCY MAP
     zred = vsys / constants.c_kms  # redshift
     freq_obs = (f_0 / (1+zred)) * (1 - v_los / constants.c_kms)  # convert v_los to f_obs
+
+    plt.imshow(freq_obs, origin='lower')
+    cbar = plt.colorbar()
+    cbar.set_label(r'Hz', fontsize=20, rotation=0, labelpad=20)
+    plt.show()
 
     # CONVERT OBSERVED DISPERSION (turbulent) TO FREQUENCY WIDTH
     sigma_grid = np.zeros(shape=R.shape) + sigma  # make sigma (whether already R-shaped or constant) R-shaped
@@ -408,7 +434,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     weight = subpix_deconvolved  # [Jy/beam Hz]
 
     # WEIGHT CURRENTLY IN UNITS OF Jy/beam * Hz --> need to get it in units of Jy/beam to match data
-    weight *=  f_w / np.sqrt(2 * np.pi * delta_freq_obs**2)  # divide to get correct units
+    weight *= f_w / np.sqrt(2 * np.pi * delta_freq_obs**2)  # divide to get correct units
     # NOTE: MAYBE multiply by fstep here, after collapsing and lucy process, rather than during collapse
     # NOTE: would then need to multiply by ~1000 factor or something else large there, bc otherwise lucy cvg too fast
 
@@ -434,14 +460,13 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         convolved_cube[z, :, :] = convolution.convolve(intrinsic_cube[z, :, :], beam)  # CONVOLVE CUBE WITH BEAM
 
     # ONLY WANT TO FIT WITHIN ELLIPTICAL REGION! APPLY ELLIPTICAL MASK TO MODEL CUBE & INPUT DATA
-    print(x_loc, xell, y_loc, yell, 'hi')
     ell_mask = ellipse_fitting(convolved_cube, rfit, xell, yell, resolution, theta_ell, q_ell)  # create ellipse mask
     convolved_cube *= ell_mask
     input_data_masked = input_data[zrange[0]:zrange[1], xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask
 
+    # '''  #
     plt.imshow(weight, origin='lower')
     plt.show()
-
     print(theta_ell)
     print(np.sum(ell_mask))
     fig = plt.figure()
@@ -455,12 +480,14 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     plt.title(r'q = ' + str(q_ell) + r', PA = ' + str(params['theta_ell']) + ' deg, rfit = ' + str(params['rfit'])
               + ' arcsec')
     plt.show()
+    # '''  #
 
     if chi2:  # if outputting chi^2
         chi_sq = 0.  # initialize chi^2
         cs = []  # chi^2 per slice
 
         # compare the data to the model by binning each in groups of dsxds pixels (separate from s)
+        print(input_data.shape)
         data_4 = rebin(input_data_masked, ds)
         ap_4 = rebin(convolved_cube, ds)
         ell_4 = rebin(ell_mask, ds)
