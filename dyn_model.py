@@ -393,22 +393,12 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     center = (R == 0.)  # Doing this is only relevant if we have pixel located exactly at the center
     v_los[center] = 0.  # if any point is at x_disk, y_disk = (0., 0.), set velocity there = 0.
 
-    plt.imshow(v_los, origin='lower')
-    cbar = plt.colorbar()
-    cbar.set_label(r'km/s', fontsize=20, rotation=0, labelpad=20)
-    plt.show()
-
     # CALCULATE VELOCITY PROFILES
     sigma = get_sig(r=R, sig0=sig_params[0], r0=sig_params[1], mu=sig_params[2], sig1=sig_params[3])[sig_type]
 
     # CONVERT v_los TO OBSERVED FREQUENCY MAP
     zred = vsys / constants.c_kms  # redshift
     freq_obs = (f_0 / (1+zred)) * (1 - v_los / constants.c_kms)  # convert v_los to f_obs
-
-    plt.imshow(freq_obs, origin='lower')
-    cbar = plt.colorbar()
-    cbar.set_label(r'Hz', fontsize=20, rotation=0, labelpad=20)
-    plt.show()
 
     # CONVERT OBSERVED DISPERSION (turbulent) TO FREQUENCY WIDTH
     sigma_grid = np.zeros(shape=R.shape) + sigma  # make sigma (whether already R-shaped or constant) R-shaped
