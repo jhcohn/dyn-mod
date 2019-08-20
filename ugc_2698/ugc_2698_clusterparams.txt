@@ -44,15 +44,15 @@ int bl 0
 str s_type flat #start_with_flat
 
 # FILES
-str data /Users/jonathancohn/Documents/dyn_mod/ugc_2698/UGC2698_C4_CO21_bri_20kms.pbcor.fits #DONE
-str mask /Users/jonathancohn/Documents/dyn_mod/ugc_2698/UGC2698_C4_CO21_bri_20kms.mask.fits #DONE(or_want_.strictmask.fits?)
-str lucy /Users/jonathancohn/Documents/dyn_mod/ugc_2698/ugc_2698_scikit_lucyout_n10.fits #CHECK?
-str lucy_in /Users/jonathancohn/Documents/dyn_mod/ugc_2698/ugc_2698_summed_model_fluxmap.fits #CHECK?
-str lucy_b /Users/jonathancohn/Documents/dyn_mod/ugc_2698/ugc_2698_beam31.fits #CHECK?
-str lucy_o /Users/jonathancohn/Documents/dyn_mod/ugc_2698/ugc_2698_model_lucyout_n10.fits[0]
-str lucy_mask /Users/jonathancohn/Documents/dyn_mod/ugc_2698/ugc_2698_collapsed_mask.fits #DONE(collapsed_from_.mask.fits,NOT_from_.strictmask.fits)
-str mass /Users/jonathancohn/Documents/dyn_mod/ugc_2698/ugc_2698_mge.txt #DONE
-str outname /Users/jonathancohn/Documents/dyn_mod/emcee_out/ugc_2698_outcube.fits #DONE
+str data /scratch/user/joncohn/dyn_cluster/ugc_2698/UGC2698_C4_CO21_bri_20kms.pbcor.fits #DONE
+str mask /scratch/user/joncohn/dyn_cluster/ugc_2698/UGC2698_C4_CO21_bri_20kms.mask.fits #DONE(or_want_.strictmask.fits?)
+str lucy /scratch/user/joncohn/dyn_cluster/ugc_2698/ugc_2698_scikit_lucyout_n10.fits #CHECK?
+str lucy_in /scratch/user/joncohn/dyn_cluster/ugc_2698/ugc_2698_summed_model_fluxmap.fits #CHECK?
+str lucy_b /scratch/user/joncohn/dyn_cluster/ugc_2698/ugc_2698_beam31.fits #CHECK?
+str lucy_o /scratch/user/joncohn/dyn_cluster/ugc_2698/ugc_2698_model_lucyout_n10.fits[0]
+str lucy_mask /scratch/user/joncohn/dyn_cluster/ugc_2698/ugc_2698_collapsed_mask.fits #DONE(collapsed_from_.mask.fits,NOT_from_.strictmask.fits)
+str mass /scratch/user/joncohn/dyn_cluster/ugc_2698/ugc_2698_mge.txt #DONE
+str outname /scratch/user/joncohn/dyn_cluster/emcee_out/ugc_2698_outcube.fits #DONE
 
 # INFO TYPES:
 # free=float [also, line includes priors]
