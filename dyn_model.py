@@ -348,22 +348,6 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         v_c = mvm.mge_vcirc(surf_pots * ml_ratio, sigma_pots, qobs, np.rad2deg(inc), 0., dist, test_rad)  # v_c,star
         v_c_r = interpolate.interp1d(test_rad, v_c, kind='cubic', fill_value='extrapolate')
 
-        # '''  #
-        print(v_c_r(0.), 'hey')
-        plt.plot(test_rad, v_c, 'k+')
-        plt.plot(test_rad, v_c_r(test_rad), 'b-')
-        plt.xlabel('Radius [arcsec]')
-        plt.ylabel(r'$v_{c*}$ [km/s]')
-        plt.title('MGE')
-        plt.show()
-        # '''  #
-        print(np.amax(R_ac), np.amin(R_ac), 'hey')
-        plt.imshow(v_c_r(R_ac), origin='lower')
-        cbar = plt.colorbar()
-        cbar.set_label(r'km/s', fontsize=20, rotation=0, labelpad=20)
-        plt.show()
-        # '''  #
-
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
         vel = np.sqrt((constants.G_pc * mbh / R) + v_c_r(R_ac)**2)
     elif menc_type == 1:  # elif using a file with v_circ(R) due to stellar mass
@@ -464,7 +448,7 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     convolved_cube *= ell_mask
     input_data_masked = input_data[zrange[0]:zrange[1], xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask
 
-    # '''  #
+    '''  #
     plt.imshow(weight, origin='lower')
     plt.show()
     print(theta_ell)
@@ -487,11 +471,12 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         cs = []  # chi^2 per slice
 
         # compare the data to the model by binning each in groups of dsxds pixels (separate from s)
-        print(input_data.shape)
         data_4 = rebin(input_data_masked, ds)
         ap_4 = rebin(convolved_cube, ds)
         ell_4 = rebin(ell_mask, ds)
 
+        print(np.amax(noise), np.amin(noise), 'helloooo')
+        print(noise)
         z_ind = 0  # the actual index for the model-data comparison cubes
         for z in range(zrange[0], zrange[1]):  # for each relevant freq slice (ignore slices with only noise)
             chi_sq += np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise[z_ind]**2)  # calculate chisq!
@@ -651,6 +636,7 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=
     noise = []  # ESTIMATE NOISE (RMS) IN ORIGINAL DATA CUBE [z, y, x]  # For large N, Variance ~= std^2
     for z in range(zrange[0], zrange[1]):  # for each relevant freq slice
         noise.append(np.std(noise_4[z, xyerr[2]:xyerr[3], xyerr[0]:xyerr[1]]))  # ~variance
+        #         noise.append(np.std(noise_4[z, int(xyerr[2]/ds):int(xyerr[3]/ds), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
 
     return lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise
 
