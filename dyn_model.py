@@ -465,8 +465,6 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         ap_4 = rebin(convolved_cube, ds)
         ell_4 = rebin(ell_mask, ds)
 
-        print(np.amax(noise), np.amin(noise), 'helloooo')
-        print(noise)
         z_ind = 0  # the actual index for the model-data comparison cubes
         for z in range(zrange[0], zrange[1]):  # for each relevant freq slice (ignore slices with only noise)
             chi_sq += np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise[z_ind]**2)  # calculate chisq!
@@ -628,8 +626,34 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=
         noise.append(np.std(noise_4[z, xyerr[2]:xyerr[3], xyerr[0]:xyerr[1]]))  # ~variance
         #         noise.append(np.std(noise_4[z, int(xyerr[2]/ds):int(xyerr[3]/ds), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
 
+    print(np.amax(noise), np.amin(noise), 'helloooo')
+    print(noise)
+    plt.plot(noise, 'b+')
+    plt.xlabel(r'Frequency slice - ' + str(zrange[0]))
+    plt.ylabel(r'Jy / beam')
+    plt.title('UGC 2698 noise region')
+    plt.show()
+    print(oop)
+
     return lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise
 
+
+def test_qell2(input_data, params, l_in, q_ell, rfit, pa):
+    ell_mask = ellipse_fitting(input_data, rfit, params['xell'], params['yell'], params['resolution'],
+                               pa, q_ell)  # create ellipse mask
+    fig = plt.figure()
+    ax = plt.gca()
+    plt.imshow(l_in, origin='lower')
+    plt.colorbar()
+    from matplotlib import patches
+    e1 = patches.Ellipse((params['xell'], params['yell']), 2 * rfit / params['resolution'],
+                         2 * rfit / params['resolution'] * q_ell,
+                         angle=pa, linewidth=2, edgecolor='w',
+                         fill=False)  # np.rad2deg(params['theta_ell'])
+    ax.add_patch(e1)
+    plt.title(r'q = ' + str(q_ell) + r', PA = ' + str(pa) + ' deg, rfit = ' + str(rfit) + ' arcsec')
+    plt.savefig('/Users/jonathancohn/Documents/dyn_mod/ugc_2698/ellipse_plots/' + str(q_ell) + '_' + str(pa) + '_' +
+                str(rfit) + '.png', dpi=300)
 
 def test_qell(input_data, params, l_in, q_ell):
     ell_mask = ellipse_fitting(input_data, params['rfit'], params['xell'], params['yell'], params['resolution'],
@@ -684,9 +708,18 @@ if __name__ == "__main__":
     l_in = hduin[0].data
     hduin.close()
 
-    # print(np.amax(lucy_out), np.amin(lucy_out), np.amax(l_in), np.amin(l_in))
-    # for q_ell in [0.3, 0.35, 0.4, 0.45]:
-    #     test_qell(input_data, params, l_in, q_ell)
+    '''  #
+    #print(np.amax(lucy_out), np.amin(lucy_out), np.amax(l_in), np.amin(l_in))
+    for q_ell in [0.3, 0.35, 0.4, 0.45]:
+        for rfit in [0.6, 0.65, 0.7]:
+            for pa in [16., 19., 22.]:
+                test_qell2(input_data, params, l_in, q_ell, rfit, pa)
+
+
+    for q_ell in [0.3, 0.35, 0.4, 0.45]:
+        test_qell(input_data, params, lucy_out, q_ell)
+    print(oop)
+    '''  #
 
     # CREATE MODEL CUBE!
     out = params['outname']
@@ -703,10 +736,21 @@ if __name__ == "__main__":
     print('True Total: ' + str(time.time() - t0_true))  # 3.93s YAY!  # 23s for 6 models (16.6 for 4 models)
     print(chi2)  # NOTE: right now, chi^2_nu (with my lucy + v(R)) = 1.9, chi^2_nu (with my lucy + mge) = 9.98
 
+'''  #
+    plt.imshow(lucy_out, origin='lower')
+    plt.colorbar()
+    plt.show()
+
+    hdu = fits.open('/Users/jonathancohn/Documents/dyn_mod/ugc_2698/ugc_2698_scikit_lucyout_n10.fits')
+    lo2 = hdu[0].data
+    hdu.close()
+    plt.imshow(lucy_out - lo2, origin='lower')
+    plt.colorbar()
+    plt.show()
+    print(oop)
+# '''  #
 # TO DO:
-# MAIN. Implement MGE as Jonelle requested[X], explore number of pixels in ellipse issue[ ], start playing with UGC[ ]
-# update dyn_emcee to use dyn_model instead of dyn_general format![X]
-# read up on convergence, implement convergence checks![?]
+# MAIN. Implement MGE as Jonelle requested[X], explore number of pixels in ellipse issue[ ], start playing with UGC[X]
 # Do Parallelization![ ] --> install mpi4py first!!!
 ## pip install mpi4py --> error: "error: Cannot compile MPI programs. Check your configuration!!!"
 ###https://stackoverflow.com/questions/28440834/error-when-installing-mpi4py --> brew install mpich
@@ -724,27 +768,13 @@ if __name__ == "__main__":
 #######Tried uninstalling/reinstalling, no success.
 # add model_prep to dyn_emcee[X]
 # Tighten all the priors![X]
-# Later (after done matching with Ben): prevent mu from going negative![ ]
+# Later (after done matching with Ben): prevent mu from going negative![X]
 # play with softening parameter?[X] --> don't worry about it anymore!
-# maybe put noise calc in model_prep function?[ ]
-# switch to using scikit-image (instead of iraf27) --> can do everything in python 3![ ]
+# maybe put noise calc in model_prep function?[X]
+# switch to using scikit-image (instead of iraf27) --> can do everything in python 3![X]
 # LONG-TERM: Do reading![ ]
 
 # CONVERGENCE: http://joergdietrich.github.io/emcee-convergence.html
-'''
-# PARALLELIZATION: from prospector.py:
-
-try:
-    from emcee.utils import MPIPool
-    pool = MPIPool(debug=False, loadbalance=True)
-    if not pool.is_master():
-        # Wait for instructions from the master process.
-        pool.wait()
-        sys.exit(0)
-except(ImportError, ValueError):
-    pool = None
-    print('Not using MPI')
-'''
 
 # emcee paper: https://arxiv.org/pdf/1202.3665.pdf
 # https://en.wikipedia.org/wiki/Reduced_chi-squared_statistic
@@ -809,33 +839,6 @@ https://stackoverflow.com/questions/42703861/how-to-use-mpi-on-mac-os-x
 Gelman-Rubin:
 http://www.stat.columbia.edu/~gelman/research/published/itsim.pdf
 http://joergdietrich.github.io/emcee-convergence.html
-
-Rhats from 100 1 100 (using bl param file)
-((), 'Rhat shape')
- 12	 7.4115		0.0786		1.13
-((), 'Rhat shape')
- 12	 7.4110		0.0741		1.20
-((), 'Rhat shape')
- 12	 7.4135		0.0693		1.14
-((), 'Rhat shape')
- 12	 7.4163		0.0660		1.13
-((), 'Rhat shape')
- 12	 7.4168		0.0648		1.09
-((), 'Rhat shape')
- 12	 7.4159		0.0633		1.10
-((), 'Rhat shape')
- 12	 7.4168		0.0632		1.18
-((), 'Rhat shape')
- 12	 7.4160		0.0587		1.12
-((), 'Rhat shape')
- 12	 7.4174		0.0562		1.09
-((), 'Rhat shape')
- 12	 7.4154		0.0528		1.18
-((), 'Rhat shape')
- 12	 7.4153		0.0498		1.12
-((), 'Rhat shape')
- 12	 7.4191		0.0479		1.12
-
 
 
 Made emcee_test.py using multiprocessing (see https://emcee.readthedocs.io/en/latest/tutorials/parallel/)
