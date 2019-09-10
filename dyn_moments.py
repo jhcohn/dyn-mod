@@ -209,11 +209,11 @@ def ellipse_fitting(cube, rfit, x0_sub, y0_sub, res, pa_disk, q):
     return ellipse_mask
 
 
-def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=np.deg2rad(60.), vsys=None, dist=17.,
-               theta=np.deg2rad(200.), input_data=None, lucy_out=None, out_name=None, beam=None, q_ell=1., theta_ell=0.,
+def moment_map(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=np.deg2rad(60.), vsys=None, dist=17.,
+               theta=np.deg2rad(200.), input_data=None, lucy_out=None, mask=None, beam=None, q_ell=1., theta_ell=0.,
                bl=False, enclosed_mass=None, menc_type=False, ml_ratio=1., sig_type='flat', sig_params=None, f_w=1.,
                noise=None, rfit=1., ds=None, chi2=False, zrange=None, xyrange=None, reduced=False, freq_ax=None, f_0=0.,
-               fstep=0., opt=True, quiet=False, xell=360., yell=350.):
+               fstep=0., opt=True, quiet=False, xell=360., yell=350., mom=0, lmask=None, datafile=None):
     """
     Build grid for dynamical modeling!
 
@@ -254,6 +254,8 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     :param bl: lucy weight map unit indicator (bl=False or 0 --> Jy/beam * Hz; bl=True or 1 --> Jy/beam km/s)
     :param opt: frequency axis velocity convention; if opt=True, optical velocity; if opt=False, radio velocity
     :param quiet: suppress printing out stuff!
+    :param mom: moment map number
+    :param lmask: lucy_mask i.e. collapsed strictmask
 
     :return: convolved model cube (if chi2 is False); chi2 (if chi2 is True)
     """
@@ -436,14 +438,291 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     convolved_cube *= ell_mask
     input_data_masked = input_data[zrange[0]:zrange[1], xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask
 
+    # MOMENT MAP STUFF
+    hdu_m = fits.open(mask)
+    data_mask = hdu_m[0].data  # this is hdu_m[0].data, NOT hdu[0].data[0], unlike the data_cube above
+    hdu_m.close()
+    # data_mask = data_mask[:, xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]]
+    data_mask = data_mask[:, xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]]
+    hdu_lm = fits.open(lmask)
+    mask2d = hdu_lm[0].data  # this is hdu_m[0].data, NOT hdu[0].data[0], unlike the data_cube above
+    hdu_lm.close()
+    mask2d = mask2d[xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]]
+    from mpl_toolkits.axes_grid1 import AxesGrid
+
+    # Not yet masked data sub-cube
+    data_subcube = input_data[zrange[0]:zrange[1], xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]]
+
+    # CONVERT FREQ TO VEL
+    velwidth = constants.c_kms * (1 + zred) * fstep / f_0
+    vel_ax = []
+    for v in range(len(freq_ax)):
+        vel_ax.append(constants.c_kms * (1. - (freq_ax[v] / f_0) * (1 + zred)))
+    vel_ax = np.asarray(vel_ax)
+    specc = False
+    mom = 2
+
+    if mom == 0:
+        if specc:  # if using SpectralCube built in function
+            from spectral_cube import SpectralCube
+            c1 = fits.open(datafile)
+            cube = SpectralCube.read(c1)
+            c1.close()
+            mo = cube.moment(order=1)
+            masked_mo = mo.hdu.data[xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask * mask2d
+
+            # masked_data_flux = fluxes[xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask
+            hdu = fits.PrimaryHDU(convolved_cube)
+            hdul = fits.HDUList([hdu])
+            temp = '/Users/jonathancohn/Documents/dyn_mod/moment_test.fits'
+            hdul.writeto(temp, overwrite=True)
+            dat, head = fits.getdata(temp, header=True)
+            dat1, head1 = fits.getdata(datafile, header=True)
+            for ind in [1, 2, 3]:
+                head['CRVAL' + str(ind)] = head1['CRVAL' + str(ind)]
+                head['CTYPE' + str(ind)] = head1['CTYPE' + str(ind)]
+                head['CDELT' + str(ind)] = head1['CDELT' + str(ind)]
+                head['CUNIT' + str(ind)] = head1['CUNIT' + str(ind)]
+            fits.writeto(temp, dat, head, overwrite=True)
+            c2 = fits.open(datafile)
+            cube2 = SpectralCube.read(c2)
+            c2.close()
+            model_mo2 = cube2.moment(order=1)
+            masked_model_mo = model_mo2.hdu.data[xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask * mask2d
+        else:  # if using equation from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
+            masked_mo = np.zeros(shape=ell_mask.shape)
+            for z in range(len(vel_ax)):
+                # masked_mo += abs(velwidth) * data_subcube[z] * mask2d
+                masked_mo += abs(velwidth) * input_data_masked[z] * mask2d
+
+            masked_model_mo = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
+            for zi in range(len(convolved_cube)):
+                masked_model_mo += convolved_cube[zi] * mask2d * abs(velwidth)  # data_mask[zi]
+
+        fig = plt.figure()
+        grid = AxesGrid(fig, 111,
+                        nrows_ncols=(1, 2),
+                        axes_pad=0.01,
+                        cbar_mode='single',
+                        cbar_location='right',
+                        cbar_pad=0.1)
+        i = 0
+        for ax in grid:
+            if i == 0:
+                im = ax.imshow(masked_mo, vmin=np.amin([np.nanmin(masked_model_mo), np.nanmin(masked_mo)]),
+                               vmax=np.amax([np.nanmax(masked_model_mo), np.nanmax(masked_mo)]), origin='lower')
+                ax.set_title(r'Moment 0 (data)')
+            else:
+                im = ax.imshow(masked_model_mo, vmin=np.amin([np.nanmin(masked_model_mo), np.nanmin(masked_mo)]),
+                               vmax=np.amax([np.nanmax(masked_model_mo), np.nanmax(masked_mo)]), origin='lower')
+                ax.set_title(r'Moment 0 (model)')
+            i += 1
+
+            ax.set_xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
+            ax.set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+
+        cbar = ax.cax.colorbar(im)
+        cbar = grid.cbar_axes[0].colorbar(im)
+        # cbar.set_label(r'Jy/beam', fontsize=20, rotation=0, labelpad=20)
+        plt.show()
+
+        plt.imshow(masked_model_mo - masked_mo, origin='lower')  # model_flux - masked_data_flux
+        plt.title(r'Moment 0 residual (model-data)')
+        plt.xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
+        plt.ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+        cbar = plt.colorbar()
+        cbar.set_label(r'Jy/beam', fontsize=20, rotation=0, labelpad=20)
+        plt.show()
+
+    else:  # elif mom == 1 or mom == 2:
+        '''  #
+        datav = np.zeros(shape=input_data_masked.shape)
+        modv = np.zeros(shape=convolved_cube.shape)
+        for v in range(len(vel_ax)):
+            datav[v] = input_data_masked[v] * vel_ax[v]
+            modv[v] = convolved_cube[v] * vel_ax[v]
+
+        dmap = np.sum(modv, axis=0) * mask2d / np.sum(convolved_cube, axis=0)
+        mmap = np.sum(datav, axis=0) * mask2d / np.sum(input_data_masked, axis=0)
+        # '''  #
+
+        mmap_num = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
+        mmap_den = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
+        for zi in range(len(convolved_cube)):
+            mmap_num += vel_ax[zi] * convolved_cube[zi] * mask2d
+            mmap_den += convolved_cube[zi] * mask2d
+        mmap = mmap_num / mmap_den
+
+        dmap_num = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
+        dmap_den = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
+        for zi in range(len(convolved_cube)):
+            dmap_num += vel_ax[zi] * input_data_masked[zi] * mask2d
+            dmap_den += input_data_masked[zi] * mask2d
+            # dmap += vel_ax[zi] * data_subcube[zi] * mask2d / (data_subcube[zi] * mask2d)
+        #plt.imshow(np.log10(np.abs(dmap_num)), origin='lower')
+        #plt.colorbar()
+        #plt.show()
+        d1 = 1.  # if NOT using UGC 2698, don't want to mask anything with this
+        if datafile.startswith('/Users/jonathancohn/Documents/dyn_mod/ugc_2698/'):
+            print('UGC')
+            d1 = np.zeros(shape=dmap_den.shape)  # d1 = dmap_den
+            for x in range(len(dmap_den)):
+                for y in range(len(dmap_den[0])):
+                    if np.abs(dmap_den[x,y]) <= 2e-3:
+                        d1[x,y] = 0.
+                    else:
+                        d1[x,y] = 1.
+
+            dmap = dmap_num / dmap_den
+            dmap *= d1
+            mmap *= d1
+            plt.imshow(d1, origin='lower')
+            plt.show()
+
+            #for x in range(len(dmap)):
+            #    for y in range(len(dmap[0])):
+            #        if d1[x, y] == 0.:
+            #            dmap[x, y] = 0.
+            #            mmap[x, y] = 0.
+        else:
+            dmap = dmap_num / dmap_den
+        '''
+        d1 = dmap_den
+        d1[dmap_den <= 1e-3] = 1.1
+        d1[dmap_den != 1.1] = 1.
+        d1[dmap_den == 1.1] = 0.
+        d2 = d1 - ell_mask
+        print(d1.shape)
+        plt.imshow(d1 - ell_mask, origin='lower')
+        plt.colorbar()
+        plt.show()
+        print(oop)
+        
+        print(dmap_den.shape, dmap_num.shape)
+        for z in range(len(dmap_den)):
+            for z2 in range(len(dmap_den[0])):
+                if 0 < np.abs(dmap_den[z,z2]) <= 5e-2:
+                    dmap_den[z,z2] = 1e-3
+        '''
+
+        if mom == 2:
+            m2_num = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
+            m2_den = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
+            for zi in range(len(convolved_cube)):
+                m2_num += (vel_ax[zi] - mmap)**2 * convolved_cube[zi] * mask2d
+                m2_den += convolved_cube[zi] * mask2d
+            m2 = np.sqrt(m2_num / m2_den) * d1  # MASKING using d1
+
+            d2_num = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
+            d2_n2 = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
+            d2_den = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
+            for zi in range(len(convolved_cube)):
+                d2_n2 += input_data_masked[zi] * (vel_ax[zi] - dmap)**2 * mask2d
+                d2_num += (vel_ax[zi] - dmap)**2 * input_data_masked[zi] * mask2d
+                d2_den += input_data_masked[zi] * mask2d
+            # d2_num = np.abs(d2_num)
+            dfig = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0]))) + 1.
+            dfig2 = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0]))) + 1.
+            dfig[d2_n2 < 0.] = 0.  # d2_n2 matches d2_den on the sign aspect
+            dfig2[d2_den < 0.] = 0.
+            plt.imshow(dfig + dfig2, origin='lower')
+            plt.colorbar()
+            plt.show()
+            d2 = np.sqrt(d2_num / d2_den) * d1  # MASKING using d1
+
+            '''  #
+            plt.imshow(d2_num / d2_den, origin='lower')
+            plt.title(r'(Moment 2)$^2$')
+            plt.colorbar()
+            plt.show()
+            plt.title('Moment 2 denom')
+            plt.imshow(d2_den, origin='lower')
+            plt.colorbar()
+            plt.show()
+            # '''  #
+
+            fig = plt.figure()
+            grid = AxesGrid(fig, 111,
+                            nrows_ncols=(1, 2),
+                            axes_pad=0.01,
+                            cbar_mode='single',
+                            cbar_location='right',
+                            cbar_pad=0.1)
+            i = 0
+            for ax in grid:
+                if i == 0:
+                    im = ax.imshow(d2, origin='lower', vmin=np.amin([np.nanmin(d2), np.nanmin(m2)]),
+                                   vmax=np.amax([np.nanmax(d2), np.nanmax(m2)]))  # , cmap='RdBu_r'
+                    ax.set_title(r'Moment 2 (data)')
+                elif i == 1:
+                    im = ax.imshow(m2, origin='lower', vmin=np.amin([np.nanmin(d2), np.nanmin(m2)]),
+                                   vmax=np.amax([np.nanmax(d2), np.nanmax(m2)]))  # , cmap='RdBu_r'
+                    ax.set_title(r'Moment 2 (model)')
+                i += 1
+
+                ax.set_xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
+                ax.set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+
+            # cbar = plt.colorbar(im)
+            cbar = ax.cax.colorbar(im)
+            cbar = grid.cbar_axes[0].colorbar(im)
+            # cbar.set_label(r'Jy/beam', fontsize=20, rotation=0, labelpad=20)
+            plt.show()
+
+            # '''  #
+            plt.imshow(m2 - d2, origin='lower', vmin=np.amin([np.nanmin(d2 - m2), np.nanmin(m2 - d2)]),
+                       vmax=np.amax([np.nanmax(d2 - m2), np.nanmax(m2 - d2)]))  # , cmap='RdBu'
+            cbar = plt.colorbar()
+            plt.title(r'Moment 2 residual (model - data)')
+            cbar.set_label(r'km/s', fontsize=20, rotation=0, labelpad=20)
+            plt.xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
+            plt.ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+            plt.show()
+
+        else:
+            fig = plt.figure()
+            grid = AxesGrid(fig, 111,
+                            nrows_ncols=(1, 2),
+                            axes_pad=0.01,
+                            cbar_mode='single',
+                            cbar_location='right',
+                            cbar_pad=0.1)
+            i = 0
+            for ax in grid:
+                if i == 0:
+                    im = ax.imshow(dmap, origin='lower', vmin=np.amin([np.nanmin(dmap), np.nanmin(mmap)]),
+                                   vmax=np.amax([np.nanmax(dmap), np.nanmax(mmap)]), cmap='RdBu_r')
+                    ax.set_title(r'Moment 1 (data)')
+                elif i == 1:
+                    im = ax.imshow(mmap, origin='lower', vmin=np.amin([np.nanmin(dmap), np.nanmin(mmap)]),
+                                   vmax=np.amax([np.nanmax(dmap), np.nanmax(mmap)]), cmap='RdBu_r')
+                    ax.set_title(r'Moment 1 (model)')
+                i += 1
+
+                ax.set_xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
+                ax.set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+
+            # cbar = plt.colorbar(im)
+            cbar = ax.cax.colorbar(im)
+            cbar = grid.cbar_axes[0].colorbar(im)
+            # cbar.set_label(r'Jy/beam', fontsize=20, rotation=0, labelpad=20)
+            plt.show()
+
+            # '''  #
+            plt.imshow(mmap - dmap, origin='lower', vmin=np.amin([np.nanmin(dmap-mmap), np.nanmin(mmap-dmap)]),
+                       vmax=np.amax([np.nanmax(dmap-mmap), np.nanmax(mmap-dmap)]), cmap='RdBu')
+            cbar = plt.colorbar()
+            plt.title(r'Moment 1 residual (model - data)')
+            cbar.set_label(r'km/s', fontsize=20, rotation=0, labelpad=20)
+            plt.xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
+            plt.ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+            plt.show()
+            # '''  #
+
     # compare the data to the model by binning each in groups of dsxds pixels (separate from s)
     ell_4 = rebin(ell_mask, ds)
     data_4 = rebin(input_data_masked, ds)
     model_4 = rebin(convolved_cube, ds)
-
-    plt.imshow(data_4[23], origin='lower')
-    plt.colorbar()
-    plt.show()
 
     indices = [[10,11], [11,11]] #UGC 2698: #[18,12] #NGC 3258: #[[13, 11]]  # [11, 13]
     print(data_4.shape, ell_4.shape)
@@ -454,10 +733,10 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     #            [12, 20], [20,12], [10, 10], [int(len(data_4[1]) / 2.), int(len(data_4[1]) / 2.)],
     #            [int(len(data_4[1]) / 2.) + 1, int(len(data_4[1]) / 2.) + 1]]
     # str(x_loc + xyrange[0])
-    compare(data_4, model_4, freq_ax / (10**9), indices, f_0 / (10**9 * (1+zred)), '', noise, ers=True)
+    # compare(data_4, model_4, freq_ax / (10**9), indices, f_0 / (10**9 * (1+zred)), 'run2 peak2', noise)
     #compare(data_4, model_4, freq_ax / 1e9, indices, (f_0 / (1+(6421. / constants.c_kms))) / 1e9, 'run2 peak2', noise)
 
-    # '''  #
+    '''  #
     # Collapsed cube flux map
     plt.title(r'Model flux map [Jy/beam]')
     plt.imshow(np.sum(model_4, axis=0), origin='lower')  # cs_unsum[16] - cs_unsum2[16]
@@ -614,18 +893,14 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=
     return lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise
 
 
-def compare(data, model, z_ax, inds_to_try2, v_sys, title, noise, ers=False, other_vsys=False):
+def compare(data, model, z_ax, inds_to_try2, v_sys, title, noise):
 
     for i in range(len(inds_to_try2)):
         print(inds_to_try2[i][0], inds_to_try2[i][1])
-        plt.plot(z_ax, model[:, inds_to_try2[i][1], inds_to_try2[i][0]], 'r*', label=r'Model')  # r-
-        if ers:
-            plt.plot(z_ax, noise, 'ko', label=r'Noise')
+        plt.plot(z_ax, model[:, inds_to_try2[i][1], inds_to_try2[i][0]], 'r+', label=r'Model')  # r-
         plt.plot(z_ax, data[:, inds_to_try2[i][1], inds_to_try2[i][0]], 'b+', label=r'Data')  # b:
         plt.axvline(x=v_sys, color='k', label=r'v$_{\text{sys}}$')
-        if other_vsys:
-            plt.axvline(x=(f_0 / (1+(6421./(2.99792458*1e5)))) / 1e9, color='k', ls='--',
-                        label=r'v$_{\text{sys}}=6421$ km/s')
+        plt.axvline(x=(f_0 / (1+(6421./(2.99792458*1e5)))) / 1e9, color='k', ls='--', label=r'v$_{\text{sys}}=6421$ km/s')
         # plt.title(str(inds_to_try2[i][0]) + ', ' + str(inds_to_try2[i][1]))  # ('no x,y offset')
         plt.legend()
         plt.xlabel(r'Frequency [GHz]')
@@ -633,7 +908,7 @@ def compare(data, model, z_ax, inds_to_try2, v_sys, title, noise, ers=False, oth
         chisq = np.sum((model[:, inds_to_try2[i][1], inds_to_try2[i][0]] - data[:, inds_to_try2[i][1], inds_to_try2[i][0]])**2
                        / np.asarray(noise)**2)  # calculate chisq!
 
-        plt.title(title + '4x4-binned pixel (' + str(inds_to_try2[i][0]) + ',' + str(inds_to_try2[i][1]) +
+        plt.title(title + ' at 4x4-binned pixel (' + str(inds_to_try2[i][0]) + ',' + str(inds_to_try2[i][1]) +
             ') with ' + r'$\chi^2 = $' + str(chisq))
         #plt.title('xloc = ' + title + ', at 4x4-binned pixel (' + str(inds_to_try2[i][0]) + ',' + str(inds_to_try2[i][1]) +
         #          ') with ' + r'$\chi^2 = $' + str(chisq))
@@ -674,110 +949,14 @@ if __name__ == "__main__":
 
     # CREATE MODEL CUBE!
     out = params['outname']
-    outs = model_grid(resolution=params['resolution'], s=params['s'], x_loc=params['xloc'], y_loc=params['yloc'],
+    outs = moment_map(resolution=params['resolution'], s=params['s'], x_loc=params['xloc'], y_loc=params['yloc'],
                       mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'], dist=params['dist'],
-                      theta=np.deg2rad(params['PAdisk']), input_data=input_data, lucy_out=lucy_out, out_name=out,
+                      theta=np.deg2rad(params['PAdisk']), input_data=input_data, lucy_out=lucy_out,
                       beam=beam, rfit=params['rfit'], enclosed_mass=params['mass'], ml_ratio=params['ml_ratio'],
                       sig_type=params['s_type'], zrange=[params['zi'], params['zf']], menc_type=params['mtype'],
                       sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], f_w=params['f'],
                       ds=params['ds'], noise=noise, chi2=True, reduced=True, freq_ax=freq_ax, q_ell=params['q_ell'],
                       theta_ell=np.deg2rad(params['theta_ell']), fstep=fstep, f_0=f_0, bl=params['bl'],
                       xyrange=[params['xi'], params['xf'], params['yi'], params['yf']], xell=params['xell'],
-                      yell=params['yell'])
+                      yell=params['yell'], mom=1, mask=params['mask'], lmask=lucy_mask, datafile=params['data'])
     vlos, x_obs, y_obs, cs, f_ax, cs_unsum, ell4 = outs
-
-    params, priors = par_dicts('/Users/jonathancohn/Documents/dyn_mod/param_files/ngc_3258binexc_xcl_params.txt')
-    # CREATE THINGS THAT ONLY NEED TO BE CALCULATED ONCE (collapse fluxes, lucy, noise)
-    mod_ins = model_prep(data=params['data'], ds=params['ds'], lucy_out=params['lucy'], lucy_mask=params['lucy_mask'],
-                         lucy_b=params['lucy_b'], lucy_in=params['lucy_in'], lucy_o=params['lucy_o'],
-                         lucy_it=params['lucy_it'], data_mask=params['mask'], grid_size=params['gsize'],
-                         res=params['resolution'], x_std=params['x_fwhm'], y_std=params['y_fwhm'], pa=params['PAbeam'],
-                         xyerr=[params['xerr0'], params['xerr1'], params['yerr0'], params['yerr1']],
-                         zrange=[params['zi'], params['zf']])
-
-    # 362.0412  # 362.0228
-    out2 = model_grid(resolution=params['resolution'], s=params['s'], x_loc=params['xloc'], y_loc=params['yloc'],
-                      mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'], dist=params['dist'],
-                      theta=np.deg2rad(params['PAdisk']), input_data=input_data, lucy_out=lucy_out, out_name=out,
-                      beam=beam, rfit=params['rfit'], enclosed_mass=params['mass'], ml_ratio=params['ml_ratio'],
-                      sig_type=params['s_type'], zrange=[params['zi'], params['zf']], menc_type=params['mtype'],
-                      sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], f_w=params['f'],
-                      ds=params['ds'], noise=noise, chi2=True, reduced=True, freq_ax=freq_ax, q_ell=params['q_ell'],
-                      theta_ell=np.deg2rad(params['theta_ell']), fstep=fstep, f_0=f_0, bl=params['bl'],
-                      xyrange=[params['xi'], params['xf'], params['yi'], params['yf']],  xell=params['xell'],
-                      yell=params['yell'])
-    vlos2, x_obs, y_obs, cs2, f_ax, cs_unsum2, ell42 = out2
-
-    vdiff = vlos - vlos2
-    plt.imshow(vdiff, origin='lower', cmap='RdBu_r', vmax=np.amax([np.amax(vdiff), -np.amin(vdiff)]),
-               vmin=-np.amax([np.amax(vdiff), -np.amin(vdiff)]))
-    cbar = plt.colorbar()
-    plt.title(r'vlos (median xloc) - vlos (lower CL xloc)')
-    cbar.set_label(r'km/s', fontsize=20, rotation=0, labelpad=20)
-    plt.xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
-    plt.ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
-    plt.show()
-    maxes = []
-    argm = []
-    for i in range(len(vdiff)):
-        maxes.append(np.amax(vdiff[i]))
-        argm.append(np.argmax(vdiff[i]))
-    j = np.argmax(maxes)
-    print(argm[j], j)
-
-    print(np.amax(vdiff), 'look')
-    print(vdiff[11, 13], 'look')
-
-    print(np.amax(cs_unsum[16] - cs_unsum2[16]), np.amin(cs_unsum[16] - cs_unsum2[16]))
-    cdiff = (cs_unsum[16] - cs_unsum2[16])
-    huh = cdiff > 0.0
-    hm = cdiff == 0.0
-    print(np.sum(huh), np.sum(hm))
-
-    cd = []
-    for i in range(len(cs_unsum)):
-        cd.append(cs_unsum[i] - cs_unsum2[i])
-    cd = np.asarray(cd)
-    print(cd.shape)
-    cd = np.sum(cd, axis=0)
-    print(cd.shape)
-
-    c1 = np.sum(cs_unsum, axis=0)
-
-    all_pix = np.ndarray.flatten(ell4)  # all fitted pixels in each slice [len = 625 (yep)] [525 masked, 100 not]
-    masked_pix = all_pix[all_pix != 0]  # all_pix, but this time only the pixels that are actually inside ellipse
-    n_pts = len(masked_pix) * len(f_ax)
-    red_cs = np.sum(cs_unsum) / (n_pts - 9.)
-
-    # plt.title(r'median xloc $\chi^2$ - lower CL xloc $\chi^2$, total $\Delta \chi^2 = $' + str(round(np.sum(cd), 4)))
-    plt.title(r'$\chi^2_\nu$ = ' + str(round(red_cs, 4)))
-    # plt.title(r'$\chi^2_{\nu} = $' + str(round(np.sum(c1) / np.sum(ell4) / len(cs_unsum), 4)))
-    #  (at $\nu = $' + str(round(f_ax[16] / 10**9, 4)) + ' GHz)'
-    # plt.imshow(c1 / np.sum(ell4) / len(cs_unsum), origin='lower')  # cs_unsum[16] - cs_unsum2[16]
-    plt.imshow(c1, origin='lower')  # cs_unsum[16] - cs_unsum2[16]
-    cbar = plt.colorbar()
-    # cbar.set_label(r'$\Delta$[(model - data)$^2 / $ noise$^2$]', fontsize=20, rotation=90, labelpad=20)
-    cbar.set_label(r'$\chi^2 = $(model - data)$^2 / $ noise$^2', fontsize=20, rotation=90, labelpad=20)
-    plt.xlabel(r'x [4x4 binned pixels]', fontsize=20)  # x [arcsec]  # x [4x4 binned pixels]
-    plt.ylabel(r'y [4x4 binned pixels]', fontsize=20)  # y [arcsec]  # y [4x4 binned pixels]
-    plt.show()
-
-    plt.plot(f_ax / 10**9, np.asarray(cs) - np.asarray(cs2), 'b*', label=r'median xloc $\chi^2 - $ lower CL xloc $\chi^2$')
-    # plt.plot(f_ax / 10**9, cs, 'b*', label='median xloc')
-    # plt.plot(f_ax / 10**9, cs2, 'k+', label='0.0016 offset xloc')
-    plt.axhline(y=np.median(np.asarray(cs) - np.asarray(cs2)), color='r', label='median difference')
-    plt.axhline(y=np.mean(np.asarray(cs) - np.asarray(cs2)), color='k', label='mean difference')
-    plt.legend(loc='lower left')
-    plt.xlabel(r'Frequency [GHz]')
-    plt.ylabel(r'$\Delta \chi^2$ per slice')
-    plt.show()
-
-    plt.imshow(vlos - vlos2, origin='lower', cmap='RdBu_r', vmax=np.amax([np.amax(vlos - vlos2), -np.amin(vlos - vlos2)]),
-               vmin=-np.amax([np.amax(vlos - vlos2), -np.amin(vlos - vlos2)]),
-               )
-    cbar = plt.colorbar()
-    cbar.set_label(r'km/s', fontsize=20, rotation=0, labelpad=20)
-    plt.xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
-    plt.ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
-    plt.show()
-

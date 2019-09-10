@@ -8,42 +8,6 @@ import corner
 import dyn_model as dm
 
 
-def blockshaped(arr, nrow, ncol):  # CONFIRMED
-    h, w = arr.shape
-    return arr.reshape(h // nrow, nrow, -1, ncol).swapaxes(1, 2).reshape(-1, nrow, ncol)
-
-
-def rebin(data, n):
-    rebinned = []
-    for z in range(len(data)):
-        subarrays = blockshaped(data[z, :, :], n, n)  # bin the data in groups of nxn (4x4) pixels
-        # each pixel in the new, rebinned data cube is the mean of each 4x4 set of original pixels
-        # reshaped = np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data[0]) / 4.),
-        #                                                                   int(len(data[0][0]) / 4.)))
-        reshaped = n**2 * np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data[0]) / n),
-                                                                                 int(len(data[0][0]) / n)))
-        rebinned.append(reshaped)
-    print('rebinned')
-    return np.asarray(rebinned)
-
-
-def compare(data, model, z_ax, inds_to_try2, v_sys, n):
-    data_4 = rebin(data, n)
-    ap_4 = rebin(model, n)
-
-    for i in range(len(inds_to_try2)):
-        print(inds_to_try2[i][0], inds_to_try2[i][1])
-        plt.plot(z_ax, ap_4[:, inds_to_try2[i][1], inds_to_try2[i][0]], 'r+', label=r'Model')  # r-
-        plt.plot(z_ax, data_4[:, inds_to_try2[i][1], inds_to_try2[i][0]], 'b+', label=r'Data')  # b:
-        plt.axvline(x=v_sys, color='k', label=r'v$_{\text{sys}}$')
-        # plt.title(str(inds_to_try2[i][0]) + ', ' + str(inds_to_try2[i][1]))  # ('no x,y offset')
-        plt.legend()
-        plt.xlabel(r'Frequency [GHz]')
-        plt.ylabel(r'Flux Density [Jy/beam]')
-        plt.show()
-        plt.close()
-
-
 def sig_prof(pfiles, R, labs):
 
     ls = ['k-', 'b--', 'r:', 'g-.']
@@ -184,7 +148,7 @@ def output(parfile, walkers, burn, steps, direc, pfile_true=None):
             plt.show()
 
 
-def outcorner(parfile, fullchain, burn):  # direc, walkers, burn, steps,
+def outcorner(parfile, fullchain, burn, end=None, bins=20):  # direc, walkers, burn, steps,
     params, priors = dm.par_dicts(parfile, q=False)  # get dicts of params and file names from parameter file
     free_p = {}
     for key in priors:  # for each parameter
@@ -196,12 +160,17 @@ def outcorner(parfile, fullchain, burn):  # direc, walkers, burn, steps,
         u.encoding = 'latin1'
         fchain = u.load()
     print(fchain.shape)
-    fchain = fchain[:, burn:, :]
+    if end is not None:
+        fchain = fchain[:, burn:end, :]
+    else:
+        fchain = fchain[:, burn:, :]
     samples = fchain.reshape((-1, len(fchain[0, 0, :])))  # (-1, ndim)  # .chain[:, 50:, :]
     print(samples.shape, 'here')
     from matplotlib import rcParams
     rcParams["font.size"] = 4
-    fig = corner.corner(samples, bins=20)  # labels=[v for v in free_p.keys()], truths=[v for v in free_p.values()], show_titles=True, )  # truths here is B1 value
+    fig = corner.corner(samples, bins=bins, labels=['mbh', 'f', 'PAdisk', 'yloc', 'xloc', 'sig0', 'vsys', 'mlratio',
+                                                    'inc'])
+    # labels=[v for v in free_p.keys()], truths=[v for v in free_p.values()], show_titles=True, )  # truths here is B1 value
     plt.show()
 
 
@@ -529,17 +498,30 @@ def compare_sigs(pfile1, pfile2, q1=True, q2=False):
     plt.show()
 
 
-def plot_all(fullchain, clip, end, pfile_true, init_guess, flatsig=False, save=False, xcl=False):
+def plot_all(fullchain, clip, end, pfile_true, init_guess, flatsig=False, save=False, xcl=False, freexy=False,
+             fixxy=False, shortrun=False, wis=False, testcase=True):
 
     params, priors = dm.par_dicts(init_guess, q=False)  # get dicts of params and file names from parameter file
 
     if xcl and flatsig:
-        fig, axes = plt.subplots(2, 4, figsize=(18, 9))  # 3 rows, 3 cols of subplots; because there are 9 free params
+        fig, axes = plt.subplots(2, 4, figsize=(18, 9))  # 2 rows, 4 cols of subplots; because there are 9 free params
         # BUCKET NEED TO FIND OUT HOW TO AUTOMATE GETTING THIS ORDER RIGHT!
         pars = ['mbh', 'f', 'PAdisk', 'yloc', 'sig0', 'vsys', 'ml_ratio', 'inc']
         ax_lab = [r'$\log_{10}$(M$_{\odot}$)', 'unitless', 'deg', 'pixels', 'km/s', 'km/s',
                   r'M$_{\odot}$/L$_{\odot}$', 'deg']
         axes_order = [[0, 0], [0, 2], [1, 0], [1, 2], [1, 3], [1, 1], [0, 1], [0, 3]]
+    elif freexy:
+        fig, axes = plt.subplots(2, 2, figsize=(18, 9))  # 1 row, 2 cols of subplots; because there are 9 free params
+        # BUCKET NEED TO FIND OUT HOW TO AUTOMATE GETTING THIS ORDER RIGHT!
+        pars = ['yloc', 'xloc']
+        ax_lab = ['pixels', 'pixels']
+        axes_order = [[0, 0], [0, 1]]
+    elif fixxy:
+        fig, axes = plt.subplots(2, 4, figsize=(18, 9))  # 3 rows, 3 cols of subplots; because there are 9 free params
+        # BUCKET NEED TO FIND OUT HOW TO AUTOMATE GETTING THIS ORDER RIGHT!
+        pars = ['mbh', 'f', 'PAdisk', 'vsys', 'sig0', 'ml_ratio', 'inc']
+        ax_lab = [r'$\log_{10}$(M$_{\odot}$)', 'unitless', 'deg', 'km/s', 'km/s', r'M$_{\odot}$/L$_{\odot}$', 'deg']
+        axes_order = [[0, 0], [0, 2], [1, 0], [1, 3], [1, 1], [0, 1], [0, 3]]
     elif flatsig:
         fig, axes = plt.subplots(3, 3, figsize=(16, 12))  # 3 rows, 3 cols of subplots; because there are 9 free params
         # BUCKET NEED TO FIND OUT HOW TO AUTOMATE GETTING THIS ORDER RIGHT!
@@ -579,7 +561,7 @@ def plot_all(fullchain, clip, end, pfile_true, init_guess, flatsig=False, save=F
         else:
             vax = params[pars[par]]
 
-        if flatsig:
+        if testcase:
             with open('/Users/jonathancohn/Documents/dyn_mod/param_files/Ben_A1_errors.txt') as a1:
                 for line in a1:
                     cols = line.split()
@@ -589,11 +571,16 @@ def plot_all(fullchain, clip, end, pfile_true, init_guess, flatsig=False, save=F
 
         row, col = axes_order[par]
         fs = 11
+        # PLOT MY DISTRIBUTIONS
         if pars[par] == 'mbh':
-            axes[row, col].hist(np.log10(chain), 2000, color="b", histtype="step")  # axes[i]
+            bin = 2000
+            if shortrun:
+                bin /= 100.
+                bin = int(bin)
+            axes[row, col].hist(np.log10(chain), bin, color="b", histtype="step")  # axes[i]
             percs = np.percentile(np.log10(chain), [16., 50., 84.])
             threepercs = np.percentile(np.log10(chain), [0.15, 50., 99.85])  # 3sigma
-            if flatsig:
+            if testcase:
                 axes[row, col].axvline(np.log10(vax), ls='-', color='k')
                 print('here', np.log10(vax), np.log10(vax-vax_width), np.log10(vax+vax_width))
                 axes[row, col].axvspan(np.log10(vax-vax_width), np.log10(vax+vax_width), hatch='/', color='k',
@@ -603,15 +590,27 @@ def plot_all(fullchain, clip, end, pfile_true, init_guess, flatsig=False, save=F
             # axes[row, col].axvline(np.log10(vax_init), ls='--', color='r')
         else:
             if pars[par] == 'xloc' or pars[par] == 'yloc' or pars[par] == 'vsys':
-                bin = 4000
+                bin = 12000
+                if shortrun:
+                    bin /= 1000.
+                    bin = int(bin)
             elif pars[par] == 'PAdisk':
                 bin = 2000
+                if shortrun:
+                    bin /= 100.
+                    bin = int(bin)
             else:
                 bin = 200
+                if shortrun:
+                    bin /= 10.
+                    bin = int(bin)
+
             axes[row, col].hist(chain, bin, color="b", histtype="step")  # axes[i]
             percs = np.percentile(chain, [16., 50., 84.])
             threepercs = np.percentile(chain, [0.15, 50., 99.85])  # 3sigma
-            if flatsig:
+
+            # PLOT BEN'S MEDIANS & ERRORS
+            if testcase:
                 axes[row, col].axvline(vax, ls='-', color='k')
                 axes[row, col].axvspan(vax-vax_width, vax+vax_width, hatch='/', color='k', fill=False, alpha=0.5)
             else:
@@ -629,14 +628,27 @@ def plot_all(fullchain, clip, end, pfile_true, init_guess, flatsig=False, save=F
                                  + str(round(percs[2] - percs[1], 4)) + ', -'
                                  + str(round(percs[1] - percs[0], 4)) + ')', fontsize=fs)
         axes[row, col].set_xlabel(ax_lab[par], fontsize=fs)
+        print(pars[par])
         print(percs[0] - (percs[1] - percs[0]), percs[2] + (percs[2] - percs[1]))
+        print(threepercs)
         # '''  #  Comment here to remove xlims
-        if pars[par] == 'vsys' or pars[par] == 'yloc':
+        if freexy:
+            if pars[par] == 'xloc':
+                axes[row, col].set_xlim(361, 363.)  # 361.9, 362.2
+            elif pars[par] == 'yloc':
+                axes[row, col].set_xlim(354., 356.)  # 354.65, 355.15
+            print(bin, 'bins')
+        elif pars[par] == 'vsys' or pars[par] == 'yloc':
             axes[row, col].set_xlim(percs[0] - 14 * (percs[1] - percs[0]), percs[2] + 14 * (percs[2] - percs[1]))
         elif pars[par] == 'xloc':
             axes[row, col].set_xlim(percs[0] - 40 * (percs[1] - percs[0]), percs[2] + 40 * (percs[2] - percs[1]))
         elif flatsig and pars[par] == 'sig0':
-            axes[row, col].set_xlim(7., 10.)
+            if wis:
+                axes[row, col].set_xlim(3., 15.)
+            elif testcase:
+                axes[row, col].set_xlim(7., 10.)
+            else:
+                axes[row, col].set_xlim(percs[0] - 2 * (percs[1] - percs[0]), percs[2] + 2 * (percs[2] - percs[1]))
         elif pars[par] == 'sig0' or pars[par] == 'r0' or pars[par] == 'mu':
             axes[row, col].set_xlim(percs[0] - 2 * (percs[1] - percs[0]), percs[2] + 2 * (percs[2] - percs[1]))
         else:
@@ -710,32 +722,68 @@ def param_changes(fullchain, clips, ends, flatsig=False):
 
 if __name__ == "__main__":
 
-    nwalkers = 250 #250#250  # 250  # 250  # 150  # 250#150
-    burn = 0  # 1  # 1  # 1  # 100#50
-    nsteps = 301 #500  # 301  # 300  # 100  # 100#100
-
     base = '/Users/jonathancohn/Documents/dyn_mod/'
-    # pf = base + 'param_files/ngc_3258_params.txt'
-    # direct = '/Users/jonathancohn/Documents/dyn_mod/emcee_out/'
-    # direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'mpi3258bl_'
-    # pf = base + 'param_files/ngc_3258bl_params.txt'
 
-    # direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'mpi3258binex_'
-    # pf = base + 'param_files/ngc_3258bl_params.txt'
-    # direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + '3258inex_'
-    # pf = base + 'param_files/ngc_3258inex_params.txt'
+    # '''  #
+    # u2698 corrected PA, s=4, beam31, strictmask
+    direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'qflat_u2698_bcluster_strict_2698_1568054984.97_'
+    pf = base + 'ugc_2698/ugc_2698_strictparams.txt'
+    bl = base + 'ugc_2698/ugc_2698_strictparams.txt'
+    directr = direct + '1000_0_5000tempchain.pkl'
+    outcorner(pf, directr, 2800, 3300, bins=50)
+    # print(oop)
+    plot_all(directr, clip=1100, end=3300, pfile_true=bl, init_guess=pf, flatsig=True, save=False, freexy=False,
+             shortrun=True, wis=False, testcase=False)
+    print(oop)
+    # '''  #
 
-    #direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'mpi3258binex_'
-    #pf = base + 'param_files/ngc_3258bl_params.txt'
+    # '''  #
+    # u2698 corrected PA, s=4, beam51
+    direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'qflat_u2698_bcluster_2698_1566849222.85_'
+    pf = base + 'ugc_2698/ugc_2698_params.txt'
+    bl = base + 'ugc_2698/ugc_2698_params.txt'
+    directr = direct + '1000_0_5000tempchain.pkl'
+    outcorner(pf, directr, 800, 1300, bins=50)
+    print(oop)
+    plot_all(directr, clip=800, end=1300, pfile_true=bl, init_guess=pf, flatsig=True, save=False, freexy=False,
+             shortrun=True, wis=False, testcase=False)
+    print(oop)
+    # '''  #
 
-    # direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'mpi3258binex_'
-    # pf = base + 'param_files/ngc_3258bl_params.txt'
-
-    # direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'mpi3258inex2_'
-    # pf = base + 'param_files/ngc_3258inex2out_params.txt'  #     pf = base + 'param_files/ngc_3258inex2_params.txt'
-
-    # COMPARE SIGMA_TURB
     '''  #
+    # u2698 s=4
+    direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'qflat_u2698_2698_1566402891.86_'
+    pf = base + 'ugc_2698/ugc_2698_params.txt'
+    bl = base + 'ugc_2698/ugc_2698_params.txt'
+    directr = direct + '500_0_5000tempchain.pkl'
+    plot_all(directr, clip=350, end=400, pfile_true=bl, init_guess=pf, flatsig=True, save=False, freexy=False,
+             shortrun=True, wis=False, testcase=False)
+    print(oop)
+    # '''  #
+
+    '''  #
+    # u2698 FIRST TEST (s=1 oops)
+    direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'qflat_u2698_2698_1566425702.85_'
+    pf = base + 'ugc_2698/ugc_2698_params.txt'
+    bl = base + 'ugc_2698/ugc_2698_params.txt'
+    directr = direct + '1000_0_5000tempchain.pkl'
+    plot_all(directr, clip=2000, end=3000, pfile_true=bl, init_guess=pf, flatsig=True, save=False, freexy=False,
+             shortrun=True, wis=False, testcase=False)
+    print(oop)
+    # '''  #
+
+    '''  #
+    direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'qflat_u2698_2698_1566396000.56_'
+    pf = base + 'ugc_2698/ugc_2698_params.txt'
+    bl = base + 'ugc_2698/ugc_2698_params.txt'
+    directr = direct + '50_0_100tempchain.pkl'
+    plot_all(directr, clip=90, end=100, pfile_true=bl, init_guess=pf, flatsig=True, save=False, freexy=False,
+             shortrun=True, wis=False, testcase=False)
+    print(oop)
+    # '''  #
+
+    '''  #
+    # COMPARE SIGMA_TURB
     # compare_sigs(base + 'param_files/ngc_3258inex5out_params.txt', base + 'param_files/ngc_3258bl_params.txt')
     rads = np.logspace(-2., 3.5, 100)
     sig_prof([base + 'param_files/ngc_3258bl_params.txt', base + 'param_files/ngc_3258inex5out_params.txt',
@@ -761,7 +809,136 @@ if __name__ == "__main__":
     bl = base + 'param_files/ngc_3258bl_params.txt'
     plot_all(direct + '500_0_500_fullchain.pkl', clip=400, end=500, pfile_true=bl, init_guess=pf, flatsig=True, save=False)
     print(oop)
-    # ''' #
+    # '''  #
+
+    '''  #
+    # fixxy
+    direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'xcl_3258binexc_1564868665.41_'
+    pf = base + 'param_files/ngc_3258binexc_fixxy_params.txt'
+    bl = base + 'param_files/ngc_3258bl_params.txt'
+    directr = direct + '500_0_5000_fullchain.pkl'
+    outcorner(pf, directr, 4500, bins=10)
+    cvg(directr, clip=0, end=-1, vline=[2000])
+    plot_all(directr, clip=1000, end=2001, pfile_true=bl, init_guess=pf, flatsig=True, save=False, fixxy=True)
+    # '''  #
+
+    '''  #
+    # freexy
+    direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'xcl_3258binexc_1564883849.2_'
+    pf = base + 'param_files/ngc_3258binexc_freexy_params.txt'  #     pf = base + 'param_files/ngc_3258inex2_params.txt'
+    bl = base + 'param_files/ngc_3258bl_params.txt'
+    directr = direct + '500_0_5000_fullchain.pkl'
+    plot_all(directr, clip=4000, end=5001, pfile_true=bl, init_guess=pf, flatsig=True, save=False, freexy=True)
+    print(oop)
+    # '''  #
+
+    '''  #
+    # myfreexy
+    direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'myfreexy_3258binexc_1565070688.21_'
+    pf = base + 'param_files/ngc_3258binexc_freexy_params.txt'  #     pf = base + 'param_files/ngc_3258inex2_params.txt'
+    bl = base + 'param_files/ngc_3258bl_params.txt'
+    directr = direct + '500_0_2000_fullchain.pkl'
+    plot_all(directr, clip=1500, end=2001, pfile_true=bl, init_guess=pf, flatsig=True, save=False, freexy=True, shortrun=True)
+    print(oop)
+    # '''  #
+
+    '''  #
+    # freexy 2
+    direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'freexy_3258binexc_1565059769.98_'
+    pf = base + 'param_files/ngc_3258binexc_freexy_params.txt'  #     pf = base + 'param_files/ngc_3258inex2_params.txt'
+    bl = base + 'param_files/ngc_3258bl_params.txt'
+    directr = direct + '500_0_2000_fullchain.pkl'
+    outcorner(pf, directr, 100, bins=50)
+    plot_all(directr, clip=1500, end=2001, pfile_true=bl, init_guess=pf, flatsig=True, save=False, freexy=True, shortrun=True)
+    print(oop)
+    # '''  #
+
+
+    '''  #
+    # freexy_adj
+    direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'freexy_bn_adj_3258binexc_1566254884.07_'
+    pf = base + 'param_files/ngc_3258binexc_freexy_adj_params.txt'  #     pf = base + 'param_files/ngc_3258inex2_params.txt'
+    bl = base + 'param_files/ngc_3258bl_params.txt'
+    directr = direct + '500_0_2000tempchain.pkl'
+    plot_all(directr, clip=250, end=400, pfile_true=bl, init_guess=pf, flatsig=True, save=False, freexy=True,
+             shortrun=True, wis=False)
+    print(oop)
+    # '''  #
+
+    '''  #
+    # freexy_adj2
+    direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'freexy_bn_adj2_3258binexc_1566270682.81_'
+    pf = base + 'param_files/ngc_3258binexc_freexy_adj_params.txt'  #     pf = base + 'param_files/ngc_3258inex2_params.txt'
+    bl = base + 'param_files/ngc_3258bl_params.txt'
+    directr = direct + '500_0_2000tempchain.pkl'
+    plot_all(directr, clip=1500, end=2000, pfile_true=bl, init_guess=pf, flatsig=True, save=False, freexy=True,
+             shortrun=True, wis=True)
+    print(oop)
+    # '''  #
+
+    '''  #
+    # flat_adj1
+    direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'flat_adj_3258binexc_1566235134.87_'
+    pf = base + 'param_files/ngc_3258binexc_adj_params.txt'  #     pf = base + 'param_files/ngc_3258inex2_params.txt'
+    bl = base + 'param_files/ngc_3258bl_params.txt'
+    directr = direct + '500_0_2000tempchain.pkl'
+    plot_all(directr, clip=400, end=500, pfile_true=bl, init_guess=pf, flatsig=True, save=False, freexy=False, shortrun=True)
+    # '''  #
+
+    '''  #
+    # flat_adj2
+    direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'flat_adj2_3258binexc_1566238277.44_'
+    pf = base + 'param_files/ngc_3258binexc_adj_params.txt'  #     pf = base + 'param_files/ngc_3258inex2_params.txt'
+    bl = base + 'param_files/ngc_3258bl_params.txt'
+    directr = direct + '500_0_2000tempchain.pkl'
+    plot_all(directr, clip=500, end=700, pfile_true=bl, init_guess=pf, flatsig=True, save=False, freexy=False,
+             shortrun=True, wis=True)
+    print(oop)
+    # '''  #
+
+    '''  #
+    # freexy (1000 walkers, Ben's noise, different a values!) and binexc (500 walkers, Ben's noise, different a values!)
+    for a in ['3_3258binexc_1565895164.98_1565956390.6_']:  #
+        direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'myfreexy_bna'
+        direct += a
+        pf = base + 'param_files/ngc_3258binexc_freexy_params.txt'
+        bl = base + 'param_files/ngc_3258bl_params.txt'
+        directr = direct + '1000_0_2000_fullchain.pkl'  # '1000_0_2000tempchain.pkl'
+        plot_all(directr, clip=1500, end=2000, pfile_true=bl, init_guess=pf, flatsig=True, save=False, freexy=True, shortrun=True)
+        # outcorner(pf, directr, 1500, end=2000, bins=20)
+
+    for a in ['33258binexc_1565800032.49_1565833904.75_', '53258binexc_1565796257.34_1565830471.94_',
+              '10_3258binexc_1565877818.99_1565908556.94_']:
+        direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'flat_bna'
+        direct += a
+        pf = base + 'param_files/ngc_3258binexc_params.txt'
+        bl = base + 'param_files/ngc_3258bl_params.txt'
+        directr = direct + '500_0_2000_fullchain.pkl'  # '500_0_2000tempchain.pkl'  #
+        plot_all(directr, clip=700, end=800, pfile_true=bl, init_guess=pf, flatsig=True, save=False, freexy=False, shortrun=True)
+        # outcorner(pf, directr, 1500, end=2000, bins=20)
+
+    for a in ['3_3258binexc_1565797655.29_1565865209.22_', '5_3258binexc_1565793124.81_1565853679.47_',
+              '10_3258binexc_1565797293.67_1565862997.3_']:  # , '3']:
+        direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'freexy_bna'
+        direct += a
+        pf = base + 'param_files/ngc_3258binexc_freexy_params.txt'
+        bl = base + 'param_files/ngc_3258bl_params.txt'
+        directr = direct + '1000_0_2000_fullchain.pkl'  # '1000_0_2000tempchain.pkl'
+        plot_all(directr, clip=1500, end=2000, pfile_true=bl, init_guess=pf, flatsig=True, save=False, freexy=True, shortrun=True)
+        # outcorner(pf, directr, 1500, end=2000, bins=20)
+    print(oop)
+    # '''  #
+
+    '''  #
+    # freexy 3 (1000 walkers, Ben's noise)
+    direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'freexy_bn_3258binexc_1565117594.92_1565178113.59_'
+    pf = base + 'param_files/ngc_3258binexc_freexy_params.txt'  #     pf = base + 'param_files/ngc_3258inex2_params.txt'
+    bl = base + 'param_files/ngc_3258bl_params.txt'
+    directr = direct + '1000_0_2000_fullchain.pkl'  # '1000_0_2000tempchain.pkl'
+    plot_all(directr, clip=1000, end=2001, pfile_true=bl, init_guess=pf, flatsig=True, save=False, freexy=True)
+    outcorner(pf, directr, 1000, bins=50)
+    print(oop)
+    # '''  #
 
     # '''  #
     # binexc run and binexc fixed ellipse run
@@ -770,10 +947,12 @@ if __name__ == "__main__":
     pf = base + 'param_files/ngc_3258binexc_params.txt'  #     pf = base + 'param_files/ngc_3258inex2_params.txt'
     bl = base + 'param_files/ngc_3258bl_params.txt'
     directr = direct + '1564759210.8_500_0_20000_fullchain.pkl'  # '500_0_20000tempchain.pkl'
-    cvg(directr, clip=0, end=-1, vline=[14750])
     #temp_out(directr, clip=0, end=-1, pfile_true=base + 'param_files/ngc_3258bl_params.txt', init_guess=pf)
-    plot_all(directr, clip=2000, end=20000, pfile_true=bl, init_guess=pf, flatsig=True, save=False)
+    # outcorner(pf, direct + '500_0_20000_fullchain.pkl', 19950)
+    plot_all(directr, clip=4000, end=20000, pfile_true=bl, init_guess=pf, flatsig=True, save=False)
     plot_all(direct_ok + '500_0_20000tempchain.pkl', clip=2000, end=20000, pfile_true=bl, init_guess=pf, flatsig=True, save=False)
+    outcorner(pf, directr, 10000)
+    cvg(directr, clip=0, end=-1, vline=[14750])
 
     # ends = [700, 800, 870, 900, 1000, 1500, 2000]  # 500, 600,
     # param_changes(direct + '500_0_20000_fullchain.pkl', clips=np.asarray(ends) - 500, ends=ends)
@@ -783,7 +962,6 @@ if __name__ == "__main__":
     #             save=False)  # clip=4000, clip=end-5000
     plot_all(direct_ok + '500_0_20000_fullchain.pkl', clip=0, end=4000, pfile_true=bl, init_guess=pf, flatsig=True,
              save=False)  # clip=4000, end=20001
-    outcorner(pf, direct + '500_0_20000_fullchain.pkl', 19950)
     cvg(direct + '500_0_20000_fullchain.pkl', clip=0, end=-1, vline=[15000])
     # output_clipped(pf, 500, 0, 20000, direct, clip=1600, pfile_true=bl, init_guess=pf)
     r = gelman_rubin(direc=direct + '500_0_20000_fullchain.pkl', clip=0, end=-1)

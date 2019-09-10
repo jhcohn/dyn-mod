@@ -19,15 +19,27 @@ dyn.py - defunct
 
 dyn3.py - defunct
 
+dyn_compare_vels.py - script to test stuff, including creating line profiles or comparing models
+
 dyn_cvg.py - same as dyn_emcee.py, but with convergence test built-in
 
-dyn_emcee.py - code to use dyn_model with emcee to optimize parameters from an input parameter file
+dyndyn.py - script to use dyn_model with dynesty to optimize parameters from an input parameter file
+
+dyndyncluster.py - same as dyndyn.py, but modified for use on cluster
+
+dyn_emcee.py - script to use dyn_model with emcee to optimize parameters from an input parameter file
 
 dyn_f.py - defunct
 
 dyn_general.py - defunct
 
-dyn_model.py - code to run one model, given an input parameter file
+dyn_model.py - script to run one model, given an input parameter file
+
+dyn_moments.py - script to create moment maps from parameter files containing optimized parameters
+
+dyn_outputs.py - script to view outputs from emcee runs
+
+dyn_testpars.py - test different combinations of parameters in 2-peaked bimodal distribution from emcee
 
 dynxy.py - defunct
 

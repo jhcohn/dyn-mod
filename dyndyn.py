@@ -131,7 +131,7 @@ def lnprob(cube):
     return -0.5 * chi2
 
 
-# run MultiNest
+# run Dynamic Nested Sampler (Dynamic -> better for posteriors)
 dsampler = DynamicNestedSampler(lnprob, prior, ndim, bound='multi')
 dsampler.run_nested()
 
