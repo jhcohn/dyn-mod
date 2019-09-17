@@ -449,6 +449,7 @@ def moment_map(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     hdu_lm.close()
     mask2d = mask2d[xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]]
     from mpl_toolkits.axes_grid1 import AxesGrid
+    clipped_mask = data_mask[zrange[0]:zrange[1]]
 
     # Not yet masked data sub-cube
     data_subcube = input_data[zrange[0]:zrange[1], xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]]
@@ -459,63 +460,56 @@ def moment_map(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     for v in range(len(freq_ax)):
         vel_ax.append(constants.c_kms * (1. - (freq_ax[v] / f_0) * (1 + zred)))
     vel_ax = np.asarray(vel_ax)
-    specc = False
-    mom = 2
+    # specc = False
+    # print(vel_ax)  # ~20km/s
+    mom = 0
+    samescale = True
 
     if mom == 0:
-        if specc:  # if using SpectralCube built in function
-            from spectral_cube import SpectralCube
-            c1 = fits.open(datafile)
-            cube = SpectralCube.read(c1)
-            c1.close()
-            mo = cube.moment(order=1)
-            masked_mo = mo.hdu.data[xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask * mask2d
+        # if using equation from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
+        masked_mo = np.zeros(shape=ell_mask.shape)
+        for z in range(len(vel_ax)):
+            # masked_mo += abs(velwidth) * data_subcube[z] * mask2d
+            masked_mo += abs(velwidth) * input_data_masked[z] * clipped_mask[z] # mask2d
 
-            # masked_data_flux = fluxes[xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask
-            hdu = fits.PrimaryHDU(convolved_cube)
-            hdul = fits.HDUList([hdu])
-            temp = '/Users/jonathancohn/Documents/dyn_mod/moment_test.fits'
-            hdul.writeto(temp, overwrite=True)
-            dat, head = fits.getdata(temp, header=True)
-            dat1, head1 = fits.getdata(datafile, header=True)
-            for ind in [1, 2, 3]:
-                head['CRVAL' + str(ind)] = head1['CRVAL' + str(ind)]
-                head['CTYPE' + str(ind)] = head1['CTYPE' + str(ind)]
-                head['CDELT' + str(ind)] = head1['CDELT' + str(ind)]
-                head['CUNIT' + str(ind)] = head1['CUNIT' + str(ind)]
-            fits.writeto(temp, dat, head, overwrite=True)
-            c2 = fits.open(datafile)
-            cube2 = SpectralCube.read(c2)
-            c2.close()
-            model_mo2 = cube2.moment(order=1)
-            masked_model_mo = model_mo2.hdu.data[xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask * mask2d
-        else:  # if using equation from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
-            masked_mo = np.zeros(shape=ell_mask.shape)
-            for z in range(len(vel_ax)):
-                # masked_mo += abs(velwidth) * data_subcube[z] * mask2d
-                masked_mo += abs(velwidth) * input_data_masked[z] * mask2d
-
-            masked_model_mo = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
-            for zi in range(len(convolved_cube)):
-                masked_model_mo += convolved_cube[zi] * mask2d * abs(velwidth)  # data_mask[zi]
+        masked_model_mo = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
+        for zi in range(len(convolved_cube)):
+            masked_model_mo += convolved_cube[zi] * abs(velwidth) * clipped_mask[zi] # * mask2d  # data_mask[zi]
 
         fig = plt.figure()
         grid = AxesGrid(fig, 111,
-                        nrows_ncols=(1, 2),
+                        nrows_ncols=(1, 3),
                         axes_pad=0.01,
                         cbar_mode='single',
                         cbar_location='right',
                         cbar_pad=0.1)
         i = 0
+
+        # CONVERT TO mJy
+        masked_mo *= 1e3
+        masked_model_mo *= 1e3
         for ax in grid:
             if i == 0:
                 im = ax.imshow(masked_mo, vmin=np.amin([np.nanmin(masked_model_mo), np.nanmin(masked_mo)]),
                                vmax=np.amax([np.nanmax(masked_model_mo), np.nanmax(masked_mo)]), origin='lower')
                 ax.set_title(r'Moment 0 (data)')
-            else:
+            elif i == 1:
                 im = ax.imshow(masked_model_mo, vmin=np.amin([np.nanmin(masked_model_mo), np.nanmin(masked_mo)]),
                                vmax=np.amax([np.nanmax(masked_model_mo), np.nanmax(masked_mo)]), origin='lower')
                 ax.set_title(r'Moment 0 (model)')
+            elif i == 2:
+                diff = masked_model_mo - masked_mo
+                if samescale:
+                    # np.abs(diff)
+                    im = ax.imshow(diff, vmin=np.amin([np.nanmin(masked_model_mo), np.nanmin(masked_mo)]),
+                                   vmax=np.amax([np.nanmax(masked_model_mo), np.nanmax(masked_mo)]), origin='lower')
+                else:  # then residual scale
+                    im = ax.imshow(diff, origin='lower', vmin=np.nanmin(diff),vmax=np.nanmax(diff))
+                    '''
+                    im = ax.imshow(diff, origin='lower', vmin=np.amin([np.nanmin(diff), np.nanmin(-diff)]),
+                                       vmax=np.amax([np.nanmax(diff), np.nanmax(-diff)]))  # model_flux-masked_data_flux
+                    '''
+                ax.set_title('Moment 0 residual (model-data)')
             i += 1
 
             ax.set_xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
@@ -526,13 +520,14 @@ def moment_map(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         # cbar.set_label(r'Jy/beam', fontsize=20, rotation=0, labelpad=20)
         plt.show()
 
-        plt.imshow(masked_model_mo - masked_mo, origin='lower')  # model_flux - masked_data_flux
+        '''  #
         plt.title(r'Moment 0 residual (model-data)')
         plt.xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
         plt.ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
         cbar = plt.colorbar()
         cbar.set_label(r'Jy/beam', fontsize=20, rotation=0, labelpad=20)
         plt.show()
+        # '''  #
 
     else:  # elif mom == 1 or mom == 2:
         '''  #
@@ -549,26 +544,26 @@ def moment_map(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         mmap_num = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
         mmap_den = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
         for zi in range(len(convolved_cube)):
-            mmap_num += vel_ax[zi] * convolved_cube[zi] * mask2d
-            mmap_den += convolved_cube[zi] * mask2d
+            mmap_num += vel_ax[zi] * convolved_cube[zi] * clipped_mask[zi] # * mask2d
+            mmap_den += convolved_cube[zi] * clipped_mask[zi] # * mask2d
         mmap = mmap_num / mmap_den
 
         dmap_num = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
         dmap_den = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
         for zi in range(len(convolved_cube)):
-            dmap_num += vel_ax[zi] * input_data_masked[zi] * mask2d
-            dmap_den += input_data_masked[zi] * mask2d
+            dmap_num += vel_ax[zi] * input_data_masked[zi] * clipped_mask[zi] # * mask2d
+            dmap_den += input_data_masked[zi] * clipped_mask[zi] # * mask2d
             # dmap += vel_ax[zi] * data_subcube[zi] * mask2d / (data_subcube[zi] * mask2d)
         #plt.imshow(np.log10(np.abs(dmap_num)), origin='lower')
         #plt.colorbar()
         #plt.show()
         d1 = 1.  # if NOT using UGC 2698, don't want to mask anything with this
-        if datafile.startswith('/Users/jonathancohn/Documents/dyn_mod/ugc_2698/'):
+        if datafile.startswith('UGC'):  # '/Users/jonathancohn/Documents/dyn_mod/ugc_2698/'
             print('UGC')
             d1 = np.zeros(shape=dmap_den.shape)  # d1 = dmap_den
             for x in range(len(dmap_den)):
                 for y in range(len(dmap_den[0])):
-                    if np.abs(dmap_den[x,y]) <= 2e-3:
+                    if np.abs(dmap_den[x,y]) <= 2e-10: # 2e-3:
                         d1[x,y] = 0.
                     else:
                         d1[x,y] = 1.
@@ -576,7 +571,8 @@ def moment_map(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
             dmap = dmap_num / dmap_den
             dmap *= d1
             mmap *= d1
-            plt.imshow(d1, origin='lower')
+            plt.imshow(d1, origin='lower')  # d1
+            plt.colorbar()
             plt.show()
 
             #for x in range(len(dmap)):
@@ -586,6 +582,7 @@ def moment_map(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
             #            mmap[x, y] = 0.
         else:
             dmap = dmap_num / dmap_den
+
         '''
         d1 = dmap_den
         d1[dmap_den <= 1e-3] = 1.1
@@ -609,41 +606,44 @@ def moment_map(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
             m2_num = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
             m2_den = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
             for zi in range(len(convolved_cube)):
-                m2_num += (vel_ax[zi] - mmap)**2 * convolved_cube[zi] * mask2d
-                m2_den += convolved_cube[zi] * mask2d
+                m2_num += (vel_ax[zi] - mmap)**2 * convolved_cube[zi] * clipped_mask[zi] # * mask2d
+                m2_den += convolved_cube[zi] * clipped_mask[zi] # * mask2d
             m2 = np.sqrt(m2_num / m2_den) * d1  # MASKING using d1
 
             d2_num = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
             d2_n2 = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
             d2_den = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
             for zi in range(len(convolved_cube)):
-                d2_n2 += input_data_masked[zi] * (vel_ax[zi] - dmap)**2 * mask2d
-                d2_num += (vel_ax[zi] - dmap)**2 * input_data_masked[zi] * mask2d
-                d2_den += input_data_masked[zi] * mask2d
+                d2_n2 += input_data_masked[zi] * (vel_ax[zi] - dmap)**2 * clipped_mask[zi] # * mask2d
+                d2_num += (vel_ax[zi] - dmap)**2 * input_data_masked[zi] * clipped_mask[zi] # * mask2d
+                d2_den += input_data_masked[zi] * clipped_mask[zi] # * mask2d
             # d2_num = np.abs(d2_num)
             dfig = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0]))) + 1.
             dfig2 = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0]))) + 1.
             dfig[d2_n2 < 0.] = 0.  # d2_n2 matches d2_den on the sign aspect
             dfig2[d2_den < 0.] = 0.
+            '''  #
             plt.imshow(dfig + dfig2, origin='lower')
             plt.colorbar()
             plt.show()
+            # '''  #
             d2 = np.sqrt(d2_num / d2_den) * d1  # MASKING using d1
 
+            # d2num~0.4 max,m2num~0.1 max,d2den~0.0175max,m2den~0.000035max
             '''  #
-            plt.imshow(d2_num / d2_den, origin='lower')
-            plt.title(r'(Moment 2)$^2$')
+            plt.imshow(d2_den, origin='lower')
+            #plt.title(r'Moment 2 data - model')
             plt.colorbar()
             plt.show()
-            plt.title('Moment 2 denom')
-            plt.imshow(d2_den, origin='lower')
+            #plt.title('Moment 2 denom')
+            plt.imshow(m2_den, origin='lower')
             plt.colorbar()
             plt.show()
             # '''  #
 
             fig = plt.figure()
             grid = AxesGrid(fig, 111,
-                            nrows_ncols=(1, 2),
+                            nrows_ncols=(1, 3),
                             axes_pad=0.01,
                             cbar_mode='single',
                             cbar_location='right',
@@ -658,6 +658,18 @@ def moment_map(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
                     im = ax.imshow(m2, origin='lower', vmin=np.amin([np.nanmin(d2), np.nanmin(m2)]),
                                    vmax=np.amax([np.nanmax(d2), np.nanmax(m2)]))  # , cmap='RdBu_r'
                     ax.set_title(r'Moment 2 (model)')
+                elif i == 2:
+                    diff = m2 - d2
+                    if samescale:
+                        im = ax.imshow(m2 - d2, origin='lower', vmin=np.amin([np.nanmin(d2), np.nanmin(m2)]),
+                                       vmax=np.amax([np.nanmax(d2), np.nanmax(m2)]))  # , cmap='RdBu'
+                    else:  # residscale
+                        im = ax.imshow(m2 - d2, origin='lower', vmin=np.nanmin(diff), vmax=np.nanmax(diff))
+                        '''
+                        im = ax.imshow(m2 - d2, origin='lower', vmin=np.amin([np.nanmin(d2-m2), np.nanmin(m2-d2)]),
+                                       vmax=np.amax([np.nanmax(d2-m2), np.nanmax(m2-d2)]))
+                        '''
+                    ax.set_title(r'Moment 2 residual (model - data)')
                 i += 1
 
                 ax.set_xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
@@ -669,20 +681,26 @@ def moment_map(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
             # cbar.set_label(r'Jy/beam', fontsize=20, rotation=0, labelpad=20)
             plt.show()
 
-            # '''  #
-            plt.imshow(m2 - d2, origin='lower', vmin=np.amin([np.nanmin(d2 - m2), np.nanmin(m2 - d2)]),
-                       vmax=np.amax([np.nanmax(d2 - m2), np.nanmax(m2 - d2)]))  # , cmap='RdBu'
+            '''  #
+            samescale = True
+            if samescale:
+                plt.imshow(m2 - d2, origin='lower', vmin=np.amin([np.nanmin(d2), np.nanmin(m2)]),
+                           vmax=np.amax([np.nanmax(d2), np.nanmax(m2)]))  # , cmap='RdBu'
+            else:
+                plt.imshow(m2 - d2, origin='lower', vmin=np.amin([np.nanmin(d2 - m2), np.nanmin(m2 - d2)]),
+                           vmax=np.amax([np.nanmax(d2 - m2), np.nanmax(m2 - d2)]))  # , cmap='RdBu'
             cbar = plt.colorbar()
             plt.title(r'Moment 2 residual (model - data)')
             cbar.set_label(r'km/s', fontsize=20, rotation=0, labelpad=20)
             plt.xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
             plt.ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
             plt.show()
+            # '''  #
 
-        else:
+        else:  # mom == 1
             fig = plt.figure()
             grid = AxesGrid(fig, 111,
-                            nrows_ncols=(1, 2),
+                            nrows_ncols=(1, 3),
                             axes_pad=0.01,
                             cbar_mode='single',
                             cbar_location='right',
@@ -697,6 +715,18 @@ def moment_map(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
                     im = ax.imshow(mmap, origin='lower', vmin=np.amin([np.nanmin(dmap), np.nanmin(mmap)]),
                                    vmax=np.amax([np.nanmax(dmap), np.nanmax(mmap)]), cmap='RdBu_r')
                     ax.set_title(r'Moment 1 (model)')
+                elif i == 2:
+                    if samescale:
+                        im = ax.imshow(mmap - dmap, origin='lower', vmin=np.amin([np.nanmin(dmap), np.nanmin(mmap)]),
+                                       vmax=np.amax([np.nanmax(dmap), np.nanmax(mmap)]), cmap='RdBu')  # , cmap='RdBu'
+                    else:  # resid scale
+                        diff = mmap - dmap
+                        im = ax.imshow(diff, origin='lower', vmin=np.nanmin(diff), vmax=np.nanmax(diff))  # cmap='RdBu'
+                        '''
+                        im = ax.imshow(mmap - dmap, origin='lower', vmin=np.amin([np.nanmin(dmap-mmap), np.nanmin(mmap-dmap)]),
+                                       vmax=np.amax([np.nanmax(dmap-mmap), np.nanmax(mmap-dmap)]), cmap='RdBu')
+                        '''
+                    ax.set_title(r'Moment 1 residual (model - data)')
                 i += 1
 
                 ax.set_xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
@@ -708,7 +738,7 @@ def moment_map(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
             # cbar.set_label(r'Jy/beam', fontsize=20, rotation=0, labelpad=20)
             plt.show()
 
-            # '''  #
+            '''  #
             plt.imshow(mmap - dmap, origin='lower', vmin=np.amin([np.nanmin(dmap-mmap), np.nanmin(mmap-dmap)]),
                        vmax=np.amax([np.nanmax(dmap-mmap), np.nanmax(mmap-dmap)]), cmap='RdBu')
             cbar = plt.colorbar()
@@ -960,3 +990,32 @@ if __name__ == "__main__":
                       xyrange=[params['xi'], params['xf'], params['yi'], params['yf']], xell=params['xell'],
                       yell=params['yell'], mom=1, mask=params['mask'], lmask=lucy_mask, datafile=params['data'])
     vlos, x_obs, y_obs, cs, f_ax, cs_unsum, ell4 = outs
+
+'''
+        if specc:  # if using SpectralCube built in function
+            from spectral_cube import SpectralCube
+            c1 = fits.open(datafile)
+            cube = SpectralCube.read(c1)
+            c1.close()
+            mo = cube.moment(order=1)
+            masked_mo = mo.hdu.data[xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask * mask2d
+
+            # masked_data_flux = fluxes[xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask
+            hdu = fits.PrimaryHDU(convolved_cube)
+            hdul = fits.HDUList([hdu])
+            temp = '/Users/jonathancohn/Documents/dyn_mod/moment_test.fits'
+            hdul.writeto(temp, overwrite=True)
+            dat, head = fits.getdata(temp, header=True)
+            dat1, head1 = fits.getdata(datafile, header=True)
+            for ind in [1, 2, 3]:
+                head['CRVAL' + str(ind)] = head1['CRVAL' + str(ind)]
+                head['CTYPE' + str(ind)] = head1['CTYPE' + str(ind)]
+                head['CDELT' + str(ind)] = head1['CDELT' + str(ind)]
+                head['CUNIT' + str(ind)] = head1['CUNIT' + str(ind)]
+            fits.writeto(temp, dat, head, overwrite=True)
+            c2 = fits.open(datafile)
+            cube2 = SpectralCube.read(c2)
+            c2.close()
+            model_mo2 = cube2.moment(order=1)
+            masked_model_mo = model_mo2.hdu.data[xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask * mask2d
+'''
