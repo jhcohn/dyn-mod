@@ -12,7 +12,7 @@ from astropy.modeling.models import Box2D
 from astropy.nddata.utils import block_reduce
 from astropy.modeling.models import Ellipse2D
 import sys
-sys.path.insert(0, '/Users/jonathancohn/Documents/jam/')  # lets me import file from different folder/path
+# sys.path.insert(0, '/Users/jonathancohn/Documents/jam/')  # lets me import file from different folder/path
 import mge_vcirc_mine as mvm  # import mge_vcirc code
 
 
@@ -155,33 +155,7 @@ def blockshaped(arr, nrow, ncol):
     return arr.reshape(h // nrow, nrow, -1, ncol).swapaxes(1, 2).reshape(-1, nrow, ncol)
 
 
-def rebin(data, n):
-    """
-    Rebin data or model cube (or one slice of a cube) in blocks of n x n pixels
-
-    :param data: input data cube, model cube, or slice of a cube, e.g. a 2Darray
-    :param n: size of pixel binning (e.g. n=4 rebins the date in blocks of 4x4 pixels)
-    :return: rebinned cube or slice
-    """
-
-    rebinned = []
-    if len(data.shape) == 2:
-        subarrays = blockshaped(data, n, n)  # bin the data in groups of nxn (4x4) pixels
-        # each pixel in the new, rebinned data cube is the mean of each 4x4 set of original pixels
-        reshaped = n**2 * np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data) / n),
-                                                                                 int(len(data[0]) / n)))
-        rebinned.append(reshaped)
-    else:
-        for z in range(len(data)):  # for each slice
-            subarrays = blockshaped(data[z, :, :], n, n)  # bin the data as above
-            reshaped = n**2 * np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data[0]) / n),
-                                                                                     int(len(data[0][0]) / n)))
-            rebinned.append(reshaped)
-
-    return np.asarray(rebinned)
-
-
-def rebin2(data, nr, nc):
+def rebin(data, nr, nc):
     """
     Rebin data or model cube (or one slice of a cube) in blocks of n x n pixels
 
@@ -235,11 +209,11 @@ def ellipse_fitting(cube, rfit, x0_sub, y0_sub, res, pa_disk, q):
     return ellipse_mask
 
 
-def moment_map(mom=0, samescale=True, resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=np.deg2rad(60.),
-               vsys=None, dist=17., theta=np.deg2rad(200.), input_data=None, lucy_out=None, mask=None, beam=None,
-               q_ell=1., theta_ell=0., bl=False, enclosed_mass=None, menc_type=False, ml_ratio=1., sig_type='flat',
-               sig_params=None, noise=None, rfit=1., ds=None, zrange=None, xyrange=None, lmask=None, f_w=1., f_0=0.,
-               freq_ax=None, fstep=0., opt=True, quiet=False, xell=360., yell=350., datafile=None, pf=None):
+def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=np.deg2rad(60.), vsys=None, dist=17.,
+               theta=np.deg2rad(200.), input_data=None, lucy_out=None, out_name=None, beam=None, q_ell=1., theta_ell=0., xell=360., yell=350.,
+               bl=False, enclosed_mass=None, menc_type=False, ml_ratio=1., sig_type='flat', sig_params=None, f_w=1.,
+               noise=None, rfit=1., ds=None, chi2=False, zrange=None, xyrange=None, reduced=False, freq_ax=None, f_0=0.,
+               fstep=0., opt=True):
     """
     Build grid for dynamical modeling!
 
@@ -279,10 +253,6 @@ def moment_map(mom=0, samescale=True, resolution=0.05, s=10, x_loc=0., y_loc=0.,
     :param fstep: frequency step in the frequency axis [Hz]
     :param bl: lucy weight map unit indicator (bl=False or 0 --> Jy/beam * Hz; bl=True or 1 --> Jy/beam km/s)
     :param opt: frequency axis velocity convention; if opt=True, optical velocity; if opt=False, radio velocity
-    :param quiet: suppress printing out stuff!
-    :param mom: moment map number
-    :param lmask: lucy_mask i.e. collapsed strictmask
-    :param pf: param_file name
 
     :return: convolved model cube (if chi2 is False); chi2 (if chi2 is True)
     """
@@ -292,8 +262,7 @@ def moment_map(mom=0, samescale=True, resolution=0.05, s=10, x_loc=0., y_loc=0.,
     constants = Constants()
 
     # SUBPIXELS (reshape deconvolved flux map [lucy_out] sxs subpixels, so subpix has flux=(real pixel flux)/s**2)
-    if not quiet:
-        print('start')
+    print('start')
     if s == 1:  # subpix_deconvolved is identical to lucy_out, with sxs subpixels per pixel & total flux conserved
         subpix_deconvolved = lucy_out
     else:
@@ -316,7 +285,7 @@ def moment_map(mom=0, samescale=True, resolution=0.05, s=10, x_loc=0., y_loc=0.,
     # RESCALE x_loc, y_loc PIXEL VALUES TO CORRESPOND TO SUB-CUBE PIXEL LOCATIONS!
     x_loc = x_loc - xyrange[0]  # x_loc - xi
     y_loc = y_loc - xyrange[2]  # y_loc - yi
-
+    
     xell = xell - xyrange[0]
     yell = yell - xyrange[2]
 
@@ -366,20 +335,17 @@ def moment_map(mom=0, samescale=True, resolution=0.05, s=10, x_loc=0., y_loc=0.,
 
     # CALCULATE KEPLERIAN VELOCITY DUE TO ENCLOSED STELLAR MASS
     if menc_type == 0:  # if calculating v(R) due to stars directly from MGE parameters
-        if not quiet:
-            print('mge')
+        print('mge')
         test_rad = np.linspace(np.amin(R_ac), np.amax(R_ac), 100)
 
         comp, surf_pots, sigma_pots, qobs = mvm.load_mge(enclosed_mass)  # load the MGE parameters
-
         v_c = mvm.mge_vcirc(surf_pots * ml_ratio, sigma_pots, qobs, np.rad2deg(inc), 0., dist, test_rad)  # v_c,star
         v_c_r = interpolate.interp1d(test_rad, v_c, kind='cubic', fill_value='extrapolate')
 
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
         vel = np.sqrt((constants.G_pc * mbh / R) + v_c_r(R_ac)**2)
     elif menc_type == 1:  # elif using a file with v_circ(R) due to stellar mass
-        if not quiet:
-            print('v(r)')
+        print('v(r)')
         radii = []
         v_circ = []
         with open(enclosed_mass) as em:  # note: current file has units v_circ^2/(M/L) --> v_circ = np.sqrt(col * (M/L))
@@ -387,15 +353,12 @@ def moment_map(mom=0, samescale=True, resolution=0.05, s=10, x_loc=0., y_loc=0.,
                 cols = line.split()  # note: currently using model "B1" = 2nd col in file (file has 4 cols of models)
                 radii.append(float(cols[0]))  # file lists radii in pc
                 v_circ.append(float(cols[1]))  # v^2 / (M/L) --> units (km/s)^2 / (M_sol/L_sol)
-
         v_c_r = interpolate.interp1d(radii, v_circ, fill_value='extrapolate')  # create a function to interpolate v_circ
 
         # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
         vel = np.sqrt(v_c_r(R) * ml_ratio + (constants.G_pc * mbh / R))  # velocities sum in quadrature
-
     elif menc_type == 2:  # elif using a file directly with stellar mass as a function of R
-        if not quiet:
-            print('M(R)')
+        print('M(R)')
         radii = []
         m_stellar = []
         with open(enclosed_mass) as em:
@@ -424,7 +387,7 @@ def moment_map(mom=0, samescale=True, resolution=0.05, s=10, x_loc=0., y_loc=0.,
     sigma = get_sig(r=R, sig0=sig_params[0], r0=sig_params[1], mu=sig_params[2], sig1=sig_params[3])[sig_type]
 
     # CONVERT v_los TO OBSERVED FREQUENCY MAP
-    zred = vsys / constants.c_kms #vsys  # redshift
+    zred = vsys / constants.c_kms  # redshift
     freq_obs = (f_0 / (1+zred)) * (1 - v_los / constants.c_kms)  # convert v_los to f_obs
 
     # CONVERT OBSERVED DISPERSION (turbulent) TO FREQUENCY WIDTH
@@ -435,7 +398,7 @@ def moment_map(mom=0, samescale=True, resolution=0.05, s=10, x_loc=0., y_loc=0.,
     weight = subpix_deconvolved  # [Jy/beam Hz]
 
     # WEIGHT CURRENTLY IN UNITS OF Jy/beam * Hz --> need to get it in units of Jy/beam to match data
-    weight *= f_w / np.sqrt(2 * np.pi * delta_freq_obs**2)  # divide to get correct units
+    weight *=  f_w / np.sqrt(2 * np.pi * delta_freq_obs**2)  # divide to get correct units
     # NOTE: MAYBE multiply by fstep here, after collapsing and lucy process, rather than during collapse
     # NOTE: would then need to multiply by ~1000 factor or something else large there, bc otherwise lucy cvg too fast
 
@@ -453,7 +416,7 @@ def moment_map(mom=0, samescale=True, resolution=0.05, s=10, x_loc=0., y_loc=0.,
     if s == 1:
         intrinsic_cube = cube_model
     else:
-        intrinsic_cube = rebin(cube_model, s)  # intrinsic_cube = block_reduce(cube_model, s, np.mean)
+        intrinsic_cube = rebin(cube_model, s, s)  # intrinsic_cube = block_reduce(cube_model, s, np.mean)
 
     # CONVERT INTRINSIC TO OBSERVED (convolve each slice of intrinsic_cube with alma beam --> observed data cube)
     convolved_cube = np.zeros(shape=intrinsic_cube.shape)  # approx ~1e-6 to 3e-6s per pixel
@@ -465,386 +428,54 @@ def moment_map(mom=0, samescale=True, resolution=0.05, s=10, x_loc=0., y_loc=0.,
     convolved_cube *= ell_mask
     input_data_masked = input_data[zrange[0]:zrange[1], xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask
 
-    # MOMENT MAP STUFF
-    hdu_m = fits.open(mask)
-    data_mask = hdu_m[0].data  # this is hdu_m[0].data, NOT hdu[0].data[0], unlike the data_cube above
-    hdu_m.close()
-    # data_mask = data_mask[:, xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]]
-    data_mask = data_mask[:, xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]]
-    hdu_lm = fits.open(lmask)
-    mask2d = hdu_lm[0].data  # this is hdu_m[0].data, NOT hdu[0].data[0], unlike the data_cube above
-    hdu_lm.close()
-    mask2d = mask2d[xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]]
-    from mpl_toolkits.axes_grid1 import AxesGrid
-    clipped_mask = data_mask[zrange[0]:zrange[1]]
+    if chi2:  # if outputting chi^2
+        chi_sq = 0.  # initialize chi^2
+        cs = []  # chi^2 per slice
 
-    # Not yet masked data sub-cube
-    data_subcube = input_data[zrange[0]:zrange[1], xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]]
+        # compare the data to the model by binning each in groups of dsxds pixels (separate from s)
+        data_4 = rebin(input_data_masked, int(ds*2), ds)
+        ap_4 = rebin(convolved_cube, int(ds*2), ds)
+        ell_4 = rebin(ell_mask, int(ds*2), ds)
 
-    # CONVERT FREQ TO VEL
-    velwidth = constants.c_kms * (1 + zred) * fstep / f_0
-    vel_ax = []
-    for v in range(len(freq_ax)):
-        vel_ax.append(constants.c_kms * (1. - (freq_ax[v] / f_0) * (1 + zred)))
-    vel_ax = np.asarray(vel_ax)
-    # specc = False
-    # print(vel_ax)  # ~20km/s
-    # mom = 0
-    # samescale = False
-    abs_diff = True
+        z_ind = 0  # the actual index for the model-data comparison cubes
+        for z in range(zrange[0], zrange[1]):  # for each relevant freq slice (ignore slices with only noise)
+            chi_sq += np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise[z_ind]**2)  # calculate chisq!
+            cs.append(np.sum((ap_4[z_ind] - data_4[z_ind])**2 / noise[z_ind]**2))  # chisq per slice
 
-    if mom == 0:
-        # if using equation from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
-        masked_mo = np.zeros(shape=ell_mask.shape)
-        for z in range(len(vel_ax)):
-            # masked_mo += abs(velwidth) * data_subcube[z] * mask2d
-            masked_mo += abs(velwidth) * input_data_masked[z] * clipped_mask[z] # mask2d
+            z_ind += 1  # the actual index for the model-data comparison cubes
 
-        masked_model_mo = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
-        for zi in range(len(convolved_cube)):
-            masked_model_mo += convolved_cube[zi] * abs(velwidth) * clipped_mask[zi] # * mask2d  # data_mask[zi]
+        # CALCULATE REDUCED CHI^2
+        all_pix = np.ndarray.flatten(ell_4)  # all fitted pixels in each slice [len = 625 (yep)] [525 masked, 100 not]
+        masked_pix = all_pix[all_pix != 0]  # all_pix, but this time only the pixels that are actually inside ellipse
+        n_pts = len(masked_pix) * len(z_ax)  # (zrange[1] - zrange[0])  # total number of pixels being compared
+        # print(n_pts, len(masked_pix))  # rfit=1.2 --> 6440 (140/slice); 6716 (146/slice) for fully inclusive ellipse
+        n_params = 12  # number of free parameters
+        print('total model constructed in {0} seconds'.format(time.time() - t_begin))  # ~213s
 
-        fig = plt.figure()
-        grid = AxesGrid(fig, 111,
-                        nrows_ncols=(1, 3),
-                        axes_pad=0.01,
-                        cbar_mode='single',
-                        cbar_location='right',
-                        cbar_pad=0.1)
-        i = 0
-
-        # CONVERT TO mJy
-        masked_mo *= 1e3
-        masked_model_mo *= 1e3
-        for ax in grid:
-            if i == 0:
-                im = ax.imshow(masked_mo, vmin=np.amin([np.nanmin(masked_model_mo), np.nanmin(masked_mo)]),
-                               vmax=np.amax([np.nanmax(masked_model_mo), np.nanmax(masked_mo)]), origin='lower')
-                ax.set_title(r'Moment 0 (data)')
-            elif i == 1:
-                im = ax.imshow(masked_model_mo, vmin=np.amin([np.nanmin(masked_model_mo), np.nanmin(masked_mo)]),
-                               vmax=np.amax([np.nanmax(masked_model_mo), np.nanmax(masked_mo)]), origin='lower')
-                ax.set_title(r'Moment 0 (model)')
-            elif i == 2:
-                diff = masked_model_mo - masked_mo
-                if samescale:
-                    if abs_diff:
-                        diff = np.abs(diff)
-                        ax.set_title('Moment 0 residual abs(model-data)')
-                    else:
-                        ax.set_title('Moment 0 residual (model-data)')
-                    im = ax.imshow(diff, vmin=np.amin([np.nanmin(masked_model_mo), np.nanmin(masked_mo)]),
-                                   vmax=np.amax([np.nanmax(masked_model_mo), np.nanmax(masked_mo)]), origin='lower')
-                else:  # then residual scale
-                    im = ax.imshow(diff, origin='lower', vmin=np.nanmin(diff),vmax=np.nanmax(diff))
-                    ax.set_title('Moment 0 residual (model-data)')
-                    '''
-                    im = ax.imshow(diff, origin='lower', vmin=np.amin([np.nanmin(diff), np.nanmin(-diff)]),
-                                       vmax=np.amax([np.nanmax(diff), np.nanmax(-diff)]))  # model_flux-masked_data_flux
-                    '''
-            i += 1
-
-            ax.set_xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
-            ax.set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
-
-        cbar = ax.cax.colorbar(im)
-        cbar = grid.cbar_axes[0].colorbar(im)
-        # cbar.set_label(r'Jy/beam', fontsize=20, rotation=0, labelpad=20)
-        plt.show()
-
-        '''  #
-        plt.title(r'Moment 0 residual (model-data)')
-        plt.xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
-        plt.ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
-        cbar = plt.colorbar()
-        cbar.set_label(r'Jy/beam', fontsize=20, rotation=0, labelpad=20)
-        plt.show()
-        # '''  #
-
-    else:  # elif mom == 1 or mom == 2:
-        '''  #
-        datav = np.zeros(shape=input_data_masked.shape)
-        modv = np.zeros(shape=convolved_cube.shape)
-        for v in range(len(vel_ax)):
-            datav[v] = input_data_masked[v] * vel_ax[v]
-            modv[v] = convolved_cube[v] * vel_ax[v]
-
-        dmap = np.sum(modv, axis=0) * mask2d / np.sum(convolved_cube, axis=0)
-        mmap = np.sum(datav, axis=0) * mask2d / np.sum(input_data_masked, axis=0)
-        # '''  #
-
-        mmap_num = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
-        mmap_den = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
-        for zi in range(len(convolved_cube)):
-            mmap_num += vel_ax[zi] * convolved_cube[zi] * clipped_mask[zi] # * mask2d
-            mmap_den += convolved_cube[zi] * clipped_mask[zi] # * mask2d
-        mmap = mmap_num / mmap_den
-
-        dmap_num = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
-        dmap_den = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
-        for zi in range(len(convolved_cube)):
-            dmap_num += vel_ax[zi] * input_data_masked[zi] * clipped_mask[zi] # * mask2d
-            dmap_den += input_data_masked[zi] * clipped_mask[zi] # * mask2d
-            # dmap += vel_ax[zi] * data_subcube[zi] * mask2d / (data_subcube[zi] * mask2d)
-        #plt.imshow(np.log10(np.abs(dmap_num)), origin='lower')
-        #plt.colorbar()
-        #plt.show()
-        d1 = 1.  # if NOT using UGC 2698, don't want to mask anything with this
-        if datafile.startswith('UGC'):  # '/Users/jonathancohn/Documents/dyn_mod/ugc_2698/'
-            print('UGC')
-            d1 = np.zeros(shape=dmap_den.shape)  # d1 = dmap_den
-            for x in range(len(dmap_den)):
-                for y in range(len(dmap_den[0])):
-                    if np.abs(dmap_den[x,y]) <= 2e-10: # 2e-3:
-                        d1[x,y] = 0.
-                    else:
-                        d1[x,y] = 1.
-
-            dmap = dmap_num / dmap_den
-            dmap *= d1
-            mmap *= d1
-            plt.imshow(d1, origin='lower')  # d1
-            plt.colorbar()
-            plt.show()
-
-            #for x in range(len(dmap)):
-            #    for y in range(len(dmap[0])):
-            #        if d1[x, y] == 0.:
-            #            dmap[x, y] = 0.
-            #            mmap[x, y] = 0.
-        else:
-            dmap = dmap_num / dmap_den
-
-        '''
-        d1 = dmap_den
-        d1[dmap_den <= 1e-3] = 1.1
-        d1[dmap_den != 1.1] = 1.
-        d1[dmap_den == 1.1] = 0.
-        d2 = d1 - ell_mask
-        print(d1.shape)
-        plt.imshow(d1 - ell_mask, origin='lower')
-        plt.colorbar()
-        plt.show()
-        print(oop)
+        if reduced:
+            print(r'Reduced chi^2=', chi_sq / (n_pts - n_params))  # 4284.80414208  # 12300204.6088
+            chi_sq /= (n_pts - n_params)  # convert to reduced chi^2; else just return full chi^2
+        if n_pts == 0.:
+            print('n_pts = ' + str(n_pts))
+            chi_sq = np.inf
         
-        print(dmap_den.shape, dmap_num.shape)
-        for z in range(len(dmap_den)):
-            for z2 in range(len(dmap_den[0])):
-                if 0 < np.abs(dmap_den[z,z2]) <= 5e-2:
-                    dmap_den[z,z2] = 1e-3
-        '''
+        print(n_pts)
+        print(r'$\chi^2=$', chi_sq)
+        return chi_sq  # / (n_pts - n_params)
 
-        if mom == 2:
-            m2_num = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
-            m2_den = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
-            for zi in range(len(convolved_cube)):
-                m2_num += (vel_ax[zi] - mmap)**2 * convolved_cube[zi] * clipped_mask[zi] # * mask2d
-                m2_den += convolved_cube[zi] * clipped_mask[zi] # * mask2d
-            m2 = np.sqrt(m2_num / m2_den) * d1  # MASKING using d1
+    else:  #if outputting actual cube itself
+        inds_to_try2 = np.asarray([[10, 10], [10, 15], [15, 10]])  # plot a few line profiles
+        import test_dyn_funcs as tdf
+        f_sys = f_0 / (1+zred)
+        tdf.compare(input_data_masked, convolved_cube, freq_ax / 1e9, inds_to_try2, f_sys / 1e9, 4)  # plot them!
 
-            d2_num = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
-            d2_n2 = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
-            d2_den = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0])))
-            for zi in range(len(convolved_cube)):
-                d2_n2 += input_data_masked[zi] * (vel_ax[zi] - dmap)**2 * clipped_mask[zi] # * mask2d
-                d2_num += (vel_ax[zi] - dmap)**2 * input_data_masked[zi] * clipped_mask[zi] # * mask2d
-                d2_den += input_data_masked[zi] * clipped_mask[zi] # * mask2d
-            # d2_num = np.abs(d2_num)
-            dfig = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0]))) + 1.
-            dfig2 = np.zeros(shape=(len(convolved_cube[0]), len(convolved_cube[0][0]))) + 1.
-            dfig[d2_n2 < 0.] = 0.  # d2_n2 matches d2_den on the sign aspect
-            dfig2[d2_den < 0.] = 0.
-            '''  #
-            plt.imshow(dfig + dfig2, origin='lower')
-            plt.colorbar()
-            plt.show()
-            # '''  #
-            d2 = np.sqrt(d2_num / d2_den) * d1  # MASKING using d1
+        if not Path(out_name).exists():  # WRITE OUT RESULTS TO FITS FILE
+            hdu = fits.PrimaryHDU(convolved_cube)
+            hdul = fits.HDUList([hdu])
+            hdul.writeto(out_name)
+            print('written!')
 
-            # d2num~0.4 max,m2num~0.1 max,d2den~0.0175max,m2den~0.000035max
-            '''  #
-            plt.imshow(d2_den, origin='lower')
-            #plt.title(r'Moment 2 data - model')
-            plt.colorbar()
-            plt.show()
-            #plt.title('Moment 2 denom')
-            plt.imshow(m2_den, origin='lower')
-            plt.colorbar()
-            plt.show()
-            # '''  #
-
-            fig = plt.figure()
-            grid = AxesGrid(fig, 111,
-                            nrows_ncols=(1, 3),
-                            axes_pad=0.01,
-                            cbar_mode='single',
-                            cbar_location='right',
-                            cbar_pad=0.1)
-            i = 0
-            for ax in grid:
-                if i == 0:
-                    im = ax.imshow(d2, origin='lower', vmin=np.amin([np.nanmin(d2), np.nanmin(m2)]),
-                                   vmax=np.amax([np.nanmax(d2), np.nanmax(m2)]))  # , cmap='RdBu_r'
-                    ax.set_title(r'Moment 2 (data)')
-                elif i == 1:
-                    im = ax.imshow(m2, origin='lower', vmin=np.amin([np.nanmin(d2), np.nanmin(m2)]),
-                                   vmax=np.amax([np.nanmax(d2), np.nanmax(m2)]))  # , cmap='RdBu_r'
-                    ax.set_title(r'Moment 2 (model)')
-                elif i == 2:
-                    diff = m2 - d2
-                    if abs_diff:
-                        diff = np.abs(diff)
-                        ax.set_title('Moment 2 residual abs(model-data)')
-                    else:
-                        ax.set_title('Moment 2 residual (model-data)')
-                    if samescale:
-                        im = ax.imshow(diff, origin='lower', vmin=np.amin([np.nanmin(d2), np.nanmin(m2)]),
-                                       vmax=np.amax([np.nanmax(d2), np.nanmax(m2)]))  # , cmap='RdBu'
-                    else:  # residscale
-                        im = ax.imshow(m2 - d2, origin='lower', vmin=np.nanmin(diff), vmax=np.nanmax(diff))
-                        '''
-                        im = ax.imshow(m2 - d2, origin='lower', vmin=np.amin([np.nanmin(d2-m2), np.nanmin(m2-d2)]),
-                                       vmax=np.amax([np.nanmax(d2-m2), np.nanmax(m2-d2)]))
-                        '''
-                        ax.set_title(r'Moment 2 residual (model - data)')
-                i += 1
-
-                ax.set_xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
-                ax.set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
-
-            # cbar = plt.colorbar(im)
-            cbar = ax.cax.colorbar(im)
-            cbar = grid.cbar_axes[0].colorbar(im)
-            # cbar.set_label(r'Jy/beam', fontsize=20, rotation=0, labelpad=20)
-            plt.show()
-
-            '''  #
-            samescale = True
-            if samescale:
-                plt.imshow(m2 - d2, origin='lower', vmin=np.amin([np.nanmin(d2), np.nanmin(m2)]),
-                           vmax=np.amax([np.nanmax(d2), np.nanmax(m2)]))  # , cmap='RdBu'
-            else:
-                plt.imshow(m2 - d2, origin='lower', vmin=np.amin([np.nanmin(d2 - m2), np.nanmin(m2 - d2)]),
-                           vmax=np.amax([np.nanmax(d2 - m2), np.nanmax(m2 - d2)]))  # , cmap='RdBu'
-            cbar = plt.colorbar()
-            plt.title(r'Moment 2 residual (model - data)')
-            cbar.set_label(r'km/s', fontsize=20, rotation=0, labelpad=20)
-            plt.xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
-            plt.ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
-            plt.show()
-            # '''  #
-
-        else:  # mom == 1
-            fig = plt.figure()
-            grid = AxesGrid(fig, 111,
-                            nrows_ncols=(1, 3),
-                            axes_pad=0.01,
-                            cbar_mode='single',
-                            cbar_location='right',
-                            cbar_pad=0.1)
-            i = 0
-            for ax in grid:
-                if i == 0:
-                    im = ax.imshow(dmap, origin='lower', vmin=np.amin([np.nanmin(dmap), np.nanmin(mmap)]),
-                                   vmax=np.amax([np.nanmax(dmap), np.nanmax(mmap)]), cmap='RdBu_r')
-                    ax.set_title(r'Moment 1 (data)')
-                elif i == 1:
-                    im = ax.imshow(mmap, origin='lower', vmin=np.amin([np.nanmin(dmap), np.nanmin(mmap)]),
-                                   vmax=np.amax([np.nanmax(dmap), np.nanmax(mmap)]), cmap='RdBu_r')
-                    ax.set_title(r'Moment 1 (model)')
-                elif i == 2:
-                    if samescale:
-                        im = ax.imshow(mmap - dmap, origin='lower', vmin=np.amin([np.nanmin(dmap), np.nanmin(mmap)]),
-                                       vmax=np.amax([np.nanmax(dmap), np.nanmax(mmap)]), cmap='RdBu')  # , cmap='RdBu'
-                    else:  # resid scale
-                        diff = mmap - dmap
-                        im = ax.imshow(diff, origin='lower', vmin=np.nanmin(diff), vmax=np.nanmax(diff))  # cmap='RdBu'
-                        '''
-                        im = ax.imshow(mmap - dmap, origin='lower', vmin=np.amin([np.nanmin(dmap-mmap), np.nanmin(mmap-dmap)]),
-                                       vmax=np.amax([np.nanmax(dmap-mmap), np.nanmax(mmap-dmap)]), cmap='RdBu')
-                        '''
-                    ax.set_title(r'Moment 1 residual (model - data)')
-                i += 1
-
-                ax.set_xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
-                ax.set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
-
-            # cbar = plt.colorbar(im)
-            cbar = ax.cax.colorbar(im)
-            cbar = grid.cbar_axes[0].colorbar(im)
-            # cbar.set_label(r'Jy/beam', fontsize=20, rotation=0, labelpad=20)
-            plt.show()
-
-            '''  #
-            plt.imshow(mmap - dmap, origin='lower', vmin=np.amin([np.nanmin(dmap-mmap), np.nanmin(mmap-dmap)]),
-                       vmax=np.amax([np.nanmax(dmap-mmap), np.nanmax(mmap-dmap)]), cmap='RdBu')
-            cbar = plt.colorbar()
-            plt.title(r'Moment 1 residual (model - data)')
-            cbar.set_label(r'km/s', fontsize=20, rotation=0, labelpad=20)
-            plt.xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
-            plt.ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
-            plt.show()
-            # '''  #
-
-    # compare the data to the model by binning each in groups of dsxds pixels (separate from s)
-
-    if pf == 'ugc_2698/ugc_2698_lucy_105outparams.txt':
-        print('yes pf here')
-        ell_4 = rebin2(ell_mask, int(ds*2), ds)
-        data_4 = rebin2(input_data_masked, int(ds*2), ds)
-        model_4 = rebin2(convolved_cube, int(ds*2), ds)
-    else:
-        ell_4 = rebin(ell_mask, ds)
-        data_4 = rebin(input_data_masked, ds)
-        model_4 = rebin(convolved_cube, ds)
-
-    indices = [[10,11], [11,11]] #UGC 2698: #[18,12] #NGC 3258: #[[13, 11]]  # [11, 13]
-    print(data_4.shape, ell_4.shape)
-    #for z in range(len(z_ax)):
-    #    plt.imshow(data_4[z] * ell_4[0], origin='lower')
-    #    plt.colorbar()
-    #    plt.show()
-    #            [12, 20], [20,12], [10, 10], [int(len(data_4[1]) / 2.), int(len(data_4[1]) / 2.)],
-    #            [int(len(data_4[1]) / 2.) + 1, int(len(data_4[1]) / 2.) + 1]]
-    # str(x_loc + xyrange[0])
-    # compare(data_4, model_4, freq_ax / (10**9), indices, f_0 / (10**9 * (1+zred)), 'run2 peak2', noise)
-    #compare(data_4, model_4, freq_ax / 1e9, indices, (f_0 / (1+(6421. / constants.c_kms))) / 1e9, 'run2 peak2', noise)
-
-    '''  #
-    # Collapsed cube flux map
-    plt.title(r'Model flux map [Jy/beam]')
-    plt.imshow(np.sum(model_4, axis=0), origin='lower')  # cs_unsum[16] - cs_unsum2[16]
-    cbar = plt.colorbar()
-    cbar.set_label(r'Flux [Jy/beam]', fontsize=20, rotation=90, labelpad=20)
-    plt.xlabel(r'x [4x4 binned pixels]', fontsize=20)  # x [arcsec]  # x [4x4 binned pixels]
-    plt.ylabel(r'y [4x4 binned pixels]', fontsize=20)  # y [arcsec]  # y [4x4 binned pixels]
-    plt.show()
-    # '''  #
-
-    all_pix = np.ndarray.flatten(ell_4)  # all fitted pixels in each slice [len = 625 (yep)] [525 masked, 100 not]
-    masked_pix = all_pix[all_pix != 0]  # all_pix, but this time only the pixels that are actually inside ellipse
-    n_pts = len(masked_pix) * len(z_ax)  # (zrange[1] - zrange[0])  # total number of pixels being compared
-    print(n_pts)
-    print(len(masked_pix))
-
-    chi_sq = 0.  # initialize chi^2
-    cs = []  # chi^2 per slice
-    cs_unsum = []
-    z_ind = 0  # the actual index for the model-data comparison cubes
-    for z in range(zrange[0], zrange[1]):  # for each relevant freq slice (ignore slices with only noise)
-        chi_sq += np.sum((model_4[z_ind] - data_4[z_ind]) ** 2 / noise[z_ind] ** 2)  # calculate chisq!
-        cs.append(np.sum((model_4[z_ind] - data_4[z_ind]) ** 2 / noise[z_ind] ** 2))  # chisq per slice
-        cs_unsum.append((model_4[z_ind] - data_4[z_ind]) ** 2 / noise[z_ind] ** 2)
-        z_ind += 1
-    print(chi_sq)
-    print(np.sum(ell_4), 'look!')
-
-    #v_los = block_reduce(v_los, s, np.mean)
-    #v_los = block_reduce(v_los, ds, np.mean) * ell_4[0]
-    print(v_los.shape)
-    #v_los *= ell_4[0]
-
-    return v_los, x_obs_ac, y_obs_ac, cs, freq_ax, cs_unsum, ell_4
+        return convolved_cube
 
 
 def par_dicts(parfile, q=False):
@@ -876,7 +507,7 @@ def par_dicts(parfile, q=False):
 
     if q:
         import sys
-        sys.path.insert(0, '/Users/jonathancohn/Documents/jam/')  # lets me import file from different folder/path
+        # sys.path.insert(0, '/Users/jonathancohn/Documents/jam/')  # lets me import file from different folder/path
         import mge_vcirc_mine as mvm
         comp, surf_pots, sigma_pots, qobs = mvm.load_mge(params['mass'])
 
@@ -886,7 +517,7 @@ def par_dicts(parfile, q=False):
         return params, priors
 
 
-def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=None, lucy_it=None, data=None, pf=None,
+def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=None, lucy_it=None, data=None,
                data_mask=None, grid_size=None, res=1., x_std=1., y_std=1., pa=0., ds=4, zrange=None, xyerr=None):
     """
 
@@ -897,7 +528,6 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=
     :param lucy_o: file name that will become the lucy_out, used in lucy process (if lucy_out doesn't exist)
     :param lucy_it: number of iterations to run in lucy process (if lucy_out doesn't exist)
     :param data: input data cube of observations
-    :param pf: parameter file
     :param data_mask: input mask cube of each slice of the data, for constructing the weight map
     :param grid_size: the pixel grid size to use for the make_beam() function
     :param res: resolution of observations [arcsec/pixel]
@@ -960,39 +590,12 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=
     lucy_out = hdu[0].data
     hdu.close()
 
-    if pf == 'ugc_2698/ugc_2698_lucy_105outparams.txt':
-        print('yes pf here')
-        noise_4 = rebin2(input_data, int(ds*2),  ds)
-    else:
-        noise_4 = rebin(input_data, ds)
+    noise_4 = rebin(input_data, int(ds*2), ds)
     noise = []  # ESTIMATE NOISE (RMS) IN ORIGINAL DATA CUBE [z, y, x]  # For large N, Variance ~= std^2
     for z in range(zrange[0], zrange[1]):  # for each relevant freq slice
         noise.append(np.std(noise_4[z, xyerr[2]:xyerr[3], xyerr[0]:xyerr[1]]))  # ~variance
 
     return lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise
-
-
-def compare(data, model, z_ax, inds_to_try2, v_sys, title, noise):
-
-    for i in range(len(inds_to_try2)):
-        print(inds_to_try2[i][0], inds_to_try2[i][1])
-        plt.plot(z_ax, model[:, inds_to_try2[i][1], inds_to_try2[i][0]], 'r+', label=r'Model')  # r-
-        plt.plot(z_ax, data[:, inds_to_try2[i][1], inds_to_try2[i][0]], 'b+', label=r'Data')  # b:
-        plt.axvline(x=v_sys, color='k', label=r'v$_{\text{sys}}$')
-        plt.axvline(x=(f_0 / (1+(6421./(2.99792458*1e5)))) / 1e9, color='k', ls='--', label=r'v$_{\text{sys}}=6421$ km/s')
-        # plt.title(str(inds_to_try2[i][0]) + ', ' + str(inds_to_try2[i][1]))  # ('no x,y offset')
-        plt.legend()
-        plt.xlabel(r'Frequency [GHz]')
-        plt.ylabel(r'Flux Density [Jy/beam]')
-        chisq = np.sum((model[:, inds_to_try2[i][1], inds_to_try2[i][0]] - data[:, inds_to_try2[i][1], inds_to_try2[i][0]])**2
-                       / np.asarray(noise)**2)  # calculate chisq!
-
-        plt.title(title + ' at 4x4-binned pixel (' + str(inds_to_try2[i][0]) + ',' + str(inds_to_try2[i][1]) +
-            ') with ' + r'$\chi^2 = $' + str(chisq))
-        #plt.title('xloc = ' + title + ', at 4x4-binned pixel (' + str(inds_to_try2[i][0]) + ',' + str(inds_to_try2[i][1]) +
-        #          ') with ' + r'$\chi^2 = $' + str(chisq))
-        plt.show()
-        plt.close()
 
 
 if __name__ == "__main__":
@@ -1014,60 +617,162 @@ if __name__ == "__main__":
     pars_str = ''
     for key in params:
         pars_str += str(params[key]) + '_'
-    out = '/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_general_' + pars_str + '_subcube_ellmask_bl2.fits'
+    out = '/scratch/user/joncohn/emcee_out/ngc_3258_outcube.fits' # '/Users/jonathancohn/Documents/dyn_mod/outputs/NGC_3258_general_' + pars_str + '_subcube_ellmask_bl2.fits'
 
     # CREATE THINGS THAT ONLY NEED TO BE CALCULATED ONCE (collapse fluxes, lucy, noise)
     mod_ins = model_prep(data=params['data'], ds=params['ds'], lucy_out=params['lucy'], lucy_mask=params['lucy_mask'],
                          lucy_b=params['lucy_b'], lucy_in=params['lucy_in'], lucy_o=params['lucy_o'],
                          lucy_it=params['lucy_it'], data_mask=params['mask'], grid_size=params['gsize'],
                          res=params['resolution'], x_std=params['x_fwhm'], y_std=params['y_fwhm'], pa=params['PAbeam'],
-                         xyerr=[params['xerr0'], params['xerr1'], params['yerr0'], params['yerr1']], pf=args['parfile'],
+                         xyerr=[params['xerr0'], params['xerr1'], params['yerr0'], params['yerr1']],
                          zrange=[params['zi'], params['zf']])
 
     lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise = mod_ins
 
     # CREATE MODEL CUBE!
     out = params['outname']
-    for mom in [0, 2]:  # ,1
-        for scale in [False]:  # True,
-            print(mom, scale, 'True=samescale, False=residscale')
-            outs = moment_map(mom=mom, samescale=True, resolution=params['resolution'], s=params['s'],
-                              x_loc=params['xloc'], y_loc=params['yloc'], mbh=params['mbh'], pf=args['parfile'],
-                              inc=np.deg2rad(params['inc']), vsys=params['vsys'], dist=params['dist'],
-                              theta=np.deg2rad(params['PAdisk']), input_data=input_data, lucy_out=lucy_out,
-                              beam=beam, rfit=params['rfit'], enclosed_mass=params['mass'], ml_ratio=params['ml_ratio'],
-                              sig_type=params['s_type'], zrange=[params['zi'], params['zf']], menc_type=params['mtype'],
-                              sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], f_w=params['f'],
-                              ds=params['ds'], noise=noise, freq_ax=freq_ax, q_ell=params['q_ell'],
-                              theta_ell=np.deg2rad(params['theta_ell']), fstep=fstep, f_0=f_0, bl=params['bl'],
-                              xyrange=[params['xi'], params['xf'], params['yi'], params['yf']], xell=params['xell'],
-                              yell=params['yell'], mask=params['mask'], lmask=lucy_mask, datafile=params['data'])
+    chi2 = model_grid(resolution=params['resolution'], s=params['s'], x_loc=params['xloc'], y_loc=params['yloc'],
+                      mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'], dist=params['dist'],
+                      theta=np.deg2rad(params['PAdisk']), input_data=input_data, lucy_out=lucy_out, out_name=out,
+                      beam=beam, rfit=params['rfit'], enclosed_mass=params['mass'], ml_ratio=params['ml_ratio'],
+                      sig_type=params['s_type'], zrange=[params['zi'], params['zf']], menc_type=params['mtype'],
+                      sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], f_w=params['f'],
+                      ds=params['ds'], noise=noise, chi2=True, reduced=True, freq_ax=freq_ax, q_ell=params['q_ell'], xell=params['xell'], yell=params['yell'],
+                      theta_ell=np.deg2rad(params['theta_ell']), fstep=fstep, f_0=f_0, bl=params['bl'],
+                      xyrange=[params['xi'], params['xf'], params['yi'], params['yf']])
+
+    print('True Total: ' + str(time.time() - t0_true))  # 3.93s YAY!  # 23s for 6 models (16.6 for 4 models)
+    print(chi2)  # NOTE: right now, chi^2_nu (with my lucy + v(R)) = 1.9, chi^2_nu (with my lucy + mge) = 9.98
+
+# TO DO:
+# MAIN. Implement MGE as Jonelle requested[X], explore number of pixels in ellipse issue[ ], start playing with UGC[ ]
+# update dyn_emcee to use dyn_model instead of dyn_general format![X]
+# read up on convergence, implement convergence checks![?]
+# Do Parallelization![ ] --> install mpi4py first!!!
+## pip install mpi4py --> error: "error: Cannot compile MPI programs. Check your configuration!!!"
+###https://stackoverflow.com/questions/28440834/error-when-installing-mpi4py --> brew install mpich
+####sudo find / -name mpicc [returned two lines]: /usr/local/bin/mpicc ; /usr/local/Cellar/mpich/3.3/bin/mpicc
+#####pip install mpi4py --> worked!
+######NOW import mpi4py works, but from mpi4py import MPI returns an error:
+#
+#  Traceback (most recent call last):
+#  File "<stdin>", line 1, in <module>
+# ImportError: dlopen(/Users/jonathancohn/anaconda3/envs/iraf27/lib/python2.7/site-packages/mpi4py/MPI.so, 2): Symbol not found: ___addtf3
+#  Referenced from: /usr/local/opt/gcc/lib/gcc/8/libquadmath.0.dylib
+#  Expected in: /usr/lib/libSystem.B.dylib
+# in /usr/local/opt/gcc/lib/gcc/8/libquadmath.0.dylib
+#
+#######Tried uninstalling/reinstalling, no success.
+# add model_prep to dyn_emcee[X]
+# Tighten all the priors![X]
+# Later (after done matching with Ben): prevent mu from going negative![ ]
+# play with softening parameter?[X] --> don't worry about it anymore!
+# maybe put noise calc in model_prep function?[ ]
+# switch to using scikit-image (instead of iraf27) --> can do everything in python 3![ ]
+# LONG-TERM: Do reading![ ]
+
+# CONVERGENCE: http://joergdietrich.github.io/emcee-convergence.html
+'''
+# PARALLELIZATION: from prospector.py:
+
+try:
+    from emcee.utils import MPIPool
+    pool = MPIPool(debug=False, loadbalance=True)
+    if not pool.is_master():
+        # Wait for instructions from the master process.
+        pool.wait()
+        sys.exit(0)
+except(ImportError, ValueError):
+    pool = None
+    print('Not using MPI')
+'''
+
+# emcee paper: https://arxiv.org/pdf/1202.3665.pdf
+# https://en.wikipedia.org/wiki/Reduced_chi-squared_statistic
+# https://en.wikipedia.org/wiki/Variance
+# https://en.wikipedia.org/wiki/Standard_deviation
 
 '''
-        if specc:  # if using SpectralCube built in function
-            from spectral_cube import SpectralCube
-            c1 = fits.open(datafile)
-            cube = SpectralCube.read(c1)
-            c1.close()
-            mo = cube.moment(order=1)
-            masked_mo = mo.hdu.data[xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask * mask2d
+(three) Jonathans-MacBook-Pro:~ jonathancohn$ brew install wget
+Warning: wget 1.20.3 is already installed, it's just not linked
+You can use `brew link wget` to link this version.
+(three) Jonathans-MacBook-Pro:~ jonathancohn$ brew link wget
+Linking /usr/local/Cellar/wget/1.20.3... 
+Error: Could not symlink share/locale/be/LC_MESSAGES/wget.mo
+/usr/local/share/locale/be/LC_MESSAGES is not writable.
 
-            # masked_data_flux = fluxes[xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask
-            hdu = fits.PrimaryHDU(convolved_cube)
-            hdul = fits.HDUList([hdu])
-            temp = '/Users/jonathancohn/Documents/dyn_mod/moment_test.fits'
-            hdul.writeto(temp, overwrite=True)
-            dat, head = fits.getdata(temp, header=True)
-            dat1, head1 = fits.getdata(datafile, header=True)
-            for ind in [1, 2, 3]:
-                head['CRVAL' + str(ind)] = head1['CRVAL' + str(ind)]
-                head['CTYPE' + str(ind)] = head1['CTYPE' + str(ind)]
-                head['CDELT' + str(ind)] = head1['CDELT' + str(ind)]
-                head['CUNIT' + str(ind)] = head1['CUNIT' + str(ind)]
-            fits.writeto(temp, dat, head, overwrite=True)
-            c2 = fits.open(datafile)
-            cube2 = SpectralCube.read(c2)
-            c2.close()
-            model_mo2 = cube2.moment(order=1)
-            masked_model_mo = model_mo2.hdu.data[xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask * mask2d
+Finally this worked: https://github.com/Homebrew/legacy-homebrew/issues/13276
+(three) Jonathans-MacBook-Pro:~ jonathancohn$ sudo chown -R $USER:admin /usr/local/share
+(three) Jonathans-MacBook-Pro:~ jonathancohn$ brew link wget
+Linking /usr/local/Cellar/wget/1.20.3... 42 symlinks created
+(Went ahead and ran brew reinstall wget [not sure if doing so was necessary tho])
+wget --version now returns something sensible!
+
+Followed instructions here: https://mpi4py.readthedocs.io/en/stable/install.html for wget (except downloaded manually,
+because link listed with wget didn't work --> https://bitbucket.org/mpi4py/mpi4py/downloads/)
+Once downloaded manually, I did the tar step and so on as shown in the link. The mpiexec test worked, but can only use
+n=2. Using n=3 or more resulted in the following error:
+    There are not enough slots available in the system to satisfy the 3 slots
+    that were requested by the application:
+        python
+
+    Either request fewer slots for your application, or make more slots available
+    for use.
+Also got new error now when from emcee.utils import MPIPool() ; pool = MPIPool():
+  File "<stdin>", line 1, in <module>
+  File "/Users/jonathancohn/anaconda3/envs/three/lib/python3.6/site-packages/emcee/mpi_pool.py", line 66, in __init__
+    raise ValueError("Tried to create an MPI pool, but there "
+ValueError: Tried to create an MPI pool, but there was only one MPI process available. Need at least two.
+
+From here: https://emcee.readthedocs.io/en/stable/_modules/emcee/mpi_pool.html --> self.comm.Get_size() = 1 -->
+self.size = 0 --> returns the above "Tried to create..." error
+
+Hmm doing this: https://superuser.com/questions/1101311/how-many-cores-does-my-mac-have -->
+Jonathans-MacBook-Pro:~ jonathancohn$ sysctl hw.physicalcpu hw.logicalcpu
+hw.physicalcpu: 2
+hw.logicalcpu: 4
+
+OKAY, bc emcee notes some issues with MPIPool that may be fixed in their newest version:
+I have done: conda uninstall emcee
+And followed github isntructions here: https://emcee.readthedocs.io/en/latest/user/install/ to install latest version
+# Note: "conda install -c conda-forge emcee" still installed the old version (2.2.1)
+# Github installed new version! (3.0rc)
+Then, installed schwimmbad using: conda install -c conda-forge schwimmbad
+# (see here: https://schwimmbad.readthedocs.io/en/latest/install.html)
+
+
+Note: MPI mac links I was using:
+https://stackoverflow.com/questions/28440834/error-when-installing-mpi4py/39886686
+https://webcache.googleusercontent.com/search?q=cache:ACFACM98t7sJ:https://stackoverflow.com/questions/49621061/python-fails-to-import-mpi4py%3Frq%3D1+&cd=3&hl=en&ct=clnk&gl=us
+https://mpi4py.readthedocs.io/en/stable/install.html
+https://stackoverflow.com/questions/42703861/how-to-use-mpi-on-mac-os-x
+
+Gelman-Rubin:
+http://www.stat.columbia.edu/~gelman/research/published/itsim.pdf
+http://joergdietrich.github.io/emcee-convergence.html
+
+
+Made emcee_test.py using multiprocessing (see https://emcee.readthedocs.io/en/latest/tutorials/parallel/)
+# It works!
+
+In the meantime I broke something... had to reinstall astropy (also had to reinstall numpy earlier)
+# also matplotlib & scipy
+# Now emcee appears to be running again!
+# However...doesn't appear to be faster. Each model is taking ~3.5+ seconds to construct
+# multiprocessing --> time in emcee 382.5468270778656
+# WITHOUT multiprocessing --> time in emcee 197.06733584403992
+
+# with nthreads=8 in emcee --> time in emcee 86.91327118873596
+# with nthreads=6 in emcee --> time in emcee 108.76913213729858
+# with nthreads=4 in emcee --> time in emcee 122.8170599937439
+# with nthreads=2 in emcee --> time in emcee 98.797208070755
+# with nthreads=None in emcee --> time in emcee 99.95753860473633
+# with no nthreads parameter in emcee --> time in emcee 107.43310499191284
+
+# Note: https://emcee.readthedocs.io/en/latest/tutorials/parallel/ suggests overhead in parallelization is to blame for
+# lack of 4x better computing time (note: printing the cpu count thing shows I have 4 CPUs too)
+
+DO HPRC account request!
+
+Prioritize parallelization on cluster
 '''

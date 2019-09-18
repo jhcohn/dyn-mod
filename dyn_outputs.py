@@ -499,7 +499,7 @@ def compare_sigs(pfile1, pfile2, q1=True, q2=False):
 
 
 def plot_all(fullchain, clip, end, pfile_true, init_guess, flatsig=False, save=False, xcl=False, freexy=False,
-             fixxy=False, shortrun=False, wis=False, testcase=True):
+             fixxy=False, shortrun=False, wis=False, testcase=True, medrun=False):
 
     params, priors = dm.par_dicts(init_guess, q=False)  # get dicts of params and file names from parameter file
 
@@ -572,12 +572,16 @@ def plot_all(fullchain, clip, end, pfile_true, init_guess, flatsig=False, save=F
         row, col = axes_order[par]
         fs = 11
         # PLOT MY DISTRIBUTIONS
+        weight = None
+        if medrun or shortrun:
+            weight = np.ones_like(chain)*1e-5
         if pars[par] == 'mbh':
             bin = 2000
-            if shortrun:
+            if shortrun or medrun:
                 bin /= 100.
-                bin = int(bin)
-            axes[row, col].hist(np.log10(chain), bin, color="b", histtype="step")  # axes[i]
+            bin = int(bin)
+            axes[row, col].hist(np.log10(chain), bin, color="b", histtype="step", weights=weight)  # axes[i]
+            # weights=np.ones_like(chain)/len(chain)
             percs = np.percentile(np.log10(chain), [16., 50., 84.])
             threepercs = np.percentile(np.log10(chain), [0.15, 50., 99.85])  # 3sigma
             if testcase:
@@ -592,20 +596,36 @@ def plot_all(fullchain, clip, end, pfile_true, init_guess, flatsig=False, save=F
             if pars[par] == 'xloc' or pars[par] == 'yloc' or pars[par] == 'vsys':
                 bin = 12000
                 if shortrun:
-                    bin /= 1000.
-                    bin = int(bin)
+                    bin /= 400.
+                    # bin /= 1000.
+                elif medrun and pars[par] == 'xloc':
+                    bin /= 200.
+                elif medrun:
+                    bin /= 100.
             elif pars[par] == 'PAdisk':
                 bin = 2000
                 if shortrun:
                     bin /= 100.
-                    bin = int(bin)
+                elif medrun:
+                    bin /= 10.
+            elif pars[par] == 'inc' or pars[par] == 'ml_ratio':
+                bin = 200
+                if medrun:
+                    bin /= 2.
+                if shortrun:
+                    bin /= 4
+            elif pars[par] == 'sig0' and shortrun:
+                bin = 200
             else:
                 bin = 200
                 if shortrun:
                     bin /= 10.
-                    bin = int(bin)
+                elif medrun:
+                    bin /= 5.
+            bin = int(bin)
 
-            axes[row, col].hist(chain, bin, color="b", histtype="step")  # axes[i]
+            axes[row, col].hist(chain, bin, color="b", histtype="step", weights=weight)  # axes[i]
+            # weights=np.ones_like(chain)/len(chain)
             percs = np.percentile(chain, [16., 50., 84.])
             threepercs = np.percentile(chain, [0.15, 50., 99.85])  # 3sigma
 
@@ -628,20 +648,70 @@ def plot_all(fullchain, clip, end, pfile_true, init_guess, flatsig=False, save=F
                                  + str(round(percs[2] - percs[1], 4)) + ', -'
                                  + str(round(percs[1] - percs[0], 4)) + ')', fontsize=fs)
         axes[row, col].set_xlabel(ax_lab[par], fontsize=fs)
+        # axes[row, col].ticklabel_format(axis='y', style='sci', scilimits=(0,0))
         print(pars[par])
         print(percs[0] - (percs[1] - percs[0]), percs[2] + (percs[2] - percs[1]))
         print(threepercs)
         # '''  #  Comment here to remove xlims
+        bad = True  # BUCKET using for UGC 2698 with lucy5, ds5
         if freexy:
             if pars[par] == 'xloc':
                 axes[row, col].set_xlim(361, 363.)  # 361.9, 362.2
             elif pars[par] == 'yloc':
                 axes[row, col].set_xlim(354., 356.)  # 354.65, 355.15
             print(bin, 'bins')
-        elif pars[par] == 'vsys' or pars[par] == 'yloc':
+        elif medrun and bad:  # for UGC 2698 medium-run parameters
+            if pars[par] == 'mbh' or pars[par] == 'f' or pars[par] == 'vsys':
+                axes[row, col].set_xlim(percs[0] - 1. * (percs[1] - percs[0]), percs[2] + 4. * (percs[2] - percs[1]))
+            elif pars[par] == 'ml_ratio':
+                axes[row, col].set_xlim(percs[0] - 3.5 * (percs[1] - percs[0]), percs[2] + 3 * (percs[2] - percs[1]))
+            elif pars[par] == 'xloc':
+                axes[row, col].set_xlim(percs[0] - 1. * (percs[1] - percs[0]), percs[2] + 1.5 * (percs[2] - percs[1]))
+            elif pars[par] == 'yloc':
+                axes[row, col].set_xlim(percs[0] - 4. * (percs[1] - percs[0]), percs[2] + 4.5 * (percs[2] - percs[1]))
+            elif pars[par] == 'sig0':
+                axes[row, col].set_xlim(0., 13.)
+            elif pars[par] == 'inc' or pars[par] == 'PAdisk':
+                axes[row, col].set_xlim(percs[0] - 3. * (percs[1] - percs[0]), percs[2] + 3. * (percs[2] - percs[1]))
+            else:
+                axes[row, col].set_xlim(percs[0] - 8 * (percs[1] - percs[0]), percs[2] + 8 * (percs[2] - percs[1]))
+        elif medrun:  # for UGC 2698 medium-run parameters
+            if pars[par] == 'mbh' or pars[par] == 'f' or pars[par] == 'vsys':
+                axes[row, col].set_xlim(percs[0] - 8 * (percs[1] - percs[0]), percs[2] + 1.5 * (percs[2] - percs[1]))
+            elif pars[par] == 'xloc':
+                axes[row, col].set_xlim(percs[0] - 8 * (percs[1] - percs[0]), percs[2] + 1.8 * (percs[2] - percs[1]))
+            elif pars[par] == 'yloc':
+                axes[row, col].set_xlim(percs[0] - 5 * (percs[1] - percs[0]), percs[2] + 2. * (percs[2] - percs[1]))
+            elif pars[par] == 'sig0':
+                axes[row, col].set_xlim(0., 13.)
+            elif pars[par] == 'inc' or pars[par] == 'PAdisk':
+                axes[row, col].set_xlim(percs[0] - 6 * (percs[1] - percs[0]), percs[2] + 6 * (percs[2] - percs[1]))
+            else:
+                axes[row, col].set_xlim(percs[0] - 8 * (percs[1] - percs[0]), percs[2] + 8 * (percs[2] - percs[1]))
+        elif shortrun:
+            if pars[par] == 'yloc':
+                axes[row, col].set_xlim(percs[0] - 14 * (percs[1] - percs[0]), percs[2] + 14 * (percs[2] - percs[1]))
+            elif pars[par] == 'mbh' or pars[par] == 'vsys' or pars[par] == 'f':
+                axes[row, col].set_xlim(percs[0] - 8 * (percs[1] - percs[0]), percs[2] + 1.5 * (percs[2] - percs[1]))
+            elif pars[par] == 'xloc':
+                axes[row, col].set_xlim(percs[0] - 7 * (percs[1] - percs[0]), percs[2] + 7 * (percs[2] - percs[1]))
+            elif flatsig and pars[par] == 'sig0':
+                if wis:
+                    axes[row, col].set_xlim(3., 15.)
+                elif testcase:
+                    axes[row, col].set_xlim(7., 10.)
+                else:
+                    axes[row, col].set_xlim(percs[0] - 2 * (percs[1] - percs[0]), percs[2] + 2 * (percs[2] - percs[1]))
+            else:
+                axes[row, col].set_xlim(percs[0] - 8 * (percs[1] - percs[0]), percs[2] + 8 * (percs[2] - percs[1]))
+        elif pars[par] == 'yloc':
             axes[row, col].set_xlim(percs[0] - 14 * (percs[1] - percs[0]), percs[2] + 14 * (percs[2] - percs[1]))
+        elif pars[par] == 'vsys':
+            # axes[row, col].set_xlim(percs[0] - 14 * (percs[1] - percs[0]), percs[2] + 14 * (percs[2] - percs[1]))
+            axes[row, col].set_xlim(percs[0] - 8 * (percs[1] - percs[0]), percs[2] + 1.5 * (percs[2] - percs[1]))
         elif pars[par] == 'xloc':
-            axes[row, col].set_xlim(percs[0] - 40 * (percs[1] - percs[0]), percs[2] + 40 * (percs[2] - percs[1]))
+            # axes[row, col].set_xlim(percs[0] - 40 * (percs[1] - percs[0]), percs[2] + 40 * (percs[2] - percs[1]))
+            axes[row, col].set_xlim(percs[0] - 7 * (percs[1] - percs[0]), percs[2] + 7 * (percs[2] - percs[1]))
         elif flatsig and pars[par] == 'sig0':
             if wis:
                 axes[row, col].set_xlim(3., 15.)
@@ -650,7 +720,8 @@ def plot_all(fullchain, clip, end, pfile_true, init_guess, flatsig=False, save=F
             else:
                 axes[row, col].set_xlim(percs[0] - 2 * (percs[1] - percs[0]), percs[2] + 2 * (percs[2] - percs[1]))
         elif pars[par] == 'sig0' or pars[par] == 'r0' or pars[par] == 'mu':
-            axes[row, col].set_xlim(percs[0] - 2 * (percs[1] - percs[0]), percs[2] + 2 * (percs[2] - percs[1]))
+            # axes[row, col].set_xlim(percs[0] - 2 * (percs[1] - percs[0]), percs[2] + 2 * (percs[2] - percs[1]))
+            axes[row, col].set_xlim(percs[0] - 4 * (percs[1] - percs[0]), percs[2] + 4 * (percs[2] - percs[1]))
         else:
             axes[row, col].set_xlim(percs[0] - 8 * (percs[1] - percs[0]), percs[2] + 8 * (percs[2] - percs[1]))
         #  '''  #
@@ -723,6 +794,40 @@ def param_changes(fullchain, clips, ends, flatsig=False):
 if __name__ == "__main__":
 
     base = '/Users/jonathancohn/Documents/dyn_mod/'
+
+    # '''  #
+    direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' +\
+             'qflat_u2698_bcluster_strict_2698_ds5_lucy10_1568817263.0_'
+    pf = base + 'ugc_2698/ugc_2698_strictparams.txt'
+    bl = base + 'ugc_2698/ugc_2698_strictparams.txt'
+    directr = direct + '1000_0_2500tempchain.pkl'
+    outcorner(pf, directr, 300, 500, bins=50)
+    # print(oop)
+    plot_all(directr, clip=300, end=500, pfile_true=bl, init_guess=pf, flatsig=True, save=False, freexy=False,
+             shortrun=True, wis=False, testcase=False)
+    print(oop)
+    # '''  #
+
+    # '''  #
+    # u2698 corrected PA, s=4, beam31, strictmask, with lucy5-or-10-or-15 and ds=4-or-5
+    its = [5, 10, 15]
+    ds = [4, 5]
+    tcodes = [[1568410727.18, 1568431682.66], [None, 1568431684.32], [1568438894.06, 1568431715.39]]
+    for it in range(len(its)):
+        for s in range(len(ds)):
+            if tcodes[it][s] is not None:
+                print('lucy', its[it], 'ds', ds[s])
+                direct = '/Users/jonathancohn/Documents/dyn_mod/cluster_out/' + 'qflat_u2698_bcluster_strict_2698_ds' +\
+                         str(ds[s]) + '_lucy' + str(its[it]) + '_' + str(tcodes[it][s]) + '_'
+                pf = base + 'ugc_2698/ugc_2698_strictparams.txt'
+                bl = base + 'ugc_2698/ugc_2698_strictparams.txt'
+                directr = direct + '1000_0_5000tempchain.pkl'
+                outcorner(pf, directr, 4000, 4300, bins=50)
+                # print(oop)
+                plot_all(directr, clip=2500, end=4300, pfile_true=bl, init_guess=pf, flatsig=True, save=False,
+                         freexy=False, shortrun=False, wis=False, testcase=False, medrun=True)
+    print(oop)
+    # '''  #
 
     # '''  #
     # u2698 corrected PA, s=4, beam31, strictmask
