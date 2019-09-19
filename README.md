@@ -4,6 +4,9 @@ Dynamical Modeling git repo
 
 dyn_cluster/ - files I'm using on the cluster<br/>
   * dyn_qcvg.py - file to run emcee with q=True
+  * dyn_qflat.py - dyn_qcvg.py but with flat sigma
+  * dyn_105mod.py - dyn_model.py but with the option of uneven final pixel binning (e.g. 10x5)
+  * dyn_u2698_105.py - dyn_qflat.py adjusted for u2698, and using dyn_105mod.py
 
 param_files/ - parameter files to run with dyn_general.py<br/>
   * ngc1332_params.txt - defunct<br/>
@@ -25,9 +28,15 @@ dyn_cvg.py - same as dyn_emcee.py, but with convergence test built-in
 
 dyndyn.py - script to use dyn_model with dynesty to optimize parameters from an input parameter file
 
+dyndyn2.py - same as dyncluster.py, now with corrections
+
 dyndyncluster.py - same as dyndyn.py, but modified for use on cluster
 
 dyn_emcee.py - script to use dyn_model with emcee to optimize parameters from an input parameter file
+
+dynesty_demo.py - copy of the dynesty demo, in script form
+
+dynesty_out.py - process my dynesty output (load pickle file, make corner/posterior plot)
 
 dyn_f.py - defunct
 
