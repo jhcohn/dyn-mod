@@ -525,6 +525,7 @@ def moment_map(mom=0, samescale=True, resolution=0.05, s=10, x_loc=0., y_loc=0.,
         masked_model_mo *= 1e3
 
         if incl_beam:
+            beam_overlay *= np.amax(masked_mo) / np.amax(beam_overlay)
             masked_mo += beam_overlay
         for ax in grid:
             if i == 0:
@@ -694,6 +695,8 @@ def moment_map(mom=0, samescale=True, resolution=0.05, s=10, x_loc=0., y_loc=0.,
             i = 0
 
             if incl_beam:
+                d2 = np.nan_to_num(d2)
+                beam_overlay *= np.amax(d2) / np.amax(beam_overlay)
                 d2 += beam_overlay
 
             for ax in grid:
