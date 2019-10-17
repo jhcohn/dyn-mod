@@ -492,6 +492,13 @@ def moment_map(mom=0, samescale=True, resolution=0.05, s=10, x_loc=0., y_loc=0.,
     # mom = 0
     # samescale = False
     abs_diff = True
+    incl_beam = True
+
+    beam_overlay = np.zeros(shape=ell_mask.shape)
+    print(beam_overlay.shape, beam.shape)
+    beam_overlay[:beam.shape[0], (beam_overlay.shape[1] - beam.shape[1]):] = beam
+    # (beam_overlay.shape[0] - beam.shape[0])
+    print(beam_overlay.shape, beam.shape)
 
     if mom == 0:
         # if using equation from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
@@ -516,6 +523,9 @@ def moment_map(mom=0, samescale=True, resolution=0.05, s=10, x_loc=0., y_loc=0.,
         # CONVERT TO mJy
         masked_mo *= 1e3
         masked_model_mo *= 1e3
+
+        if incl_beam:
+            masked_mo += beam_overlay
         for ax in grid:
             if i == 0:
                 im = ax.imshow(masked_mo, vmin=np.amin([np.nanmin(masked_model_mo), np.nanmin(masked_mo)]),
@@ -526,6 +536,7 @@ def moment_map(mom=0, samescale=True, resolution=0.05, s=10, x_loc=0., y_loc=0.,
                                vmax=np.amax([np.nanmax(masked_model_mo), np.nanmax(masked_mo)]), origin='lower')
                 ax.set_title(r'Moment 0 (model)')
             elif i == 2:
+                masked_mo -= beam_overlay
                 diff = masked_model_mo - masked_mo
                 if samescale:
                     if abs_diff:
@@ -681,6 +692,10 @@ def moment_map(mom=0, samescale=True, resolution=0.05, s=10, x_loc=0., y_loc=0.,
                             cbar_location='right',
                             cbar_pad=0.1)
             i = 0
+
+            if incl_beam:
+                d2 += beam_overlay
+
             for ax in grid:
                 if i == 0:
                     im = ax.imshow(d2, origin='lower', vmin=np.amin([np.nanmin(d2), np.nanmin(m2)]),
@@ -743,6 +758,10 @@ def moment_map(mom=0, samescale=True, resolution=0.05, s=10, x_loc=0., y_loc=0.,
                             cbar_location='right',
                             cbar_pad=0.1)
             i = 0
+
+            if incl_beam:
+                dmap += beam_overlay
+
             for ax in grid:
                 if i == 0:
                     im = ax.imshow(dmap, origin='lower', vmin=np.amin([np.nanmin(dmap), np.nanmin(mmap)]),
@@ -1028,7 +1047,7 @@ if __name__ == "__main__":
 
     # CREATE MODEL CUBE!
     out = params['outname']
-    for mom in [0, 2]:  # ,1
+    for mom in [0, 1, 2]:  # ,1
         for scale in [False]:  # True,
             print(mom, scale, 'True=samescale, False=residscale')
             outs = moment_map(mom=mom, samescale=True, resolution=params['resolution'], s=params['s'],
