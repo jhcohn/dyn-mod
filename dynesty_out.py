@@ -30,23 +30,34 @@ rcParams.update({'ytick.minor.width': '1.0'})
 rcParams.update({'font.size': 15})
 
 
-def my_own_thing(results, par_labels, ax_labels, quantiles, ax_lims=None):
+def my_own_thing(results, par_labels, ax_labels, quantiles, ax_lims=None, compare_err=False):
     # results should be dyn_res['samples']
-    roundto = 2  # 4
+    roundto = 3  # 2  # 4
     fig, axes = plt.subplots(3, 3, figsize=(16, 12))  # 3 rows, 3 cols of subplots; because there are 9 free params
     fs = 12
     labels = np.array(['mbh', 'xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])
     axes_order = [[0, 0], [2, 0], [2, 1], [2, 2], [1, 0], [1, 1], [1, 2], [0, 1], [0, 2]]
     for i in range(len(results[0])):
         row, col = axes_order[i]
-        if labels[i] == 'mbh' or labels[i] == 'PAdisk':
-            bins = 1000
+        if compare_err:
+            print('yes', labels[i])
+            if labels[i] == 'yloc' or labels[i] == 'xloc':
+                bins = 3200
+            elif labels[i] == 'sig0':
+                bins = 200  # 1000
+            elif labels[i] == 'f' or labels[i] == 'PAdisk' or labels[i] == 'vsys' or labels[i] == 'mbh':
+                bins = 1500
+            else:
+                bins = 800
         else:
-            bins = 100
+            if labels[i] == 'mbh' or labels[i] == 'PAdisk':
+                bins = 400 #1000
+            else:
+                bins = 100
         chain = results[:, i]
         weight = np.ones_like(chain) * 2e-3
         axes[row, col].hist(chain, bins=bins, color="b", histtype="step", weights=weight)  # axes[i]
-        print(quantiles[i], 'look')
+        # print(quantiles[i], 'look')
         # percs = np.percentile(chain, [.15, 50., 99.85])  # 3sigma
         # axes[row, col].axvline(percs[1], color='b', ls='--')  # axes[i]
         # axes[row, col].axvspan(percs[0], percs[2], color='b', alpha=0.25)
@@ -57,6 +68,23 @@ def my_own_thing(results, par_labels, ax_labels, quantiles, ax_lims=None):
                                  + str(round(quantiles[i][2] - quantiles[i][1], roundto)) + ', -'
                                  + str(round(quantiles[i][1] - quantiles[i][0], roundto)) + ')', fontsize=fs)
         axes[row, col].set_xlabel(ax_labels[i], fontsize=fs)
+
+        if compare_err:
+            with open('/Users/jonathancohn/Documents/dyn_mod/param_files/Ben_A1_errors.txt') as a1:
+                for line in a1:
+                    cols = line.split()
+                    if cols[0] == labels[i]:
+                        vax = float(cols[1])
+                        vax_width = float(cols[2])
+            print(vax, 'vax', labels[i])
+            if labels[i] == 'mbh':
+                axes[row, col].axvline(np.log10(vax), ls='-', color='k')
+                print('here', np.log10(vax), np.log10(vax - vax_width), np.log10(vax + vax_width))
+                axes[row, col].axvspan(np.log10(vax - vax_width), np.log10(vax + vax_width), hatch='/', color='k',
+                                       fill=False, alpha=0.5)
+            else:
+                axes[row, col].axvline(vax, ls='-', color='k')
+                axes[row, col].axvspan(vax - vax_width, vax + vax_width, hatch='/', color='k', fill=False, alpha=0.5)
         if ax_lims is not None:
             axes[row, col].set_xlim(ax_lims[i][0], ax_lims[i][1])
     plt.tight_layout()
@@ -71,7 +99,7 @@ direc = '/Users/jonathancohn/Documents/dyn_mod/nest_out/'
 # WORKED
 # out_name = direc + 'dyndyncluster_test_n8_1568739677.2582278_tempsave.pkl'  # 2698 old prior
 # out_name = direc + 'dyndyn3258_test_n8_dlogz1.5_1569249221.642805_tempsave.pkl'  # 3258 old TINY prior
-# out_name = direc + 'dyndyn3258_test_n8_dlogz1.5_1569249222.4063346_tempsave.pkl'  # 3258 old TINY prior (same as above)
+# thing = 'dyndyn3258_test_n8_dlogz1.5_1569249222.4063346_tempsave.pkl'  # 3258 old TINY prior (same as above)
 # out_name = direc + 'dyndyn3258_test_n8_dlogz15_1569434823.359717_tempsave.pkl'  # 3258 old TINY prior
 # out_name = direc + 'dyndyn3258_newpri_test_n8_dlogz1.5_1569620562.4751067_tempsave.pkl'  # 3258 newprior TYPO (PRIOR for f was BAD 0.5<f<0.65) (AHA!)
 # out_name = direc + 'dyndyn3258_newpri_test_n8_dlogz1.5_1569620562.355544_tempsave.pkl'  # 3258 newprior TYPO same as above!
@@ -84,7 +112,21 @@ direc = '/Users/jonathancohn/Documents/dyn_mod/nest_out/'
 # out_name = direc + 'dyndyn105newpri_test_n8_ds3_1570633918.9553041_tempsave.pkl'  # 2698 neworior 3x6 REALLY BAD WHY
 # out_name = direc + 'dyndyn105newpri_test_n8_1570545604.3403502_tempsave.pkl'  # 2698 neworior 4x8 REALLY BAD WHY
 # out_name = direc + 'dyndyn3258_newpri_2_test_n8_dlogz0.15_1570807500.0458014_tempsave.pkl'  # 3258 newprior 2 REALLY BAD STILL WHYYYY (BECAUSE MAXCALL IS REACHED!!!)
-out_name = direc + 'dyndyn3258_narrowpri_n8_dlogz1.5_1571063422.9054961_tempsave.pkl'  # 3258 narrow priors, yep still works
+# out_name = direc + 'dyndyn3258_narrowpri_n8_dlogz1.5_1571063422.9054961_tempsave.pkl'  # 3258 narrow priors, yep still works
+# thing = 'dyndyn105newpri_2_maxcmil_n8_ds3_1571235624.2196844_tempsave.pkl'  # 2698 105newpri2 3x6 BAD PA NOT IN RADS
+# thing = 'dyndyn105newpri_2_maxcmil_n8_ds3_1571410705.2218955_end.pkl'  # 2698 105newpri2 3x6 end BAD PA NOT IN RADS
+# thing = 'dyndyn105newpri_3_maxcmil_n8_ds3_1571323790.6415393_tempsave.pkl'  # 2698 105newpri3 3x6 (fine)
+# thing = 'dyndyn105newpri_3_maxcmil_n8_ds3_1571374539.7854428_end.pkl'  # 2698 105newpri3 3x6 (fine)
+# thing = 'dyndyn105newpri_maxcmil_n8_ds3_1571092540.929372_tempsave.pkl'  # 2698 105newpri 3x6 VERY BAD (must've hit mil)
+# thing = 'dyndyn105newpri_maxcmil_n8_ds4_1571092684.7476249_tempsave.pkl'  # 2698 105newpri 4x8 VERY BAD (must've hit mil)
+# thing = 'dyndyn_newpri_2_n8_1571236232.359415_tempsave.pkl'  # 2698 newpri2 BAD because hit mil (getting closer tho)
+# thing = 'dyndyn_newpri_2_maxc10mil_n8_1571596549.628827_tempsave.pkl'  # 2698 newpri2 BAD because PA NOT IN RADS
+# thing = 'dyndyn_newpri_2_maxc10mil_n8_1571981879.8668501_end.pkl'  # 2698 newpri2 BAD because PA NOT IN RADS
+# thing = 'dyndyn_newpri_3_maxc10mil_n8_0.02_1572037132.3993847_tempsave.pkl'  # 2698 newpri3 GOOD PA CORRECTED!
+# thing = 'dyndyn3258_newpri_5_max10mil_test_n8_dlogz0.15_1572883759.2018988_tempsave.pkl'  # 3258 newpri5 PA GOOD!
+thing = 'dyndyn3258_newpri_5_max10mil_n8_dlogz0.15_1573010828.1336136_end.pkl'  # 3258 newpri5 PA GOOD end! (same good)
+out_name = direc + thing
+
 
 with open(out_name, 'rb') as pk:
     u = pickle._Unpickler(pk)
@@ -103,6 +145,7 @@ ax_lab = np.array([r'$\log_{10}$(M$_{\odot}$)', 'pixels', 'pixels', 'km/s', 'deg
 from dynesty import utils as dyfunc
 weights = np.exp(dyn_res['logwt'] - dyn_res['logz'][-1])  # normalized weights
 three_sigs = []
+one_sigs = []
 for i in range(dyn_res['samples'].shape[1]):  # for each parameter
     quantiles_3 = dyfunc.quantile(dyn_res['samples'][:, i], [0.0015, 0.5, 0.9985], weights=weights)
     quantiles_2 = dyfunc.quantile(dyn_res['samples'][:, i], [0.025, 0.5, 0.975], weights=weights)
@@ -113,11 +156,13 @@ for i in range(dyn_res['samples'].shape[1]):  # for each parameter
         print(np.log10(quantiles_2), quantiles_2)
         print(np.log10(quantiles_1), quantiles_1)
         three_sigs.append(np.log10(quantiles_3))
+        one_sigs.append(np.log10(quantiles_1))
     else:
         print(quantiles_3)
         print(quantiles_2)
         print(quantiles_1)
         three_sigs.append(quantiles_3)
+        one_sigs.append(quantiles_1)
 
 from dynesty import plotting as dyplot
 
@@ -161,27 +206,33 @@ if logm:
 
 ax_lims = None
 if '3258' in out_name:
-    ax_lims = [[9.2, 9.6], [126.2, 127.8], [150.2, 151.8], [7.5, 14.], [66., 70.], [19.13, 19.23], [6447., 6462.],
-               [1.52, 1.8], [0.93, 1.2]]
-    ax_lims = None
+    # ax_lims = [[9.2, 9.6], [126.2, 127.8], [150.2, 151.8], [7.5, 14.], [66., 70.], [19.13, 19.23], [6447., 6462.],
+    #           [1.52, 1.8], [0.93, 1.2]]
+    # ax_lims = None
+    ax_lims = [[9.36, 9.4], [361.97, 362.08], [354.75, 355.], [7., 11.], [45.5, 46.5], [166.3, 167], [2760.5, 2761],
+               [3.1, 3.22], [1.015, 1.03]]
 else:
-    ax_lims = [[9.3, 9.6], [126.2, 127.8], [150.2, 151.8], [7.5, 14.], [66., 70.], [19.13, 19.23], [6447., 6462.],
-               [1.52, 1.8], [0.93, 1.2]]
-    #ax_lims=None
+    ax_lims = [[9.3, 9.6], [126.2, 127.8], [150.2, 151.8], [7.5, 14.], [66., 70.], [15., 23.], [6447., 6462.],
+               [1.52, 1.8], [0.93, 1.2]]  # [19.13, 19.23]
+    # ax_lims=None
 
-my_own_thing(dyn_res['samples'], labels, ax_lab, three_sigs, ax_lims=ax_lims)
+# USE FOR INCLUDING BEN'S A1 ERRORS
+my_own_thing(dyn_res['samples'], labels, ax_lab, one_sigs, ax_lims=ax_lims, compare_err=True)  # three_sigs
 print(oop)
+
+# ELSE USE THIS
+# my_own_thing(dyn_res['samples'], labels, ax_lab, three_sigs, ax_lims=ax_lims)
 
 # plot initial run (res1; left)
 
 # TO EDIT SOURCE CODE: open /Users/jonathancohn/anaconda3/envs/three/lib/python3.6/site-packages/dynesty/plotting.py
 
 # USE THIS FOR COMPARING 3258 TO BEN'S A1 MODEL:
-#fg, ax = dyplot.cornerplot(dyn_res, color='blue', show_titles=True, max_n_ticks=3, quantiles=sig1, labels=labels,
-#                           compare_med=vax, compare_width=vwidth)
-#plt.show()
+# fg, ax = dyplot.cornerplot(dyn_res, color='blue', show_titles=True, max_n_ticks=3, quantiles=sig1, labels=labels,
+#                            compare_med=vax, compare_width=vwidth)
+# plt.show()
 # OTHERWISE USE THIS:
-fg, ax = dyplot.cornerplot(dyn_res, color='blue', show_titles=True, max_n_ticks=3, quantiles=sig1, labels=labels)
+fg, ax = dyplot.cornerplot(dyn_res, color='blue', show_titles=True, max_n_ticks=3, quantiles=sig3, labels=labels)
 
 # fig=(fig, axes), truths=np.zeros(ndim), truth_color='black',
 
@@ -224,7 +275,6 @@ plt.show()
     cube[8] = cube[8] + 0.5  # f: uniform prior 0.5:1.5
 
 # 3258 newpri 4
-    # NARROWEST PRIORS based on short MCMC
     cube[0] = 10 ** (cube[0] * 2. + 8.)  # mbh: log-uniform prior 1e9.3:1e9.4
     cube[1] = cube[1] * 5. + 360.  # xloc: uniform prior 360:365
     cube[2] = cube[2] * 9. + 351.  # yloc: uniform prior 353:356
@@ -233,6 +283,28 @@ plt.show()
     cube[5] = cube[5] * 45. + 135.  # PAdisk: uniform prior 100:210
     cube[6] = cube[6] * 50. + 2730.  # vsys: uniform prior 2730:2780
     cube[7] = cube[7] * 3. + 1.  # mlratio: uniform prior 0.5:5.5
+    cube[8] = cube[8] + 0.5  # f: uniform prior 0.5:1.5
+
+# 3258 newpri 5
+    cube[0] = 10 ** (cube[0] * 2. + 8.)  # mbh: log-uniform prior 1e9.3:1e9.4
+    cube[1] = cube[1] * 5. + 360.  # xloc: uniform prior 360:365
+    cube[2] = cube[2] * 5. + 353.  # yloc: uniform prior 353:356
+    cube[3] = cube[3] * 15.  # sig0: uniform prior 0:15
+    cube[4] = cube[4] * 15. + 45.  # inc: uniform prior 44.5:89.5 (low pri=44.01472043806415 from MGE q)
+    cube[5] = cube[5] * 45. + 135.  # PAdisk: uniform prior 100:210
+    cube[6] = cube[6] * 50. + 2730.  # vsys: uniform prior 2730:2780
+    cube[7] = cube[7] * 2. + 2.  # mlratio: uniform prior 0.5:5.5
+    cube[8] = cube[8] + 0.5  # f: uniform prior 0.5:1.5
+
+# 3258 newpriN 5
+    cube[0] = 10 ** (cube[0] * 2. + 8.)  # mbh: log-uniform prior 1e9.3:1e9.4
+    cube[1] = cube[1] * 5. + 360.  # xloc: uniform prior 360:365
+    cube[2] = cube[2] * 5. + 353.  # yloc: uniform prior 353:356
+    cube[3] = cube[3] * 15.  # sig0: uniform prior 0:15
+    cube[4] = cube[4] * 15. + 45.  # inc: uniform prior 44.5:89.5 (low pri=44.01472043806415 from MGE q)
+    cube[5] = cube[5] * 20. + 150.  # PAdisk: uniform prior 100:210
+    cube[6] = cube[6] * 50. + 2730.  # vsys: uniform prior 2730:2780
+    cube[7] = cube[7] * 2. + 2.  # mlratio: uniform prior 0.5:5.5
     cube[8] = cube[8] + 0.5  # f: uniform prior 0.5:1.5
 '''
 
@@ -270,6 +342,20 @@ plt.show()
     cube[6] = cube[6] * 100. + 6400.  # vsys: uniform prior 6440:6490
     cube[7] = cube[7] + 1.  # mlratio: uniform prior 1:2
     cube[8] = cube[8] * 1.5 + 0.5  # f: uniform prior 0.85:1.7
+
+# 2698 dyndyn_newpri 3 (NARROWER ON ALL BUT PA, FOLLOWING newpri 2 results)
+    cube[0] = 10 ** (cube[0] * 0.6 + 9.2)  # mbh: log-uniform prior 10^8:10^10
+    cube[1] = cube[1] * 2.6 + 125.8  # xloc: uniform prior 124:130
+    cube[2] = cube[2] * 2. + 150.  # yloc: uniform prior 149:153
+    cube[3] = cube[3] * 7.5 + 7.5  # sig0: uniform prior 0:15
+    cube[4] = cube[4] * 10. + 63.  # inc: uniform prior 66:71 (low pri=49.83663935008522 from MGE q)
+    cube[5] = cube[5] * 35. + 10.  # PAdisk: uniform prior 17:21
+    cube[6] = cube[6] * 30. + 6435.  # vsys: uniform prior 6440:6490
+    cube[7] = cube[7] * 0.6 + 1.4  # mlratio: uniform prior 1:2
+    cube[8] = cube[8] * 0.65 + 0.75  # f: uniform prior 0.85:1.7
+# relative time taken: nc 79745 niter 15290 (end: nc 154073 niter 32858)
+# CPU time: 303927.34s (~10.5 hours over 8 CPUs)
+# runtime: 39369.12614393234
 '''
 
 '''
@@ -294,4 +380,19 @@ plt.show()
     cube[6] = cube[6] * 100. + 6400.  # vsys: uniform prior 6400:6500
     cube[7] = cube[7] * 1.9 + 0.1  # mlratio: uniform prior 0.1:2
     cube[8] = cube[8] * 1.5 + 0.5  # f: uniform prior 0.5:2
+# relative time taken: nc 515184 niter 18808
+# CPU time: 1276895.38s (44 hours/8 CPUs)
+
+# 2698 105newpri 3
+    cube[0] = 10 ** (cube[0] * 2. + 8.)  # mbh: log-uniform prior 10^8:10^10
+    cube[1] = cube[1] * 4. + 125.  # xloc: uniform prior 123:131
+    cube[2] = cube[2] * 4. + 149.  # yloc: uniform prior 147:155
+    cube[3] *= 15.  # sig0: uniform prior 0:15
+    cube[4] = cube[4] * 10. + 65.  # inc: uniform prior 50:89 (low pri=49.83663935008522 from MGE q)
+    cube[5] = cube[5] * 10. + 15.  # PAdisk: uniform prior 0:45
+    cube[6] = cube[6] * 50. + 6440.  # vsys: uniform prior 6400:6500
+    cube[7] = cube[7] * 1.9 + 0.1  # mlratio: uniform prior 0.1:5
+    cube[8] = cube[8] * 1.5 + 0.5  # f: uniform prior 0.5:2
+# relative time taken: nc 115840 niter 18389
+# CPU time: 365789.09s (12 hours/8 CPUs)
 '''
