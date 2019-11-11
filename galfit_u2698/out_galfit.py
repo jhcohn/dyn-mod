@@ -5,11 +5,11 @@ from mpl_toolkits.axes_grid1 import AxesGrid
 
 
 base = '/Users/jonathancohn/Documents/dyn_mod/galfit_u2698/'
-out = base + 'imgblock_masked5.fits' # 'imgblock_masked3.fits'  # 'imgblock_test49.fits'
+out = base + 'imgblock_masked8.fits' # 'imgblock_masked3.fits'  # 'imgblock_test49.fits'
 abs = 0
 
 
-def plot3(img, normed=True, clipreg=False, indivs=False):
+def plot3(img, normed=True, clipreg=None, indivs=False):
     with fits.open(img) as hdu:
         print(hdu.info())
         # print(hdu_h[0].header)
@@ -31,10 +31,10 @@ def plot3(img, normed=True, clipreg=False, indivs=False):
     labels = ['Input image', 'Model', 'Residual']  # [(data - model) / data]
     i = 0
 
-    if clipreg:
+    if clipreg is not None:
         for d in range(len(dataset)):
             print(dataset[d].shape)
-            dataset[d] = dataset[d][30:-30, 30:-30]
+            dataset[d] = dataset[d][clipreg:-clipreg, clipreg:-clipreg]
             print(dataset[d].shape)
 
     if normed:
@@ -68,5 +68,5 @@ def plot3(img, normed=True, clipreg=False, indivs=False):
     plt.show()
 
 
-plot3(out, clipreg=True)
+plot3(out, clipreg=60)  # clipreg=30
 
