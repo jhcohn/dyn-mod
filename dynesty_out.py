@@ -30,7 +30,7 @@ rcParams.update({'ytick.minor.width': '1.0'})
 rcParams.update({'font.size': 15})
 
 
-def my_own_thing(results, par_labels, ax_labels, quantiles, ax_lims=None, compare_err=False):
+def my_own_thing(results, par_labels, ax_labels, quantiles, ax_lims=None, compare_err=False, comp2=False, err=1):
     # results should be dyn_res['samples']
     roundto = 3  # 2  # 4
     fig, axes = plt.subplots(3, 3, figsize=(16, 12))  # 3 rows, 3 cols of subplots; because there are 9 free params
@@ -39,7 +39,7 @@ def my_own_thing(results, par_labels, ax_labels, quantiles, ax_lims=None, compar
     axes_order = [[0, 0], [2, 0], [2, 1], [2, 2], [1, 0], [1, 1], [1, 2], [0, 1], [0, 2]]
     for i in range(len(results[0])):
         row, col = axes_order[i]
-        if compare_err:
+        if compare_err or comp2:
             print('yes', labels[i])
             if labels[i] == 'yloc' or labels[i] == 'xloc':
                 bins = 3200
@@ -77,6 +77,26 @@ def my_own_thing(results, par_labels, ax_labels, quantiles, ax_lims=None, compar
                         vax = float(cols[1])
                         vax_width = float(cols[2])
             print(vax, 'vax', labels[i])
+            if labels[i] == 'mbh':
+                axes[row, col].axvline(np.log10(vax), ls='-', color='k')
+                print('here', np.log10(vax), np.log10(vax - vax_width), np.log10(vax + vax_width))
+                axes[row, col].axvspan(np.log10(vax - vax_width), np.log10(vax + vax_width), hatch='/', color='k',
+                                       fill=False, alpha=0.5)
+            else:
+                axes[row, col].axvline(vax, ls='-', color='k')
+                axes[row, col].axvspan(vax - vax_width, vax + vax_width, hatch='/', color='k', fill=False, alpha=0.5)
+        elif comp2:
+            with open('/Users/jonathancohn/Documents/dyn_mod/param_files/Ben_A1_sampling.txt') as a1:
+                for line in a1:
+                    cols = line.split()
+                    if cols[0] == labels[i]:
+                        vax = float(cols[1])
+                        vax_width1 = float(cols[2])
+                        vax_width3 = float(cols[3])
+            if err == 1:
+                vax_width = vax_width1
+            elif err == 3:
+                vax_width = vax_width3
             if labels[i] == 'mbh':
                 axes[row, col].axvline(np.log10(vax), ls='-', color='k')
                 print('here', np.log10(vax), np.log10(vax - vax_width), np.log10(vax + vax_width))
@@ -209,16 +229,20 @@ if '3258' in out_name:
     # ax_lims = [[9.2, 9.6], [126.2, 127.8], [150.2, 151.8], [7.5, 14.], [66., 70.], [19.13, 19.23], [6447., 6462.],
     #           [1.52, 1.8], [0.93, 1.2]]
     # ax_lims = None
-    ax_lims = [[9.36, 9.4], [361.97, 362.08], [354.75, 355.], [7., 11.], [45.5, 46.5], [166.3, 167], [2760.5, 2761],
-               [3.1, 3.22], [1.015, 1.03]]
+    # ax_lims = [[9.36, 9.4], [361.97, 362.08], [354.75, 355.], [7., 11.], [45.5, 46.5], [166.3, 167], [2760.5, 2761],
+    #            [3.1, 3.22], [1.015, 1.03]]  # USE THESE IF NOT COMPARING TO BEN'S A1 SAMPLING ERRORS
+    ax_lims = [[9.364, 9.391], [361.97, 362.08], [354.84, 354.975], [8.5, 10.75], [45.5, 46.5], [166.4, 167.1],
+               [2760.5, 2761], [3.08, 3.23], [1.015, 1.03]]
 else:
     ax_lims = [[9.3, 9.6], [126.2, 127.8], [150.2, 151.8], [7.5, 14.], [66., 70.], [15., 23.], [6447., 6462.],
                [1.52, 1.8], [0.93, 1.2]]  # [19.13, 19.23]
     # ax_lims=None
 
 # USE FOR INCLUDING BEN'S A1 ERRORS
-my_own_thing(dyn_res['samples'], labels, ax_lab, one_sigs, ax_lims=ax_lims, compare_err=True)  # three_sigs
-print(oop)
+#my_own_thing(dyn_res['samples'], labels, ax_lab, one_sigs, ax_lims=ax_lims, compare_err=True)  # three_sigs
+#print(oop)
+# my_own_thing(dyn_res['samples'], labels, ax_lab, one_sigs, ax_lims=ax_lims, comp2=True, err=1)  # one_sigma
+my_own_thing(dyn_res['samples'], labels, ax_lab, three_sigs, ax_lims=ax_lims, comp2=True, err=3)  # three_sigma
 
 # ELSE USE THIS
 # my_own_thing(dyn_res['samples'], labels, ax_lab, three_sigs, ax_lims=ax_lims)
@@ -231,12 +255,12 @@ print(oop)
 # fg, ax = dyplot.cornerplot(dyn_res, color='blue', show_titles=True, max_n_ticks=3, quantiles=sig1, labels=labels,
 #                            compare_med=vax, compare_width=vwidth)
 # plt.show()
+
 # OTHERWISE USE THIS:
-fg, ax = dyplot.cornerplot(dyn_res, color='blue', show_titles=True, max_n_ticks=3, quantiles=sig3, labels=labels)
+# fg, ax = dyplot.cornerplot(dyn_res, color='blue', show_titles=True, max_n_ticks=3, quantiles=sig3, labels=labels)
+# plt.show()
 
-# fig=(fig, axes), truths=np.zeros(ndim), truth_color='black',
-
-plt.show()
+print(oop)
 
 
 '''
