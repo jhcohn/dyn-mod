@@ -490,13 +490,24 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         data_4 = rebin(input_data_masked, ds)
         ap_4 = rebin(convolved_cube, ds)
 
-        ell_4 = rebin(ell_mask, ds)
-        ell_4[ell_4 < 8] = 0
-        ell_4[ell_4 >= 8] = 1
-        print(np.sum(ell_4))
-        plt.imshow(ell_4[0], origin='lower')
+        # HERE: I DEFINE THE ELLIPSE ON THE 4x4-PIXEL SCALE! THIS RESULTS IN 116 PIXELS PER SLICE, FOR CHI^2_nu=1.841
+        ell_mask = ellipse_fitting(ap_4, rfit, xell / ds, yell / ds, resolution * ds, theta_ell, q_ell)
+        # create ellipse mask
+        print(len(ap_4[0]), len(ap_4[0][0]), xell, xell / ds, yell, yell / ds, rfit, rfit / resolution / ds)
+        print(np.sum(ell_mask))
+        plt.imshow(ell_mask, origin='lower')
+        plt.title('Ellipse constructed on 4x4-binned grid')
         plt.colorbar()
         plt.show()
+
+        #ell_4 = rebin(ell_mask, ds)
+        #ell_4[ell_4 < 8] = 0
+        #ell_4[ell_4 >= 8] = 1
+        #print(np.sum(ell_4))
+        #plt.imshow(ell_4[0], origin='lower')
+        #plt.colorbar()
+        #plt.show()
+        ell_4 = ell_mask
 
         z_ind = 0  # the actual index for the model-data comparison cubes
         for z in range(zrange[0], zrange[1]):  # for each relevant freq slice (ignore slices with only noise)
@@ -507,8 +518,8 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
 
         # CALCULATE REDUCED CHI^2
         all_pix = np.ndarray.flatten(ell_4)  # all fitted pixels in each slice [len = 625 (yep)] [525 masked, 100 not]
-        masked_pix = all_pix[all_pix >= 8]  # all_pix, but this time only the pixels that are actually inside ellipse
-        # masked_pix = all_pix[all_pix != 0]  # all_pix, but this time only the pixels that are actually inside ellipse
+        # masked_pix = all_pix[all_pix >= 8]  # all_pix, but this time only the pixels that are actually inside ellipse
+        masked_pix = all_pix[all_pix != 0]  # all_pix, but this time only the pixels that are actually inside ellipse
         n_pts = len(masked_pix) * len(z_ax)  # (zrange[1] - zrange[0])  # total number of pixels being compared
         print(n_pts, len(masked_pix))  # rfit=1.2 --> 6440 (140/slice); 6716 (146/slice) for fully inclusive ellipse
         # print(oop)  # rfit=1.05 --> 4968 (108/slice)  # rfit=1.136 --> 5704 (124/slice) (see 16 April 2018 meeting)
