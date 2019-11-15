@@ -443,10 +443,10 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     convolved_cube *= ell_mask
     input_data_masked = input_data[zrange[0]:zrange[1], xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask
 
-    plt.imshow(ell_mask, origin='lower')
-    plt.title('Ellipse before binning')
-    plt.colorbar()
-    plt.show()
+    #plt.imshow(ell_mask, origin='lower')
+    #plt.title('Ellipse before binning')
+    #plt.colorbar()
+    #plt.show()
 
     ell_4 = rebin(ell_mask, ds)
     all_pix = np.ndarray.flatten(ell_4)  # all fitted pixels in each slice [len = 625 (yep)] [525 masked, 100 not]
@@ -458,10 +458,10 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     # 1.56*6302/1.788 -> want ~5500 (5498)
     #print(oop)
 
-    plt.imshow(ell_4[0], origin='lower')
-    plt.title('Ellipse after 4x4 binning')
-    plt.colorbar()
-    plt.show()
+    #plt.imshow(ell_4[0], origin='lower')
+    #plt.title('Ellipse after 4x4 binning')
+    #plt.colorbar()
+    #plt.show()
     #print(oop)
 
     '''  #
@@ -489,7 +489,14 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         # compare the data to the model by binning each in groups of dsxds pixels (separate from s)
         data_4 = rebin(input_data_masked, ds)
         ap_4 = rebin(convolved_cube, ds)
+
         ell_4 = rebin(ell_mask, ds)
+        ell_4[ell_4 < 8] = 0
+        ell_4[ell_4 >= 8] = 1
+        print(np.sum(ell_4))
+        plt.imshow(ell_4[0], origin='lower')
+        plt.colorbar()
+        plt.show()
 
         z_ind = 0  # the actual index for the model-data comparison cubes
         for z in range(zrange[0], zrange[1]):  # for each relevant freq slice (ignore slices with only noise)
