@@ -412,10 +412,13 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     # NOTE: MAYBE multiply by fstep here, after collapsing and lucy process, rather than during collapse
     # NOTE: would then need to multiply by ~1000 factor or something else large there, bc otherwise lucy cvg too fast
 
+    # print(constants.c_kms * (1 - (fstep / f_0) * (1+zred)))
+
     # BEN_LUCY COMPARISON ONLY (only use for comparing to model with Ben's lucy map, which is in different units)
     if bl:  # (multiply by vel_step because Ben's lucy map is actually in Jy/beam km/s units)
         weight *= fstep * 6.783  # NOTE: 6.783 == beam size / channel width in km/s
         # channel width = 1.537983987579E+07 Hz --> v_width = c * (1 - f_0 / (fstep / (1+zred)))
+        # 2698: channel width = 1.537983987576E+07 --> vwidth = 3e5 * (1 -
 
     # BUILD GAUSSIAN LINE PROFILES!!!
     cube_model = np.zeros(shape=(len(freq_ax), len(freq_obs), len(freq_obs[0])))  # initialize model cube
@@ -428,15 +431,38 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     else:
         intrinsic_cube = rebin(cube_model, s)  # intrinsic_cube = block_reduce(cube_model, s, np.mean)
 
+    tc = time.time()
     # CONVERT INTRINSIC TO OBSERVED (convolve each slice of intrinsic_cube with alma beam --> observed data cube)
     convolved_cube = np.zeros(shape=intrinsic_cube.shape)  # approx ~1e-6 to 3e-6s per pixel
     for z in range(len(z_ax)):
         convolved_cube[z, :, :] = convolution.convolve(intrinsic_cube[z, :, :], beam)  # CONVOLVE CUBE WITH BEAM
+    print('convolution loop ' + str(time.time() - tc))
 
     # ONLY WANT TO FIT WITHIN ELLIPTICAL REGION! APPLY ELLIPTICAL MASK TO MODEL CUBE & INPUT DATA
     ell_mask = ellipse_fitting(convolved_cube, rfit, xell, yell, resolution, theta_ell, q_ell)  # create ellipse mask
     convolved_cube *= ell_mask
     input_data_masked = input_data[zrange[0]:zrange[1], xyrange[2]:xyrange[3], xyrange[0]:xyrange[1]] * ell_mask
+
+    plt.imshow(ell_mask, origin='lower')
+    plt.title('Ellipse before binning')
+    plt.colorbar()
+    plt.show()
+
+    ell_4 = rebin(ell_mask, ds)
+    all_pix = np.ndarray.flatten(ell_4)  # all fitted pixels in each slice [len = 625 (yep)] [525 masked, 100 not]
+    masked_pix = all_pix[all_pix >= 8]  # all_pix, but this time only the pixels that are actually inside ellipse
+    print(len(masked_pix), len(z_ax))
+    n_pts = len(masked_pix) * len(z_ax)
+    print(n_pts)
+    # n_pts = 4508 if all_pix == 16. 6302 if all_pix != 0. 5566 if all_pix >= 8 [red_chi2=1.766].
+    # 1.56*6302/1.788 -> want ~5500 (5498)
+    #print(oop)
+
+    plt.imshow(ell_4[0], origin='lower')
+    plt.title('Ellipse after 4x4 binning')
+    plt.colorbar()
+    plt.show()
+    #print(oop)
 
     '''  #
     plt.imshow(weight, origin='lower')
@@ -474,19 +500,22 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
 
         # CALCULATE REDUCED CHI^2
         all_pix = np.ndarray.flatten(ell_4)  # all fitted pixels in each slice [len = 625 (yep)] [525 masked, 100 not]
-        masked_pix = all_pix[all_pix != 0]  # all_pix, but this time only the pixels that are actually inside ellipse
+        masked_pix = all_pix[all_pix >= 8]  # all_pix, but this time only the pixels that are actually inside ellipse
+        # masked_pix = all_pix[all_pix != 0]  # all_pix, but this time only the pixels that are actually inside ellipse
         n_pts = len(masked_pix) * len(z_ax)  # (zrange[1] - zrange[0])  # total number of pixels being compared
         print(n_pts, len(masked_pix))  # rfit=1.2 --> 6440 (140/slice); 6716 (146/slice) for fully inclusive ellipse
         # print(oop)  # rfit=1.05 --> 4968 (108/slice)  # rfit=1.136 --> 5704 (124/slice) (see 16 April 2018 meeting)
         n_params = 12  # number of free parameters
+        print(r'chi^2=', chi_sq)
         if not quiet:
             print('total model constructed in {0} seconds'.format(time.time() - t_begin))  # ~213s
 
         if reduced:
-            print(r'chi^2=', chi_sq)  # 4284.80414208  # 12300204.6088
-            print(r'Reduced chi^2=', chi_sq / (n_pts - n_params))  # 4284.80414208  # 12300204.6088
+            print(r'chi^2=', chi_sq)
+            print(r'Reduced chi^2=', chi_sq / (n_pts - n_params))
             chi_sq /= (n_pts - n_params)  # convert to reduced chi^2; else just return full chi^2
         if n_pts == 0.:
+            print(resolution, xell, yell)
             print('n_pts = ' + str(n_pts))
             chi_sq = np.inf
         return chi_sq  # / (n_pts - n_params)
@@ -615,6 +644,8 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=
         hdu1 = fits.PrimaryHDU(l_o)
         hdul1 = fits.HDUList([hdu1])
         hdul1.writeto(lucy_out)  # write out to lucy_out file
+        print(lucy_out)
+        print(oop)
 
     hdu = fits.open(lucy_out)
     lucy_out = hdu[0].data
@@ -625,15 +656,6 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=
     for z in range(zrange[0], zrange[1]):  # for each relevant freq slice
         noise.append(np.std(noise_4[z, xyerr[2]:xyerr[3], xyerr[0]:xyerr[1]]))  # ~variance
         #         noise.append(np.std(noise_4[z, int(xyerr[2]/ds):int(xyerr[3]/ds), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
-
-    print(np.amax(noise), np.amin(noise), 'helloooo')
-    print(noise)
-    plt.plot(noise, 'b+')
-    plt.xlabel(r'Frequency slice - ' + str(zrange[0]))
-    plt.ylabel(r'Jy / beam')
-    plt.title('UGC 2698 noise region')
-    plt.show()
-    print(oop)
 
     return lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise
 
@@ -654,6 +676,7 @@ def test_qell2(input_data, params, l_in, q_ell, rfit, pa):
     plt.title(r'q = ' + str(q_ell) + r', PA = ' + str(pa) + ' deg, rfit = ' + str(rfit) + ' arcsec')
     plt.savefig('/Users/jonathancohn/Documents/dyn_mod/ugc_2698/ellipse_plots/' + str(q_ell) + '_' + str(pa) + '_' +
                 str(rfit) + '.png', dpi=300)
+
 
 def test_qell(input_data, params, l_in, q_ell):
     ell_mask = ellipse_fitting(input_data, params['rfit'], params['xell'], params['yell'], params['resolution'],
