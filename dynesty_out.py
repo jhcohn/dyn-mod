@@ -30,6 +30,69 @@ rcParams.update({'ytick.minor.width': '1.0'})
 rcParams.update({'font.size': 15})
 
 
+def my_own_xy(results, par_labels, ax_labels, quantiles, ax_lims=None, compare_err=False, comp2=False, err=1):
+    # results should be dyn_res['samples']
+    roundto = 3  # 2  # 4
+    fig, axes = plt.subplots(1, 2, figsize=(12, 8))  # 3 rows, 3 cols of subplots; because there are 9 free params
+    fs = 12
+    labels = np.array(['xloc', 'yloc'])
+    print(results.shape, 'look!')
+    for i in range(2):
+        bins = 5000
+        chain = results[:, i]
+        print(np.quantile(chain, [.16, .5, .84]), 'look')
+        weight = np.ones_like(chain) * 2e-4
+        axes[i].hist(chain, bins=bins, color="b", histtype="step", weights=weight)  # axes[i]
+        axes[i].axvline(quantiles[i][1], color='b', ls='--')  # axes[i]
+        axes[i].axvspan(quantiles[i][0], quantiles[i][2], color='b', alpha=0.25)
+        axes[i].tick_params('both', labelsize=fs)
+        axes[i].set_title(par_labels[i] + ': ' + str(round(quantiles[i][1], roundto)) + ' (+'
+                                 + str(round(quantiles[i][2] - quantiles[i][1], roundto)) + ', -'
+                                 + str(round(quantiles[i][1] - quantiles[i][0], roundto)) + ')', fontsize=fs)
+        axes[i].set_xlabel(ax_labels[i], fontsize=fs)
+
+        if compare_err:
+            with open('/Users/jonathancohn/Documents/dyn_mod/param_files/Ben_A1_errors.txt') as a1:
+                for line in a1:
+                    cols = line.split()
+                    if cols[0] == labels[i]:
+                        vax = float(cols[1])
+                        vax_width = float(cols[2])
+            print(vax, 'vax', labels[i])
+            if labels[i] == 'mbh':
+                axes[i].axvline(np.log10(vax), ls='-', color='k')
+                print('here', np.log10(vax), np.log10(vax - vax_width), np.log10(vax + vax_width))
+                axes[i].axvspan(np.log10(vax - vax_width), np.log10(vax + vax_width), hatch='/', color='k',
+                                       fill=False, alpha=0.5)
+            else:
+                axes[i].axvline(vax, ls='-', color='k')
+                axes[i].axvspan(vax - vax_width, vax + vax_width, hatch='/', color='k', fill=False, alpha=0.5)
+        elif comp2:
+            with open('/Users/jonathancohn/Documents/dyn_mod/param_files/Ben_A1_sampling.txt') as a1:
+                for line in a1:
+                    cols = line.split()
+                    if cols[0] == labels[i]:
+                        vax = float(cols[1])
+                        vax_width1 = float(cols[2])
+                        vax_width3 = float(cols[3])
+            if err == 1:
+                vax_width = vax_width1
+            elif err == 3:
+                vax_width = vax_width3
+            if labels[i] == 'mbh':
+                axes[i].axvline(np.log10(vax), ls='-', color='k')
+                print('here', np.log10(vax), np.log10(vax - vax_width), np.log10(vax + vax_width))
+                axes[i].axvspan(np.log10(vax - vax_width), np.log10(vax + vax_width), hatch='/', color='k',
+                                       fill=False, alpha=0.5)
+            else:
+                axes[i].axvline(vax, ls='-', color='k')
+                axes[i].axvspan(vax - vax_width, vax + vax_width, hatch='/', color='k', fill=False, alpha=0.5)
+        if ax_lims is not None:
+            axes[i].set_xlim(ax_lims[i][0], ax_lims[i][1])
+    plt.tight_layout()
+    plt.show()
+
+
 def my_own_thing(results, par_labels, ax_labels, quantiles, ax_lims=None, compare_err=False, comp2=False, err=1):
     # results should be dyn_res['samples']
     roundto = 3  # 2  # 4
@@ -144,7 +207,9 @@ direc = '/Users/jonathancohn/Documents/dyn_mod/nest_out/'
 # thing = 'dyndyn_newpri_2_maxc10mil_n8_1571981879.8668501_end.pkl'  # 2698 newpri2 BAD because PA NOT IN RADS
 # thing = 'dyndyn_newpri_3_maxc10mil_n8_0.02_1572037132.3993847_tempsave.pkl'  # 2698 newpri3 GOOD PA CORRECTED!
 # thing = 'dyndyn3258_newpri_5_max10mil_test_n8_dlogz0.15_1572883759.2018988_tempsave.pkl'  # 3258 newpri5 PA GOOD!
-thing = 'dyndyn3258_newpri_5_max10mil_n8_dlogz0.15_1573010828.1336136_end.pkl'  # 3258 newpri5 PA GOOD end! (same good)
+# thing = 'dyndyn3258_newpri_5_max10mil_n8_dlogz0.15_1573010828.1336136_end.pkl'  # 3258 newpri5 PA GOOD end! (same good)
+thing = 'dyndyn3258_xy_max10mil_n8_dlogz0.15_1574217317.0507047_end.pkl'  # 3258 xy free, else fixed
+
 out_name = direc + thing
 
 
@@ -171,7 +236,13 @@ for i in range(dyn_res['samples'].shape[1]):  # for each parameter
     quantiles_2 = dyfunc.quantile(dyn_res['samples'][:, i], [0.025, 0.5, 0.975], weights=weights)
     quantiles_1 = dyfunc.quantile(dyn_res['samples'][:, i], [0.16, 0.5, 0.84], weights=weights)
     print(labels[i])
-    if i == 0:
+    if 'xy' in thing:
+        print(quantiles_3)
+        print(quantiles_2)
+        print(quantiles_1)
+        three_sigs.append(quantiles_3)
+        one_sigs.append(quantiles_1)
+    elif i == 0:
         print(np.log10(quantiles_3), quantiles_3)
         print(np.log10(quantiles_2), quantiles_2)
         print(np.log10(quantiles_1), quantiles_1)
@@ -183,7 +254,6 @@ for i in range(dyn_res['samples'].shape[1]):  # for each parameter
         print(quantiles_1)
         three_sigs.append(quantiles_3)
         one_sigs.append(quantiles_1)
-
 from dynesty import plotting as dyplot
 
 '''
@@ -220,12 +290,31 @@ print(vax[labels=='sig0'])
 print(vwidth[labels=='sig0'])
 
 logm = True
-if logm:
+if logm and 'xy' not in thing:
     dyn_res['samples'][:, 0] = np.log10(dyn_res['samples'][:, 0])
     labels[0] = 'log mbh'  # r'log$_{10}$mbh'
 
 ax_lims = None
-if '3258' in out_name:
+if 'xy' in thing:
+    labels = np.array(['xloc', 'yloc'])
+    ax_lab = ['pixels', 'pixels']
+    ax_lims = [[361.97, 362.08], [354.84, 354.975]]
+    my_own_xy(dyn_res['samples'], labels, ax_lab, one_sigs, ax_lims=ax_lims, comp2=True, err=1)  # one_sigma
+    # my_own_xy(dyn_res['samples'], labels, ax_lab, three_sigs, ax_lims=ax_lims, comp2=True, err=3)  # three_sigma
+    print(oop)
+    '''
+    [362.021449724303, 362.0429280235011, 362.04897481883864]
+    [362.038033081247, 362.0429280235011, 362.04651339175155]
+    [362.0414293129913, 362.0429280235011, 362.04455921103]
+    xloc
+    [354.87933747089113, 354.8935055084055, 354.9029591740998]
+    [354.8857249803428, 354.8935055084055, 354.8994498474415]
+    [354.8901495992812, 354.8935055084055, 354.8965309525797]
+    yloc
+
+    '''
+
+elif '3258' in out_name:
     # ax_lims = [[9.2, 9.6], [126.2, 127.8], [150.2, 151.8], [7.5, 14.], [66., 70.], [19.13, 19.23], [6447., 6462.],
     #           [1.52, 1.8], [0.93, 1.2]]
     # ax_lims = None
