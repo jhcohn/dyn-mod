@@ -73,25 +73,10 @@ def fit_u2698():
     img1 -= 0.37  # subtract sky
     hdu.close()
 
-    maskfile = base + 'f160w_ahcorr_mask_px010.fits'
-    hdu = fits.open(maskfile)
-    mask1 = hdu[0].data  # Must be Boolean with False=masked in sectors_photometry(). Image is 1=Masked, 0=Unmasked
+    mask = base + 'f160w_combined_ahcorr_px010.fits'
+    hdu = fits.open(mask)
+    maskimg = hdu[0].data  # Must be Boolean with False=masked in sectors_photometry(). Image is 1+ = Masked.
     hdu.close()
-
-    mask2 = base + 'f160w_combinedmask_px010.fits'
-    hdu = fits.open(mask2)
-    mask_comb = hdu[0].data  # Must be Boolean with False=masked in sectors_photometry(). Image is 1+ = Masked.
-    hdr_new = hdu[0].header
-    hdu.close()
-
-    maskimg = mask_comb + mask1
-
-    new_name = base + 'f160w_combined_ahcorr_px010.fits'
-
-    hdr_new['history'] = 'added f160w_combined_px010 and f160w_ahcorr_mask_px010'
-    fits.writeto(new_name, maskimg, hdr_new)
-
-    print(oop)
 
     maskimg[maskimg == 0] = -1
     maskimg[maskimg > 0] = False
