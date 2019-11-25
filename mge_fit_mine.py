@@ -81,9 +81,17 @@ def fit_u2698():
     mask2 = base + 'f160w_combinedmask_px010.fits'
     hdu = fits.open(mask2)
     mask_comb = hdu[0].data  # Must be Boolean with False=masked in sectors_photometry(). Image is 1+ = Masked.
+    hdr_new = hdu[0].header
     hdu.close()
 
     maskimg = mask_comb + mask1
+
+    new_name = base + 'f160w_combined_ahcorr_px010.fits'
+
+    hdr_new['history'] = 'added f160w_combined_px010 and f160w_ahcorr_mask_px010'
+    fits.writeto(new_name, maskimg, hdr_new)
+
+    print(oop)
 
     maskimg[maskimg == 0] = -1
     maskimg[maskimg > 0] = False
@@ -98,6 +106,7 @@ def fit_u2698():
     xc1 = 489.81  # 491.08  # Based on Nuker profile fits in GALFIT
     yc1 = 879.91  # 880.89  # Based on Nuker profile fits in GALFIT
     eps = 0.284  # 1 - 0.73  # I've been finding q = 0.73 with the Nuker profile in GALFIT
+    # set1 = 96.3,489.81,879.91,0.284,binning=1,fraction-=0.1
     # above uses fraction=0.1, binning=5. Using fraction=0.05: ang1=172.0,xc1=490.21,yc1=880.40,eps=0.305
     # Using fraction=0.2: ang1=178.8,xcl=487.16,ycl=878.78,eps=0.248
     # Using fraction=0.01: ang1=178.8,xcl=491.51,ycl=879.79,eps=0.312
@@ -141,9 +150,14 @@ def fit_u2698():
     popty, pcovy = opt.curve_fit(gauss_function, yarr, psfimg[xctr, :], p0=[0.11658926, yctr, 1.])
     print(poptx, popty, amp, xctr, yctr)
     sigmapsf = np.mean([poptx[2], popty[2]])
+    plt.plot(psfimg[:, yctr], 'k-')
+    plt.plot(poptx[0] * np.exp(-(xarr - poptx[1])**2 / (2 * poptx[2]**2)), 'r--')
+    plt.plot(psfimg[xctr, :], 'k-')
+    plt.plot(popty[0] * np.exp(-(yarr - popty[1])**2 / (2 * popty[2]**2)), 'b--')
+    plt.show()
     # fwhm = 2 * np.sqrt(2 * np.log(2)) * sig_avg
     # print(sigmapsf)  # 0.892
-    ngauss = 10
+    # ngauss = 10
     #print(radius)
     #print(angle)
     #print(counts)
@@ -159,7 +173,8 @@ def fit_u2698():
     # See the documentation of mge_fit_sectors_regularized for details.
     # *********************************************************************
     plt.clf()
-    m = mge_fit_sectors(radius, angle, counts, eps, ngauss=ngauss, sigmapsf=sigmapsf, scale=scale1, plot=1, linear=0)
+    m = mge_fit_sectors(radius, angle, counts, eps, sigmapsf=sigmapsf, scale=scale1, plot=1, linear=True)
+    # ngauss=ngauss,
     print(m.sol)
     plt.show()  # Allow plot to appear on the screen
 
@@ -200,4 +215,25 @@ if __name__ == '__main__':
        162588      88.9077     0.707725
        166389      174.463     0.733191
        196010      505.144     0.785429
+
+
+
+  Total_Counts  Sigma_Pixels      qObs
+############################################
+      9104.31      1.80429            1
+      1994.43      2.73585            1
+      10603.9      4.69608            1
+      30319.6       7.4939     0.602674
+      23105.5       10.078     0.827892
+      53889.6      14.1119     0.745498
+      90717.1      25.9335     0.761944
+      83508.1      55.3055     0.630831
+       153750      81.6541      0.73941
+      33830.9       147.68            1
+      12248.8      164.898     0.404042
+       129416      168.936     0.684078
+      36981.4      294.837            1
+         3191      558.949     0.184736
+       172209      558.949     0.738044
+++++++++++++++++++++++++++++++++++++++++++++
 '''
