@@ -21,7 +21,7 @@ from sectors_photometry_twist import sectors_photometry_twist
 from mge_print_contours_twist import mge_print_contours_twist
 
 
-def sb_prof3(smas, intens, mge_sols):
+def sb_prof3(smas, intens, mge_sols, qbounds=[0., 1.]):
     # Select an x and y plot range that is the same for all plots
     #
     minrad = np.min(mge_sols.radius) * mge_sols.scale
@@ -33,33 +33,17 @@ def sb_prof3(smas, intens, mge_sols):
     n = mge_sols.sectors.size
     dn = int(round(n / 6.))
     nrows = (n - 1) // dn + 1  # integer division
-    fig, ax = plt.subplots(1, 1)
-    # fig.subplots_adjust(hspace=0.01)
+    fig, ax = plt.subplots(2, 1, sharex=True, figsize=(8, 16))
+    fig.subplots_adjust(hspace=0.01)
     # fig.text(0.04, 0.5, 'counts', va='center', rotation='vertical')
     # fig.text(0.96, 0.5, 'error (%)', va='center', rotation='vertical')
     #ax[-1, 0].set_xlabel("arcsec")
     #ax[-1, 1].set_xlabel("arcsec")
-    ax.set_xlabel('arcsec')
-    row = 0
-    ct = []
-    for i in range(n):
-        w = np.nonzero(mge_sols.angle == mge_sols.sectors[i])[0]
-        w = w[np.argsort(mge_sols.radius[w])]
-        r = mge_sols.radius[w] * mge_sols.scale
-        ct.append(mge_sols.counts[w])
-    # txt = "$%.f^\circ$" % mge_sols.sectors[i]
-    ax.set_xlim(xran)
-    ax.set_ylim(yran)
-    print(mge_sols.counts)
-    print(len(mge_sols.counts))  # 1045
-    print(len(w), len(r))
-    '''
-    ax.loglog(r, mge_sols.counts[w], 'C0o')
-    ax.loglog(r, mge_sols.yfit[w], 'C1', linewidth=2)
-    # ax.text(0.98, 0.95, txt, ha='right', va='top', transform=ax[row, 0].transAxes)
-    # ax.text(0.98, 0.95, txt, ha='right', va='top', transform=ax.transAxes)
-    ax.loglog(r, mge_sols.gauss[w, :] * mge_sols.weights[None, :])
-    '''
+    ax[1].set_xlabel('arcsec')
+
+    ax[0].set_xlim(0.5, 400.)  # xran
+    ax[0].set_ylim(2e-3, 3.*10**3)  # yran
+    ax[1].set_ylim(-1, 1.)
 
     '''
     OPTIONAL OUTPUT KEYWORDS:
@@ -74,16 +58,18 @@ def sb_prof3(smas, intens, mge_sols):
               3) sol[2,*] = qObs, is the observed axial ratio of the
                   best-fitting Gaussian components.
     '''
-    print(len(mge_sols.sol))
     just_sols = mge_sols.sol
-    rarray = np.logspace(-3, 3., 100)
-    total = np.zeros(shape=rarray.shape)
+    # rarray = np.logspace(-3, 3., 100)
+    total = np.zeros(shape=np.array(smas).shape)
     for each_gauss in range(len(just_sols[0])):
         norm = just_sols[0, each_gauss] / (just_sols[1, each_gauss]**2 * 2*np.pi*just_sols[2, each_gauss])
-        yarray = norm * np.exp(-0.5 * (rarray / just_sols[1, each_gauss]) ** 2)
+        yarray = norm * np.exp(-0.5 * (smas / just_sols[1, each_gauss]) ** 2)
         total += yarray
-        ax.loglog(rarray, yarray, 'r--')
-    ax.loglog(rarray, total, 'r-', label=r'MGE Fit Sectors model', linewidth=2)
+        ax[0].loglog(smas, yarray, 'r--')
+    ax[0].loglog(smas, total, 'r-', label=r'MGE Fit Sectors model', linewidth=2)
+
+    ax[1].plot(smas, (intens - total) / intens, 'ko', markersize=4)
+    ax[1].axhline(y=0., color='k', ls='--')
 
     #ax[row, 1].semilogx(r, mge_sols.err[w] * 100, 'C0o')
     #ax[row, 1].axhline(linestyle='--', color='C1', linewidth=2)
@@ -92,13 +78,15 @@ def sb_prof3(smas, intens, mge_sols):
     #ax[row, 1].set_ylim([-19.5, 20])
 
     # plt.errorbar(isolist.sma, isolist.grad, yerr=isolist.grad_r_error, fmt='--', markersize=4)
-    plt.plot(smas, intens, 'k--', label='Data (from Ellipse task)', linewidth=4)
+    ax[0].plot(smas, intens, 'b--', label='Data (from Ellipse task)', linewidth=4)
     #plt.xlabel('Semimajor Axis Length log(pix)')
     #plt.xscale('log')
-    plt.ylabel('Mean counts along semi-major axis')
-    plt.title(r'UGC 2698 surface brightness profile')
-    plt.legend()
+    ax[0].set_ylabel('Mean counts along semi-major axis')
+    ax[1].set_ylabel(r'Residual [(data - model) / data]',)
+    ax[0].legend()
+    ax[0].set_title(r'UGC 2698 surface brightness profile, qbounds=' + str(qbounds))
     plt.show()
+    plt.clf()
 
 
 def sb_prof2(data, xctr, yctr, a0, eps, pa, mge_sols):
@@ -500,15 +488,15 @@ def fit_u2698(plots=False):
     # at the top of this file and re-run the procedure.
     # See the documentation of mge_fit_sectors_regularized for details.
     # *********************************************************************
+    qlims = [0.55, 1.0]  # 0.4
     plt.clf()
     m = mge_fit_sectors(radius, angle, counts, eps, sigmapsf=sigma_psf, normpsf=norm_psf, scale=scale1, plot=1,
-                        linear=True, qbounds=[0.4, 1.0])  # 0.55
-    # ngauss=ngauss,
+                        linear=True, qbounds=qlims) # ngauss=ngauss,
     print(m.sol)
     plt.show()  # Allow plot to appear on the screen
 
     # PRINT 1D SURF BRIGHTNESS PROFILES
-    sb_prof3(smas, intens, m)
+    sb_prof3(smas, intens, m, qbounds=qlims)
     # sb_prof2(test_img, yc1, xc1, sma, eps, -ang1, m)
 
     # Plot MGE contours of the HST image
