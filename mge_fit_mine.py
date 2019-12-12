@@ -488,7 +488,7 @@ def fit_u2698(plots=False):
     # at the top of this file and re-run the procedure.
     # See the documentation of mge_fit_sectors_regularized for details.
     # *********************************************************************
-    qlims = [0.55, 1.0]  # 0.4
+    qlims = None #[0.55, 1.0]  # 0.4
     plt.clf()
     m = mge_fit_sectors(radius, angle, counts, eps, sigmapsf=sigma_psf, normpsf=norm_psf, scale=scale1, plot=1,
                         linear=True, qbounds=qlims) # ngauss=ngauss,
@@ -706,3 +706,6 @@ also make 1D surface brightness profiles
 
 For my prelim: I'll do similar first-pass gas modeling of more CEGs or of other galaxies at upper-mass end
 '''
+
+
+# NOTE: GOT 0.05 ERROR WHEN I USED ZP J) 25.95, BUT NOT WHEN I USED ZP J) 24.697
