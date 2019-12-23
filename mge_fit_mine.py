@@ -321,7 +321,7 @@ def psf_2dgauss(psfimg):
     plt.show()
 
 
-def fit_u2698(plots=False):
+def fit_u2698(input_image, input_mask, num=None, write_out=None, plots=False, qlims=None, fit43=False):
     """
     This function fits an mge to UGC 2698
 
@@ -334,14 +334,16 @@ def fit_u2698(plots=False):
     scale1 = 0.1     # (arcsec/pixel) PC1. This is used as scale and flux reference!
 
     base = '/Users/jonathancohn/Documents/dyn_mod/galfit_u2698/'
-    file = base + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan.fits'  # dust-corrected UGC 2698 H-band, from Ben
+    file = base + input_image
+    # 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan.fits'  # dust-corrected UGC 2698 H-band, from Ben
     hdu = fits.open(file)
     img1 = hdu[0].data
     hdrn = hdu[0].header
     img1 -= 0.37  # subtract sky
     hdu.close()
 
-    mask = base + 'f160w_maskedgemask_px010.fits'
+    mask = base + input_mask
+    # 'f160w_maskedgemask_px010.fits'
     hdu = fits.open(mask)
     maskimg = hdu[0].data  # Must be Boolean with False=masked in sectors_photometry(). Image is 1+ = Masked.
     hdu.close()
@@ -356,7 +358,7 @@ def fit_u2698(plots=False):
     # out_file = base + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_maskedgemask.fits'
     # fits.writeto(out_file, test_img, hdrn)  # new_psf
     # print(oop)
-    masked_img = base + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_maskedgemask.fits'
+    # masked_img = base + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_maskedgemask.fits'
     # hdu = fits.open(masked_img)
     # testing = hdu[0].data  # Must be Boolean with False=masked in sectors_photometry(). Image is 1+ = Masked.
     # hdu.close()
@@ -366,11 +368,22 @@ def fit_u2698(plots=False):
     if plots:
         plt.show()
     plt.clf()
+    # USING REGULAR H-BAND, PLUS DUST MASK (binning=1, fraction = 0.1
+    ang1 = 96.3
+    xc1 = 489.92
+    yc1 = 880.01
+    eps = 0.284
+    sma = 324.6
+    # astro PA = 173.7
+    '''  #
+    # USING DUST-CORRECTED H-BAND
     ang1 = 96.3 #173.8  # -8.13  # Based on Nuker profile fits in GALFIT
     xc1 = 489.99  # 491.08  # Based on Nuker profile fits in GALFIT
     yc1 = 879.95  # 880.89  # Based on Nuker profile fits in GALFIT
     eps = 0.284  # 1 - 0.73  # I've been finding q = 0.73 with the Nuker profile in GALFIT
     sma = 324.5
+    # '''  #
+    # print(oop)
     # set1 = 96.3,489.81,879.91,0.284,binning=1,fraction-=0.1
     # above uses fraction=0.1, binning=5. Using fraction=0.05: ang1=172.0,xc1=490.21,yc1=880.40,eps=0.305
     # Using fraction=0.2: ang1=178.8,xcl=487.16,ycl=878.78,eps=0.248
@@ -378,6 +391,7 @@ def fit_u2698(plots=False):
     # fraction=0.1,binning=3: ang1=173.8,xcl=489.82,ycl=879.88,eps=0.284
     # fraction=0.1,binning=1: ang1=96.3,xcl=489.99,ycl=879.95,eps=0.284,sma=324.5 [Astro PA = 173.7]
 
+    '''  #
     # PRINT 1D SURF BRIGHTNESS PROFILES
     # sb_profile(masked_img, 'out1.tab', sma, xc1, yc1, eps, ang1)
     smas = []
@@ -399,6 +413,7 @@ def fit_u2698(plots=False):
     intens.reverse()
     print(smas)
     print(intens)
+    # '''  #
 
     plt.clf()
     s1 = sectors_photometry(img1, eps, ang1, xc1, yc1, minlevel=0, mask=maskimg, plot=1)
@@ -488,16 +503,23 @@ def fit_u2698(plots=False):
     # at the top of this file and re-run the procedure.
     # See the documentation of mge_fit_sectors_regularized for details.
     # *********************************************************************
-    qlims = None #[0.55, 1.0]  # 0.4
+    # qlims = None #[0.55, 1.0]  # 0.4
     plt.clf()
-    m = mge_fit_sectors(radius, angle, counts, eps, sigmapsf=sigma_psf, normpsf=norm_psf, scale=scale1, plot=1,
-                        linear=True, qbounds=qlims) # ngauss=ngauss,
+    linear = False
+    if num is None:
+        linear = True
+    if fit43:
+        m = mge_fit_sectors43(radius, angle, counts, eps, sigmapsf=sigma_psf, normpsf=norm_psf, scale=scale1, plot=1,
+                              linear=linear, qbounds=qlims, ngauss=num)  # ngauss=ngauss,
+    else:
+        m = mge_fit_sectors(radius, angle, counts, eps, sigmapsf=sigma_psf, normpsf=norm_psf, scale=scale1, plot=1,
+                            linear=linear, qbounds=qlims, ngauss=num) # ngauss=ngauss,
     print(m.sol)
     plt.show()  # Allow plot to appear on the screen
 
     # PRINT 1D SURF BRIGHTNESS PROFILES
-    sb_prof3(smas, intens, m, qbounds=qlims)
-    # sb_prof2(test_img, yc1, xc1, sma, eps, -ang1, m)
+    # sb_prof3(smas, intens, m, qbounds=qlims)
+    ## sb_prof2(test_img, yc1, xc1, sma, eps, -ang1, m)
 
     # Plot MGE contours of the HST image
     plt.clf()
@@ -505,9 +527,8 @@ def fit_u2698(plots=False):
     # binning=4, magrange=9
     plt.show()
 
-    write_out = False
-    outname = base + 'ugc_2698_f160w_ahcorr_mge.txt'
-    if write_out:
+    if write_out is not None:
+        outname = base + write_out
         with open(outname, 'w+') as o:
             o.write('# UGC 2698 MGE using mge_fit_mine.py\n')
             o.write('# Counts Sigma_pix qObs\n')
@@ -520,7 +541,49 @@ def fit_u2698(plots=False):
 if __name__ == '__main__':
 
     print("\nFitting UGC 2698-----------------------------------\n")
-    fit_u2698()
+    # regular H-band, without dust-mask (43 gaussians; Akin Yildirim-like); ngauss=43
+    # outname = 'ugc_2698_akin_n43_mge_06.txt'
+    # img = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits'
+    # mask = 'f160w_maskedgemask_px010.fits'
+    # num = 43
+    # ql = [0.6, 1.]
+    # from mge_fit_sectors43 import mge_fit_sectors43
+
+    # regular H-band, without dust-mask (43 gaussians; Akin Yildirim-like); LINEAR
+    outname = 'ugc_2698_akin_linear_mge_06.txt'
+    img = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits'
+    mask = 'f160w_maskedgemask_px010.fits'
+    num = None
+    ql = [0.6, 1.]
+    # from mge_fit_sectors43 import mge_fit_sectors43
+
+    # regular H-band, WITHOUT dust-mask, NOT linear (10 gaussians)
+    #outname = 'ugc_2698_regH_combmask_n10_q055_mge.txt'
+    #fit_u2698('ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits', 'f160w_combinedmask_px010.fits', num=10,
+    #          plots=False, write_out=outname, qlims=[0.55, 1.])
+
+    # regular H-band, with dust-mask, NOT linear (10 gaussians)
+    # outname = 'ugc_2698_regH_combmask_n11_q055_mge.txt'  # n10
+    # fit_u2698('ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits', 'f160w_combinedmask_px010.fits', num=11,
+    #           plots=False, write_out=outname, qlims=[0.55, 1.])
+
+    # regular H-band, with dust-mask
+    # outname = 'ugc_2698_regH_combmask_mge.txt'
+    # fit_u2698('ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits', 'f160w_combinedmask_px010.fits', plots=False,
+    #           write_out=outname)
+
+    # dust-corrected H-band, without dust-mask (10 gaussians)
+    # outname = 'ugc_2698_ahcorr_n11_mge_04.txt'
+    # img = 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan.fits'
+    # mask = 'f160w_maskedgemask_px010.fits'
+    # num = 11
+    # ql = [0.4, 1.]
+
+    # dust-corrected H-band, without dust-mask
+    # outname = 'ugc_2698_f160w_ahcorr_mge.txt'
+    # fit_u2698('ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan.fits', 'f160w_maskedgemask_px010.fits')
+
+    fit_u2698(img, mask, write_out=outname, num=num, qlims=ql, fit43=False)
 
 '''
 ############################################
