@@ -320,7 +320,7 @@ def psf_2dgauss(psfimg):
     plt.show()
 
 
-def fit_u2698(input_image, input_mask, num=None, write_out=None, plots=False, qlims=None):
+def fit_u2698(input_image, input_mask, psf_file, num=None, write_out=None, plots=False, qlims=None):
     """
     This function fits an mge to UGC 2698
 
@@ -332,18 +332,13 @@ def fit_u2698(input_image, input_mask, num=None, write_out=None, plots=False, ql
 
     scale1 = 0.1     # (arcsec/pixel) PC1. This is used as scale and flux reference!
 
-    base = '/Users/jonathancohn/Documents/dyn_mod/galfit_u2698/'
-    file = base + input_image
-    # 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan.fits'  # dust-corrected UGC 2698 H-band, from Ben
-    hdu = fits.open(file)
+    hdu = fits.open(input_image)
     img1 = hdu[0].data
     hdrn = hdu[0].header
     img1 -= 0.37  # subtract sky
     hdu.close()
 
-    mask = base + input_mask
-    # 'f160w_maskedgemask_px010.fits'
-    hdu = fits.open(mask)
+    hdu = fits.open(input_mask)
     maskimg = hdu[0].data  # Must be Boolean with False=masked in sectors_photometry(). Image is 1+ = Masked.
     hdu.close()
 
@@ -353,17 +348,9 @@ def fit_u2698(input_image, input_mask, num=None, write_out=None, plots=False, ql
     maskimg = maskimg.astype(bool)
 
     test_img = img1 * maskimg
-    # hdrn['history'] = 'multiplied by f160w_maskedgemask_px010.fits'
-    # out_file = base + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_maskedgemask.fits'
-    # fits.writeto(out_file, test_img, hdrn)  # new_psf
-    # print(oop)
-    # masked_img = base + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_maskedgemask.fits'
-    # hdu = fits.open(masked_img)
-    # testing = hdu[0].data  # Must be Boolean with False=masked in sectors_photometry(). Image is 1+ = Masked.
-    # hdu.close()
 
     # The geometric parameters below were obtained using my FIND_GALAXY program
-    f = find_galaxy(test_img, binning=1, fraction=0.1, level=None, nblob=1, plot=True, quiet=False)
+    f = find_galaxy(test_img, binning=5, fraction=0.2, level=None, nblob=1, plot=plots, quiet=False)
     if plots:
         plt.show()
     plt.clf()
@@ -372,67 +359,32 @@ def fit_u2698(input_image, input_mask, num=None, write_out=None, plots=False, ql
     yc1 = f.ymed
     eps = f.eps
     sma = f.majoraxis
-    '''
-    print(' Peak Img[j, k]:', self.xpeak, self.ypeak)
-    print(' Mean (j, k): %.2f %.2f' % (self.xmed, self.ymed))
-    print(' Theta (deg): %.1f' % self.theta)
-    print(' Astro PA (deg): %.1f' % self.pa)
-    print(' Eps: %.3f' % self.eps)
-    print(' Major axis (pix): %.1f' % self.majoraxis)
-    #  '''
-    '''  #
-    # USING REGULAR H-BAND, PLUS DUST MASK (binning=1, fraction = 0.1
-    ang1 = 96.3
-    # xc1 = 489.99
-    # yc1 = 879.95
-    xc1 = 491.1538  # 489.92
-    yc1 = 880.6390  # 880.01
-    eps = 0.284
-    sma = 324.6
-    # astro PA = 173.7
-    # '''
-    '''  #
-    # USING DUST-CORRECTED H-BAND
-    ang1 = 96.3 #173.8  # -8.13  # Based on Nuker profile fits in GALFIT
-    xc1 = 489.99  # 491.08  # Based on Nuker profile fits in GALFIT
-    yc1 = 879.95  # 880.89  # Based on Nuker profile fits in GALFIT
-    eps = 0.284  # 1 - 0.73  # I've been finding q = 0.73 with the Nuker profile in GALFIT
-    sma = 324.5
-    # '''  #
-    # print(oop)
-    # set1 = 96.3,489.81,879.91,0.284,binning=1,fraction-=0.1
-    # above uses fraction=0.1, binning=5. Using fraction=0.05: ang1=172.0,xc1=490.21,yc1=880.40,eps=0.305
-    # Using fraction=0.2: ang1=178.8,xcl=487.16,ycl=878.78,eps=0.248
-    # Using fraction=0.01: ang1=178.8,xcl=491.51,ycl=879.79,eps=0.312
-    # fraction=0.1,binning=3: ang1=173.8,xcl=489.82,ycl=879.88,eps=0.284
-    # fraction=0.1,binning=1: ang1=96.3,xcl=489.99,ycl=879.95,eps=0.284,sma=324.5 [Astro PA = 173.7]
+    # ahcorr, binning=1, fraction=0.05: 490.40 880.37, theta=98.0, eps=0.304
+    # ahcorr, binning=3, fraction=0.05: 490.39 880.37, theta=97.9, eps=0.305
+    # ahcorr, binning=5, fraction=0.05: 490.38 880.38, theta=98.0, eps=0.305
+    # ahcorr, binning=1, fraction=0.1: 489.99 879.95, theta=96.3, eps=0.284
+    # ahcorr, binning=3, fraction=0.1: 490.00 879.91, theta=96.2, eps=0.284
+    # ahcorr, binning=5, fraction=0.1: 489.99 879.93, theta=96.2, eps=0.284
+    # ahcorr, binning=1, fraction=0.2: 487.69 878.85, theta=91.4, eps=0.251
+    # ahcorr, binning=3, fraction=0.2: 487.53 878.84, theta=91.2, eps=0.249
+    # ahcorr, binning=5, fraction=0.2: 487.52 878.88, theta=91.2, eps=0.249
 
-    '''  #
-    # PRINT 1D SURF BRIGHTNESS PROFILES
-    # sb_profile(masked_img, 'out1.tab', sma, xc1, yc1, eps, ang1)
-    smas = []
-    intens = []
-    with open('/Users/jonathancohn/Documents/mge/out_tab1_saved.txt') as efile:
-        for line in efile:
-            if not line.startswith('#'):
-                cols = line.split()
-                c1 = ''
-                parens = 0
-                for char in cols[1]:
-                    if char == '(':
-                        parens += 1
-                    elif parens == 0:
-                        c1 += char
-                smas.append(float(cols[0]))
-                intens.append(float(c1))
-    smas.reverse()
-    intens.reverse()
-    print(smas)
-    print(intens)
-    # '''  #
+    # regH, binning=1, fraction=0.05: 490.34 880.47, theta=98.0, eps=0.304
+    # regH, binning=3, fraction=0.05: 490.33 880.47, theta=97.9, eps=0.305
+    # regH, binning=5, fraction=0.05: 490.32 880.49, theta=98.0, eps=0.305
+    # regH, binning=1, fraction=0.1: 489.92 880.01, theta=96.3, eps=0.284
+    # regH, binning=3, fraction=0.1: 489.93 879.97, theta=96.2, eps=0.284
+    # regH, binning=5, fraction=0.1: 489.92 880.00, theta=96.2, eps=0.284
+    # regH, binning=1, fraction=0.1: 487.52 878.86, theta=91.4, eps=0.251
+    # regH, binning=3, fraction=0.1: 487.35 878.86, theta=91.2, eps=0.249
+    # regH, binning=5, fraction=0.1: 487.34 878.90, theta=91.2, eps=0.248
+
+    # WHERE DID THESE COME FROM -- from Nuker profile fits in GALFIT? Or?
+    # xc1 = 491.1538
+    # yc1 = 880.6390
 
     plt.clf()
-    s1 = sectors_photometry(img1, eps, ang1, xc1, yc1, minlevel=0, mask=maskimg, plot=1)
+    s1 = sectors_photometry(img1, eps, ang1, xc1, yc1, minlevel=0, mask=maskimg, plot=plots)
     if plots:
         plt.show()  # Allow plot to appear on the screen
 
@@ -442,108 +394,39 @@ def fit_u2698(input_image, input_mask, num=None, write_out=None, plots=False, ql
 
     # The PSF needs to be the one for the high-resolution image used in the centre.
     # Here this is the WFC3/F160W image (we use a Gaussian PSF for simplicity)
-
-    psffile = base + 'ugc2698_f160w_pxfr075_pxs010_rapid_psf_drz_sci_clipped2no0.fits'
-    m_psf = fit_psf(psffile)
+    m_psf = fit_psf(psf_file)
     print(m_psf.sol)
     sigma_psf = m_psf.sol[1]
     norm_psf = m_psf.sol[0] / np.sum(m_psf.sol[0])
     print(norm_psf)
     print(np.sum(norm_psf))
 
-    # From FIND GALAXY
-    # Pixels used: 999
-    # Peak Img[j, k]: 51 50
-    # Mean (j, k): 51.37 50.44
-    # Theta (deg): 151.3
-    # Astro PA (deg): 118.7
-    # Eps: 0.031
-    # Major axis (pix): 28.9
-
-    '''
-    hdu = fits.open(psffile)
-    psfimg = hdu[0].data
-    hdu.close()
-
-    plt.imshow(psfimg)
-    plt.colorbar()
-    plt.show()
-
-    psf_2dgauss(psfimg)
-    print(oop)
-    
-    mge_fit_1d(psfimg)
-
-    amp = np.amax(psfimg)
-    xctr, yctr = np.where(psfimg == amp)
-    xctr = xctr[0]
-    yctr = yctr[0]
-
-    #print(np.amax(psfimg))
-    #print(np.where(psfimg==np.amax(psfimg)))
-    #plt.imshow(psfimg)
-    #plt.colorbar()
-    #plt.show()
-
-    #diffs = fwhm_est(psfimg)
-    #print(diffs)
-
-    import scipy.optimize as opt
-    xarr = range(len(psfimg))
-    yarr = range(len(psfimg[1]))
-    poptx, pcovx = opt.curve_fit(gauss_function, xarr, psfimg[:, yctr], p0=[0.11658926, xctr, 1.])
-    popty, pcovy = opt.curve_fit(gauss_function, yarr, psfimg[xctr, :], p0=[0.11658926, yctr, 1.])
-    print(poptx, popty, amp, xctr, yctr)
-    sigmapsf = np.mean([poptx[2], popty[2]])
-    plt.plot(psfimg[:, yctr], 'k-')
-    plt.plot(poptx[0] * np.exp(-(xarr - poptx[1])**2 / (2 * poptx[2]**2)), 'r--')
-    plt.plot(psfimg[xctr, :], 'k-')
-    plt.plot(popty[0] * np.exp(-(yarr - popty[1])**2 / (2 * popty[2]**2)), 'b--')
-    plt.show()
-    # fwhm = 2 * np.sqrt(2 * np.log(2)) * sig_avg
-    # print(sigmapsf)  # 0.892
-    # ngauss = 10
-    #print(radius)
-    #print(angle)
-    #print(counts)
-    #print(oop)
-    '''
-    # sigmapsf = np.mean([0.94123, 0.91545])
-
     # Do the actual MGE fit
     # *********************** IMPORTANT ***********************************
     # For the final publication-quality MGE fit one should include the line:
-    #
     # from mge_fit_sectors_regularized import mge_fit_sectors_regularized as mge_fit_sectors
-    #
     # at the top of this file and re-run the procedure.
     # See the documentation of mge_fit_sectors_regularized for details.
     # *********************************************************************
     plt.clf()
-    linear = False
     if num is None:
-        linear = True
-        m = mge_fit_sectors(radius, angle, counts, eps, sigmapsf=sigma_psf, normpsf=norm_psf, scale=scale1, plot=1,
-                            linear=linear, qbounds=qlims, ngauss=num)
+        m = mge_fit_sectors(radius, angle, counts, eps, sigmapsf=sigma_psf, normpsf=norm_psf, scale=scale1, plot=plots,
+                            linear=True, qbounds=qlims, ngauss=num)
     else:
-        m = mge_fit_sectors(radius, angle, counts, eps, sigmapsf=sigma_psf, normpsf=norm_psf, scale=scale1, plot=1,
-                            linear=linear, qbounds=qlims, ngauss=num)
+        m = mge_fit_sectors(radius, angle, counts, eps, sigmapsf=sigma_psf, normpsf=norm_psf, scale=scale1, plot=plots,
+                            linear=False, qbounds=qlims, ngauss=num)
     print(m.sol)
     if plots:
         plt.show()  # Allow plot to appear on the screen
 
-    # PRINT 1D SURF BRIGHTNESS PROFILES
-    # sb_prof3(smas, intens, m, qbounds=qlims)
-    ## sb_prof2(test_img, yc1, xc1, sma, eps, -ang1, m)
-
     # Plot MGE contours of the HST image
     plt.clf()
     mge_print_contours(img1, ang1, xc1, yc1, m.sol, scale=scale1, binning=1, sigmapsf=sigma_psf, normpsf=norm_psf)
-    # binning=4, magrange=9
+    # magrange=9
     plt.show()
 
     if write_out is not None:
-        outname = base + write_out
+        outname = write_out
         with open(outname, 'w+') as o:
             o.write('# UGC 2698 MGE using mge_fit_mine.py\n')
             o.write('# Counts Sigma_pix qObs\n')
@@ -567,6 +450,8 @@ def display_mod(galfit_out=None):
             cols = line.split()
             if line.startswith('A)'):
                 file = cols[1]
+            elif line.startswith('D)'):
+                psf_file = cols[1]
             elif line.startswith('F)'):
                 mask = cols[1]
             elif line.startswith('J)'):
@@ -588,16 +473,12 @@ def display_mod(galfit_out=None):
         norm = False
         print(file)
 
-    # file = base + input_image
-    # 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan.fits'  # dust-corrected UGC 2698 H-band, from Ben
     hdu = fits.open(file)
     img1 = hdu[0].data
     hdrn = hdu[0].header
     img1 -= 0.37  # subtract sky
     hdu.close()
 
-    # mask = base + input_mask
-    # 'f160w_maskedgemask_px010.fits'
     hdu = fits.open(mask)
     maskimg = hdu[0].data  # Must be Boolean with False=masked in sectors_photometry(). Image is 1+ = Masked.
     hdu.close()
@@ -612,7 +493,6 @@ def display_mod(galfit_out=None):
     # The geometric parameters below were obtained using my FIND_GALAXY program
     f = find_galaxy(test_img, binning=1, fraction=0.1, level=None, nblob=1, plot=True, quiet=False)
     plt.show()
-    # plt.clf()
     '''
     # USING AHCORR (DUST-CORRECTED H-BAND), REGULAR MASK (and binning=1, fraction=0.1)
     /Users/jonathancohn/Documents/dyn_mod/galfit_u2698/ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan.fits
@@ -644,10 +524,10 @@ def display_mod(galfit_out=None):
     sma = 324.6
     # astro PA = 173.7
 
-    '''  #
+    # '''  #
     plt.clf()
-    s1 = sectors_photometry(img1, eps, ang1, xc1, yc1, minlevel=0, mask=maskimg, plot=1)
-    plt.show()  # Allow plot to appear on the screen
+    s1 = sectors_photometry(img1, eps, ang1, xc1, yc1, minlevel=0, mask=maskimg, plot=0)
+    # plt.show()  # Allow plot to appear on the screen
 
     radius = s1.radius
     angle = s1.angle
@@ -656,16 +536,9 @@ def display_mod(galfit_out=None):
 
     # The PSF needs to be the one for the high-resolution image used in the centre.
     # Here this is the WFC3/F160W image (we use a Gaussian PSF for simplicity)
-
-    psffile = base + 'ugc2698_f160w_pxfr075_pxs010_rapid_psf_drz_sci_clipped2no0.fits'
-    m_psf = fit_psf(psffile)
-    # print(m_psf.sol)
+    m_psf = fit_psf(psf_file)
     sigma_psf = m_psf.sol[1]
     norm_psf = m_psf.sol[0] / np.sum(m_psf.sol[0])
-    # ugc2698_f160w_pxfr075_pxs010_rapid_psf_drz_sci_clipped2no0
-    # ugc2698_f160w_pxfr075_pxs010_rapid_psf_drz_sci_clipped2no0
-    # print(norm_psf)
-    # print(np.sum(norm_psf))
 
     # From FIND GALAXY (with PSF)
     # Pixels used: 999
@@ -676,64 +549,6 @@ def display_mod(galfit_out=None):
     # Eps: 0.031
     # Major axis (pix): 28.9
 
-    # sigmapsf = np.mean([0.94123, 0.91545])
-
-    # Do the actual MGE fit
-    # *********************** IMPORTANT ***********************************
-    # For the final publication-quality MGE fit one should include the line:
-    #
-    # from mge_fit_sectors_regularized import mge_fit_sectors_regularized as mge_fit_sectors
-    #
-    # at the top of this file and re-run the procedure.
-    # See the documentation of mge_fit_sectors_regularized for details.
-    # *********************************************************************
-
-    '''  #
-    # Select an x and y plot range that is the same for all plots
-    #
-    minrad = np.min(radius) * scale
-    maxrad = np.max(radius) * scale
-    mincnt = np.min(counts)
-    maxcnt = np.max(counts)
-    xran = minrad * (maxrad / minrad) ** np.array([-0.02, +1.02])
-    yran = mincnt * (maxcnt / mincnt) ** np.array([-0.05, +1.05])
-
-    n = sectors.size
-    dn = int(round(n / 6.))
-    nrows = (n - 1) // dn + 1  # integer division
-
-    fig, ax = plt.subplots(nrows, 2, sharex=True, sharey='col', num=fignum)
-    fig.subplots_adjust(hspace=0.01)
-
-    fig.text(0.04, 0.5, 'counts', va='center', rotation='vertical')
-    fig.text(0.96, 0.5, 'error (%)', va='center', rotation='vertical')
-
-    ax[-1, 0].set_xlabel("arcsec")
-    ax[-1, 1].set_xlabel("arcsec")
-
-    row = 0
-    for j in range(0, n, dn):
-        w = np.nonzero(angle == sectors[j])[0]
-        w = w[np.argsort(radius[w])]
-        r = radius[w] * scale
-        txt = "$%.f^\circ$" % sectors[j]
-
-        ax[row, 0].set_xlim(xran)
-        ax[row, 0].set_ylim(yran)
-        ax[row, 0].loglog(r, counts[w], 'C0o')
-        ax[row, 0].loglog(r, yfit[w], 'C1', linewidth=2)
-        ax[row, 0].text(0.98, 0.95, txt, ha='right', va='top', transform=ax[row, 0].transAxes)
-        ax[row, 0].loglog(r, gauss[w, :] * weights[None, :])
-
-        ax[row, 1].semilogx(r, err[w] * 100, 'C0o')
-        ax[row, 1].axhline(linestyle='--', color='C1', linewidth=2)
-        ax[row, 1].yaxis.tick_right()
-        ax[row, 1].yaxis.set_label_position("right")
-        ax[row, 1].set_ylim([-19.5, 20])
-
-        row += 1
-    # '''  #
-
     '''  #
     plt.clf()
     linear = False
@@ -741,10 +556,6 @@ def display_mod(galfit_out=None):
         linear = True
         m = mge_fit_sectors(radius, angle, counts, eps, sigmapsf=sigma_psf, normpsf=norm_psf, scale=scale1, plot=1,
                             linear=linear, qbounds=qlims, ngauss=num)  # ngauss=ngauss,
-    elif num >= 35:
-        from mge_fit_sectors43 import mge_fit_sectors43
-        m = mge_fit_sectors43(radius, angle, counts, eps, sigmapsf=sigma_psf, normpsf=norm_psf, scale=scale1, plot=1,
-                              linear=linear, qbounds=qlims, ngauss=num)  # ngauss=ngauss,
     else:
         m = mge_fit_sectors(radius, angle, counts, eps, sigmapsf=sigma_psf, normpsf=norm_psf, scale=scale1, plot=1,
                             linear=linear, qbounds=qlims, ngauss=num)  # ngauss=ngauss,
@@ -773,61 +584,21 @@ def display_mod(galfit_out=None):
 if __name__ == '__main__':
 
     print("\nFitting UGC 2698-----------------------------------\n")
-    ###
-
-    # regular H-band, without dust-mask (43 gaussians; Akin Yildirim-like); ngauss=43
-    # outname = 'ugc_2698_akin_n43_mge_06.txt'
-    # img = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits'
-    # mask = 'f160w_maskedgemask_px010.fits'
-    # num = 43
-    # ql = [0.6, 1.]
-    # from mge_fit_sectors43 import mge_fit_sectors43
-
-    # regular H-band, without dust-mask (43 gaussians; Akin Yildirim-like); LINEAR
-    # outname = 'ugc_2698_akin_linear_mge_06.txt'
-    # img = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits'
-    # mask = 'f160w_maskedgemask_px010.fits'
-    # num = None
-    # ql = [0.6, 1.]
-    # from mge_fit_sectors43 import mge_fit_sectors43
-
-    # regular H-band, WITHOUT dust-mask, NOT linear (10 gaussians)
-    #outname = 'ugc_2698_regH_combmask_n10_q055_mge.txt'
-    #fit_u2698('ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits', 'f160w_combinedmask_px010.fits', num=10,
-    #          plots=False, write_out=outname, qlims=[0.55, 1.])
-
-    # regular H-band, with dust-mask, NOT linear (10 gaussians)
-    # outname = 'ugc_2698_regH_combmask_n11_q055_mge.txt'  # n10
-    # fit_u2698('ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits', 'f160w_combinedmask_px010.fits', num=11,
-    #           plots=False, write_out=outname, qlims=[0.55, 1.])
-
-    ###
-
-    # regular H-band, with dust-mask
-    # outname = None #'ugc_2698_regH_combmask_n10_mge_04.txt'  #'ugc_2698_regH_combmask_n10_mge_06.txt'
-    # img = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits'
-    # mask = 'f160w_combinedmask_px010.fits'
-    # num = 10
-    # ql = [0.4, 1.]
-    # outname = 'ugc_2698_regH_combmask_mge.txt'
-    # fit_u2698('ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits', 'f160w_combinedmask_px010.fits', plots=False,
-    #           write_out=outname)
-
-    ###
 
     # dust-corrected H-band, without dust-mask (10 gaussians)
-    outname = 'ugc_2698_ahcorr_n10_mge_06.txt'  # None  # 'ugc_2698_ahcorr_n11_mge_04.txt'
-    ahcorr_img = 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan.fits'
-    reg_mask = 'f160w_maskedgemask_px010.fits'
-    regH_img = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits'
-    comb_mask = 'f160w_combinedmask_px010.fits'
+    base = '/Users/jonathancohn/Documents/dyn_mod/galfit_u2698/'
+    ahcorr_img = base + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan.fits'
+    reg_mask = base + 'f160w_maskedgemask_px010.fits'
+    regH_img = base + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits'
+    comb_mask = base + 'f160w_combinedmask_px010.fits'
+    psf_file = base + 'ugc2698_f160w_pxfr075_pxs010_rapid_psf_drz_sci_clipped2no0.fits'
+
+    outname = base + 'ugc_2698_ahcorr_n10_mge_06.txt'  # None  # 'ugc_2698_ahcorr_n11_mge_04.txt'
     num = 10
     ql = [0.6, 1.]
 
-    # dust-corrected H-band, without dust-mask
-    # outname = 'ugc_2698_f160w_ahcorr_mge.txt'
-    fit_u2698(ahcorr_img, reg_mask, num=10, write_out=outname, qlims=ql)
-    #fit_u2698(regH_img, comb_mask, num=10, write_out=outname, qlims=ql)
+    # fit_u2698(ahcorr_img, reg_mask, psf_file, num=num, write_out=outname, qlims=ql)
+    fit_u2698(regH_img, comb_mask, psf_file, num=num, write_out=outname, qlims=ql)
     print(oop)
 
     display_mod(galfit_out='galfit.72')
