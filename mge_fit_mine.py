@@ -21,303 +21,39 @@ from sectors_photometry_twist import sectors_photometry_twist
 from mge_print_contours_twist import mge_print_contours_twist
 
 
-def sb_prof3(smas, intens, mge_sols, qbounds=[0., 1.]):
-    # Select an x and y plot range that is the same for all plots
-    #
-    minrad = np.min(mge_sols.radius) * mge_sols.scale
-    maxrad = np.max(mge_sols.radius) * mge_sols.scale
-    mincnt = np.min(mge_sols.counts)
-    maxcnt = np.max(mge_sols.counts)
-    xran = minrad * (maxrad / minrad) ** np.array([-0.02, +1.02])
-    yran = mincnt * (maxcnt / mincnt) ** np.array([-0.05, +1.05])
-    n = mge_sols.sectors.size
-    dn = int(round(n / 6.))
-    nrows = (n - 1) // dn + 1  # integer division
-    fig, ax = plt.subplots(2, 1, sharex=True, figsize=(8, 16))
-    fig.subplots_adjust(hspace=0.01)
-    # fig.text(0.04, 0.5, 'counts', va='center', rotation='vertical')
-    # fig.text(0.96, 0.5, 'error (%)', va='center', rotation='vertical')
-    #ax[-1, 0].set_xlabel("arcsec")
-    #ax[-1, 1].set_xlabel("arcsec")
-    ax[1].set_xlabel('arcsec')
-
-    ax[0].set_xlim(0.5, 400.)  # xran
-    ax[0].set_ylim(2e-3, 3.*10**3)  # yran
-    ax[1].set_ylim(-1, 1.)
-
-    '''
-    OPTIONAL OUTPUT KEYWORDS:
-        SOL - Output keyword containing a 3xNgauss array with the
-              best-fitting solution:
-              1) sol[0,*] = TotalCounts, of the Gaussians components.
-                  The relation TotalCounts = Height*(2*!PI*Sigma**2*qObs)
-                  can be used compute the Gaussian central surface
-                  brightness (Height)
-              2) sol[1,*] = Sigma, is the dispersion of the best-fitting
-                  Gaussians in pixels.
-              3) sol[2,*] = qObs, is the observed axial ratio of the
-                  best-fitting Gaussian components.
-    '''
-    just_sols = mge_sols.sol
-    # rarray = np.logspace(-3, 3., 100)
-    total = np.zeros(shape=np.array(smas).shape)
-    for each_gauss in range(len(just_sols[0])):
-        norm = just_sols[0, each_gauss] / (just_sols[1, each_gauss]**2 * 2*np.pi*just_sols[2, each_gauss])
-        yarray = norm * np.exp(-0.5 * (smas / just_sols[1, each_gauss]) ** 2)
-        total += yarray
-        ax[0].loglog(smas, yarray, 'r--')
-    ax[0].loglog(smas, total, 'r-', label=r'MGE Fit Sectors model', linewidth=2)
-
-    ax[1].plot(smas, (intens - total) / intens, 'ko', markersize=4)
-    ax[1].axhline(y=0., color='k', ls='--')
-
-    #ax[row, 1].semilogx(r, mge_sols.err[w] * 100, 'C0o')
-    #ax[row, 1].axhline(linestyle='--', color='C1', linewidth=2)
-    #ax[row, 1].yaxis.tick_right()
-    #ax[row, 1].yaxis.set_label_position("right")
-    #ax[row, 1].set_ylim([-19.5, 20])
-
-    # plt.errorbar(isolist.sma, isolist.grad, yerr=isolist.grad_r_error, fmt='--', markersize=4)
-    ax[0].plot(smas, intens, 'b--', label='Data (from Ellipse task)', linewidth=4)
-    #plt.xlabel('Semimajor Axis Length log(pix)')
-    #plt.xscale('log')
-    ax[0].set_ylabel('Mean counts along semi-major axis')
-    ax[1].set_ylabel(r'Residual [(data - model) / data]',)
-    ax[0].legend()
-    ax[0].set_title(r'UGC 2698 surface brightness profile, qbounds=' + str(qbounds))
-    plt.show()
-    plt.clf()
-
-
-def sb_prof2(data, xctr, yctr, a0, eps, pa, mge_sols):
-    from photutils.isophote import EllipseGeometry
-    geometry = EllipseGeometry(x0=xctr, y0=yctr, sma=a0, eps=eps, pa=pa * np.pi / 180.)
-    from photutils import EllipticalAperture
-    aper = EllipticalAperture((geometry.x0, geometry.y0), geometry.sma, geometry.sma * (1 - geometry.eps), geometry.pa)
-    plt.imshow(data, origin='lower')
-    aper.plot(color='w')
-    plt.show()
-    from photutils.isophote import Ellipse
-    ellipse = Ellipse(data, geometry)
-    isolist = ellipse.fit_image()
-    print(isolist)
-    print(isolist.grad)
-    print(isolist.sma)
-    print(isolist.intens)
-
-    # Select an x and y plot range that is the same for all plots
-    #
-    minrad = np.min(mge_sols.radius) * mge_sols.scale
-    maxrad = np.max(mge_sols.radius) * mge_sols.scale
-    mincnt = np.min(mge_sols.counts)
-    maxcnt = np.max(mge_sols.counts)
-    xran = minrad * (maxrad / minrad) ** np.array([-0.02, +1.02])
-    yran = mincnt * (maxcnt / mincnt) ** np.array([-0.05, +1.05])
-    n = mge_sols.sectors.size
-    dn = int(round(n / 6.))
-    nrows = (n - 1) // dn + 1  # integer division
-    fig, ax = plt.subplots(1, 1)
-    # fig.subplots_adjust(hspace=0.01)
-    fig.text(0.04, 0.5, 'counts', va='center', rotation='vertical')
-    fig.text(0.96, 0.5, 'error (%)', va='center', rotation='vertical')
-    #ax[-1, 0].set_xlabel("arcsec")
-    #ax[-1, 1].set_xlabel("arcsec")
-    ax.set_xlabel('arcsec')
-    row = 0
-    w = np.nonzero(mge_sols.angle == mge_sols.sectors[n-1])[0]
-    w = w[np.argsort(mge_sols.radius[w])]
-    r = mge_sols.radius[w] * mge_sols.scale
-    txt = "$%.f^\circ$" % mge_sols.sectors[n-1]
-    ax.set_xlim(xran)
-    ax.set_ylim(yran)
-    ax.loglog(r, mge_sols.counts[w], 'C0o')
-    ax.loglog(r, mge_sols.yfit[w], 'C1', linewidth=2)
-    # ax.text(0.98, 0.95, txt, ha='right', va='top', transform=ax[row, 0].transAxes)
-    ax.text(0.98, 0.95, txt, ha='right', va='top', transform=ax.transAxes)
-    ax.loglog(r, mge_sols.gauss[w, :] * mge_sols.weights[None, :])
-    #ax[row, 1].semilogx(r, mge_sols.err[w] * 100, 'C0o')
-    #ax[row, 1].axhline(linestyle='--', color='C1', linewidth=2)
-    #ax[row, 1].yaxis.tick_right()
-    #ax[row, 1].yaxis.set_label_position("right")
-    #ax[row, 1].set_ylim([-19.5, 20])
-
-    plt.errorbar(isolist.sma, isolist.grad, yerr=isolist.grad_r_error, fmt='--', markersize=4)
-    #plt.xlabel('Semimajor Axis Length log(pix)')
-    #plt.xscale('log')
-    plt.ylabel('Mean intensity')
-    plt.show()
-    print(oop)
-
-
-def sb_profile(image, out_tab, a0, x0, y0, eps0, theta0):
-    # also make 1D surface brightness profiles
-    # *e.g. iraf or pyraf ellipse task
-    # BUCKET: run ellipse task on main galaxy (dust-corr) and on GALFIT output, then plot both
-    # ellipse task should show 1D surf brightness
-    import pyraf
-    from pyraf import iraf
-    from iraf import stsdas, analysis, isophote
-    from iraf import stsdas, fitting
-    #pyraf.epar(isophote.ellipse)
-    isophote.ellipse(input=image, output=out_tab)#, a0=a0, x0=x0, y0=y0, eps0=eps0, teta0=theta0)
-    # in terminal with: source activate iraf27: pyraf: stsdas: analysis: isophote: epar ellipse:
-    # # PSET geompar: x0 879.95, y0 489.99, ellip0 0.284, pa0 96.3 (-6.3), sma0 324.5
-    print(e)
-    # .c1h
-    print(e[0])
-    print(e[1])
-    print('next:')
-    #f1 = fitting.gfit1d()#input=out_tab + ' a**1/4 mag', output='outgfit1.tab')
-    #print(f1)
-    print(oop)
-    # restore.lucy(lucy_in, lucy_b, lucy_o, niter=lucy_it, maskin=lucy_mask, goodpixval=1, limchisq=1E-3)  # lucy
-    # print('lucy process done in ' + str(time.time() - t_pyraf) + 's')  # ~10.6s
-
-
-def fit_1d():
-    """
-    Usage example for mge_fit_1d().
-    This example reproduces Figure 3 in Cappellari (2002)
-    It takes <1s on a 2.5 GHz computer
-
-    """
-    n = 300  # number of sampled points
-    x = np.logspace(np.log10(0.01), np.log10(300), n)  # logarithmically spaced radii
-    y = (1 + x)**-4  # The profile must be logarithmically sampled!
-    plt.clf()
-    p = mge_fit_1d(x, y, ngauss=16, plot=True)
-    plt.show()  # allow the plot to appear in certain situations
-
-
-def fwhm_est(arr):
-    amp = np.amax(arr)
-    xctr,yctr = np.where(arr == amp)
-    xctr = xctr[0]
-    yctr = yctr[0]
-    half_max = amp / 2.  # find when function crosses line half_max (when sign of diff flips)
-    # take the 'derivative' of signum(half_max - Y[])
-    dx = np.sign(half_max - np.array(arr[xctr, 0:-1])) - np.sign(half_max - np.array(arr[xctr, 1:]))
-    dy = np.sign(half_max - np.array(arr[0:-1, yctr])) - np.sign(half_max - np.array(arr[1:, yctr]))
-    # find the left and right most indexes
-    print(dx)
-    print(dy)
-    dx_idx_l = np.where(dx > 0)[0][0]
-    dx_idx_r = np.where(dx < 0)[-1][0]
-    dy_idx_l = np.where(dy > 0)[0][0]
-    dy_idx_r = np.where(dy < 0)[-1][0]
-    return dx_idx_r - dx_idx_l, dy_idx_r - dy_idx_l  # return the differences (full width)
-
-
-def gaussian_2d(xx, amplitude, xo, yo, sigma_x, sigma_y, theta, offset):
-    x = xx[0]
-    y = xx[1]
-    xo = float(xo)
-    yo = float(yo)
-    a = (np.cos(theta)**2)/(2*sigma_x**2) + (np.sin(theta)**2)/(2*sigma_y**2)
-    b = -(np.sin(2*theta))/(4*sigma_x**2) + (np.sin(2*theta))/(4*sigma_y**2)
-    c = (np.sin(theta)**2)/(2*sigma_x**2) + (np.cos(theta)**2)/(2*sigma_y**2)
-    g = offset + amplitude*np.exp(-(a*((x-xo)**2) + 2*b*(x-xo)*(y-yo) + c*((y-yo)**2)))
-    return g.ravel()
-
-
-def gauss_function(x, a, x0, sigma):
-
-    return a*np.exp(-(x-x0)**2/(2*sigma**2))
-
-
 def fit_psf(psf_file, plotem=False):
     """
     This function fits an mge to a PSF
 
-    Mask the object before MGE fitting.
-
-    We model an HST/WFC3/F160W image of UGC 2698.
-    :return: 
+    We model the PSF of our HST/WFC3/F160W image of UGC 2698.
+    :return: the mge parameters fit to the PSF
     """
-    scale1 = 0.1     # (arcsec/pixel) PC1. This is used as scale and flux reference!
-
     hdu = fits.open(psf_file)
     psfimg = hdu[0].data
     hdu.close()
 
-    f = find_galaxy(psfimg, binning=1, fraction=0.1, level=None, nblob=1, plot=True, quiet=False)
+    f = find_galaxy(psfimg, binning=1, fraction=0.02, level=None, nblob=1, plot=plotem, quiet=False)
     if plotem:
         plt.show()
-    plt.clf()
-    # theta = 151.3, xctr = 51.37, yctr = 50.44, eps = 0.31, major axis = 28.9 pix
-    eps = 0.31
-    ang1 = 151.3
-    xc1 = 51.37
-    yc1 = 50.44
-    sma = 28.9
-
-    # sb_profile(a0=28.9, x0=51.37, y0=50.44, eps0=0.31, theta0=151.3)
+        plt.clf()
+    psf_ang1 = f.theta  # theta = 151.3, xctr = 51.37, yctr = 50.44, eps = 0.031, major axis = 28.9 pix
+    psf_xc1 = f.xmed
+    psf_yc1 = f.ymed
+    psf_eps = f.eps
 
     # sectors photometry first! Specify just want 1 sector
     plt.clf()
-    s1 = sectors_photometry(psfimg, eps, ang1, xc1, yc1, n_sectors=1, minlevel=0, mask=None, plot=1)
-    print('hi')
+    sp = sectors_photometry(psfimg, psf_eps, psf_ang1, psf_xc1, psf_yc1, n_sectors=1, minlevel=0, plot=plotem)
     if plotem:
         plt.show()  # Allow plot to appear on the screen
+        plt.clf()
 
-    plt.clf()
-    m1d = mge_fit_1d(s1.radius, s1.counts, plot=True)
-    # ngauss=ngauss,
+    m1d = mge_fit_1d(sp.radius, sp.counts, plot=plotem)
     if plotem:
         plt.show()  # Allow plot to appear on the screen
-    plt.clf()
-
-    '''  #
-    x = np.zeros(shape=psfimg.shape)
-    xctr = 51.37
-    yctr = 50.44
-    for i in range(len(x)):
-        for j in range(len(x[0])):
-            x[i, j] = np.sqrt((i-xctr)**2 + (j-yctr)**2)
-
-    x1 = np.arange(len(x))
-    x2 = np.arange(len(x[0]))
-    xx, yy = np.meshgrid(x1, x2)
-    xs = [xx, yy]
-
-    init_guess = [np.amax(psfimg), xctr, yctr, 0.9, 0.9, np.deg2rad(151.3), 0.]
-
-    popt, pcov = opt.curve_fit(gaussian_2d, xs, np.ravel(psfimg), p0=init_guess)
-    print(popt, pcov)
-    # 0.1369, 50.4615, 51.3456, 0.94123, 0.91545, 4.48e7 (equivalent to 2.831 rad = 162.2 deg), 2.59e-5
-
-    print(x.shape, psfimg.shape)
-    print(oop)
-    plt.imshow(x, origin='lower')
-    plt.colorbar()
-    plt.show()
-    # R = np.sqrt(xx**2 + xy**2)
-    # '''  #
+        plt.clf()
 
     return m1d
-
-
-def psf_2dgauss(psfimg):
-
-    # Use base cmap to create transparent
-
-    mycmap = plt.cm.Blues
-    mycmap._init()
-    mycmap._lut[:,-1] = np.linspace(0, 0.6, 259)
-
-    # Import image and get x and y extents
-    x1 = np.arange(len(psfimg))
-    x2 = np.arange(len(psfimg[0]))
-    xx, yy = np.meshgrid(x1, x2)
-
-    # Plot image and overlay colormap
-    fig, ax = plt.subplots(1, 1)
-    ax.imshow(psfimg, origin='lower', cmap=plt.cm.Reds)
-    Gauss = gaussian_2d((xx, yy), 0.1369, 50.4615, 51.2456, 0.94123, 0.91545, 4.48e7, 2.59e-5)
-    # gaussian_2d(xx, amplitude, xo, yo, sigma_x, sigma_y, theta, offset)
-    cb = ax.contourf(xx, yy, Gauss.reshape(xx.shape[0], yy.shape[1]), 15, cmap=mycmap)
-    plt.colorbar(cb)
-    plt.show()
 
 
 def fit_u2698(input_image, input_mask, psf_file, num=None, write_out=None, plots=False, qlims=None):
@@ -334,8 +70,8 @@ def fit_u2698(input_image, input_mask, psf_file, num=None, write_out=None, plots
 
     hdu = fits.open(input_image)
     img1 = hdu[0].data
-    hdrn = hdu[0].header
-    img1 -= 0.37  # subtract sky
+    img1 -= 0.37  # subtract sky  # BUCKET SAVE NEW VERSIONS OF IMGS WITH SKY SUBTRACTED OR PUT SKY COMPONENT IN GALFIT
+    # NOTE: both ahcorr and regH images have the same flux values
     hdu.close()
 
     hdu = fits.open(input_mask)
@@ -347,18 +83,19 @@ def fit_u2698(input_image, input_mask, psf_file, num=None, write_out=None, plots
     maskimg[maskimg < 0] = True
     maskimg = maskimg.astype(bool)
 
-    test_img = img1 * maskimg
+    test_img1 = img1 * maskimg
 
     # The geometric parameters below were obtained using my FIND_GALAXY program
-    f = find_galaxy(test_img, binning=5, fraction=0.2, level=None, nblob=1, plot=plots, quiet=False)
+    f = find_galaxy(img1, binning=1, fraction=0.01, level=None, nblob=1, plot=plots, quiet=False)
     if plots:
         plt.show()
-    plt.clf()
+        plt.clf()
     ang1 = f.theta
     xc1 = f.xmed
     yc1 = f.ymed
     eps = f.eps
-    sma = f.majoraxis
+    print(xc1, yc1)  # testimg: (491.58373124948986, 879.84644288856066); img1: (491.35568183143056, 879.92930964133632)
+    #print(oop)
     # ahcorr, binning=1, fraction=0.05: 490.40 880.37, theta=98.0, eps=0.304
     # ahcorr, binning=3, fraction=0.05: 490.39 880.37, theta=97.9, eps=0.305
     # ahcorr, binning=5, fraction=0.05: 490.38 880.38, theta=98.0, eps=0.305
@@ -383,10 +120,10 @@ def fit_u2698(input_image, input_mask, psf_file, num=None, write_out=None, plots
     # xc1 = 491.1538
     # yc1 = 880.6390
 
-    plt.clf()
     s1 = sectors_photometry(img1, eps, ang1, xc1, yc1, minlevel=0, mask=maskimg, plot=plots)
     if plots:
         plt.show()  # Allow plot to appear on the screen
+        plt.clf()
 
     radius = s1.radius
     angle = s1.angle
@@ -395,11 +132,9 @@ def fit_u2698(input_image, input_mask, psf_file, num=None, write_out=None, plots
     # The PSF needs to be the one for the high-resolution image used in the centre.
     # Here this is the WFC3/F160W image (we use a Gaussian PSF for simplicity)
     m_psf = fit_psf(psf_file)
-    print(m_psf.sol)
     sigma_psf = m_psf.sol[1]
     norm_psf = m_psf.sol[0] / np.sum(m_psf.sol[0])
-    print(norm_psf)
-    print(np.sum(norm_psf))
+    print(norm_psf, np.sum(norm_psf))
 
     # Do the actual MGE fit
     # *********************** IMPORTANT ***********************************
@@ -408,7 +143,6 @@ def fit_u2698(input_image, input_mask, psf_file, num=None, write_out=None, plots
     # at the top of this file and re-run the procedure.
     # See the documentation of mge_fit_sectors_regularized for details.
     # *********************************************************************
-    plt.clf()
     if num is None:
         m = mge_fit_sectors(radius, angle, counts, eps, sigmapsf=sigma_psf, normpsf=norm_psf, scale=scale1, plot=plots,
                             linear=True, qbounds=qlims, ngauss=num)
@@ -418,9 +152,9 @@ def fit_u2698(input_image, input_mask, psf_file, num=None, write_out=None, plots
     print(m.sol)
     if plots:
         plt.show()  # Allow plot to appear on the screen
+        plt.clf()
 
     # Plot MGE contours of the HST image
-    plt.clf()
     mge_print_contours(img1, ang1, xc1, yc1, m.sol, scale=scale1, binning=1, sigmapsf=sigma_psf, normpsf=norm_psf)
     # magrange=9
     plt.show()
@@ -429,9 +163,10 @@ def fit_u2698(input_image, input_mask, psf_file, num=None, write_out=None, plots
         outname = write_out
         with open(outname, 'w+') as o:
             o.write('# UGC 2698 MGE using mge_fit_mine.py\n')
-            o.write('# Counts Sigma_pix qObs\n')
+            o.write('# Counts Sigma_pix qObs xc yc ang\n')
             for j in range(len(m.sol[0])):
-                o.write(str(m.sol[0][j]) + ' ' + str(m.sol[1][j]) + ' ' + str(m.sol[2][j]) + '\n')
+                o.write(str(m.sol[0][j]) + ' ' + str(m.sol[1][j]) + ' ' + str(m.sol[2][j]) + ' ' + str(xc1) + ' ' +
+                        str(yc1) + ' ' + str(ang1) + '\n')
         print('written!')
 
 
@@ -593,15 +328,25 @@ if __name__ == '__main__':
     comb_mask = base + 'f160w_combinedmask_px010.fits'
     psf_file = base + 'ugc2698_f160w_pxfr075_pxs010_rapid_psf_drz_sci_clipped2no0.fits'
 
-    outname = base + 'ugc_2698_ahcorr_n10_mge_06.txt'  # None  # 'ugc_2698_ahcorr_n11_mge_04.txt'
+    out_ah = base + 'ugc_2698_ahcorr_n10_mge_06_psff002.txt'  # None  # 'ugc_2698_ahcorr_n11_mge_04.txt'
+    out_ah4 = base + 'ugc_2698_ahcorr_n10_mge_04_psff002.txt'
+    out_rh = base + 'ugc_2698_regH_n10_mge_06_psff002.txt'
+    out_rh4 = base + 'ugc_2698_regH_n10_mge_04_psff002.txt'
     num = 10
     ql = [0.6, 1.]
+    ql4 = [0.4, 1.]
 
-    # fit_u2698(ahcorr_img, reg_mask, psf_file, num=num, write_out=outname, qlims=ql)
-    fit_u2698(regH_img, comb_mask, psf_file, num=num, write_out=outname, qlims=ql)
+    fit_u2698(ahcorr_img, reg_mask, psf_file, num=num, write_out=out_ah4, qlims=ql4, plots=True)
+    fit_u2698(ahcorr_img, reg_mask, psf_file, num=num, write_out=out_ah, qlims=ql, plots=True)
+    fit_u2698(regH_img, comb_mask, psf_file, num=num, write_out=out_rh4, qlims=ql4, plots=True)
+    fit_u2698(regH_img, comb_mask, psf_file, num=num, write_out=out_rh, qlims=ql, plots=True)
     print(oop)
 
     display_mod(galfit_out='galfit.72')
+    # IMPORTANT NOTE: m_Vega zeropoint for F160W = m_AB - 1.39 = 25.95 - 1.39 = 24.56 (F160W~H?)
+    # http://www.astronomy.ohio-state.edu/~martini/usefuldata.html (conversion AB-Vega)
+    # https://hst-docs.stsci.edu/display/WFC3IHB/9.3+Calculating+Sensitivities+from+Tabulated+Data (F160W AB zeropoint)
+    # https://github.tamu.edu/joncohn/gas-dynamical-modeling/wiki/Week-of-2019-12-09 (did this on this page)
     # regH: 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits'
     # dust mask: 'f160w_combinedmask_px010.fits'
     # ahcorr: 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan.fits'
