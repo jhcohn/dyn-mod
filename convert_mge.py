@@ -109,30 +109,36 @@ def paper_to_galfit(table_file, mag_sol=3.32, pix_scale=0.06, t_exp=1354.46, zp=
             new_g.write(' Z) 0                      #  Skip this model in output image?  (yes=1, no=0)\n')
 
 
-def mge_to_galfit(mge_file, zeropoint, xctr=None, yctr=None, pa=-7.5697, img=None, mask=None, copy_file=None,
-                  galfit_out=None, write_new=None, new_galfit=None, constraint=None):
+def mge_to_galfit(mge_file, zeropoint, img=None, mask=None, copy_file=None, galfit_out=None, write_new=None,
+                  new_galfit=None, constraint=None):  # pa=-7.5697
 
     mags = []
     fwhms = []
     qs = []
+    xs = []
+    ys = []
     pas = []
+
 
     with open(mge_file, 'r') as f:
         for line in f:
             cols = line.split()
             if not line.startswith('#'):
                 mags.append(zeropoint - 2.5 * np.log10(float(cols[0])))
-                fwhms.append(2 * np.sqrt(2 * np.log(2.)) * float(cols[1]))
-                # https://en.wikipedia.org/wiki/Full_width_at_half_maximum
+                fwhms.append(2 * np.sqrt(2 * np.log(2.)) * float(cols[1]))  # FWHM =~ 2.355 sigma
                 qs.append(float(cols[2]))
-                if len(cols) > 3:
-                    pas.append(float(cols[3]))
+                xs.append(float(cols[3]))
+                ys.append(float(cols[4]))
+                pas.append(90. - float(cols[5]))
+                # MGE find_galaxy: Position angle measured clock-wise from the image X axis
+                # GALFIT: PA = 0 if the semi-major axis is parallel to the Y-axis, and increases counter-clockwise
 
     if write_new is not None:
         with open(write_new, 'w+') as newfile:
-            newfile.write('# Mags FWHM_pixels qObs\n')  # PAs
+            newfile.write('# Mags FWHM_pixels qObs xc yc pa\n')  # PAs
             for i in range(len(mags)):
-                newfile.write(str(mags[i]) + ' ' + str(fwhms[i]) + ' ' + str(qs[i]) + '\n')  # ' ' + str(pas[i]) +
+                newfile.write(str(mags[i]) + ' ' + str(fwhms[i]) + ' ' + str(qs[i]) + ' ' + str(xs[i]) + ' ' +
+                              str(ys[i]) + ' ' + str(pas[i]) + '\n')  # ' ' + str(pas[i]) +
 
     print(len(mags))
     with open(new_galfit, 'w+') as new_g:
@@ -141,15 +147,17 @@ def mge_to_galfit(mge_file, zeropoint, xctr=None, yctr=None, pa=-7.5697, img=Non
                 wline = line
                 if not line.startswith('# Component number: '):
                     if img is not None and line.startswith('A)'):
-                        wline = 'A) '  + img + '      # Input data image (FITS file)' + '\n'
+                        wline = 'A) '  + img + '      # Input data image (FITS file)\n'
                     elif line.startswith('B)'):
-                        wline = 'B) '  + galfit_out + '      # Output data image block' + '\n'
+                        wline = 'B) '  + galfit_out + '      # Output data image block\n'
                     elif mask is not None and line.startswith('F)'):
-                        wline = 'F) '  + mask + '      # Bad pixel mask (FITS image or ASCII coord list)' + '\n'
+                        wline = 'F) '  + mask + '      # Bad pixel mask (FITS image or ASCII coord list)\n'
                     elif constraint is not None and line.startswith('G)'):
-                        wline = 'G) '  + constraint + '      # File with parameter constraints (ASCII file)' + '\n'
-                    elif line.startswith('H)') or line.startswith('I)') or line.startswith('J)') or \
-                            line.startswith('K)') or line.startswith('O)') or line.startswith('P)'):
+                        wline = 'G) '  + constraint + '      # File with parameter constraints (ASCII file)\n'
+                    elif line.startswith('J)'):
+                        wline = 'J) ' + str(zeropoint) + '              # Magnitude photometric zeropoint \n'
+                    elif line.startswith('H)') or line.startswith('I)') or line.startswith('K)') or \
+                            line.startswith('O)') or line.startswith('P)'):
                         wline = line
                         # line += '\n'
                     new_g.write(wline)
@@ -160,7 +168,7 @@ def mge_to_galfit(mge_file, zeropoint, xctr=None, yctr=None, pa=-7.5697, img=Non
             new_g.write('\n')
             new_g.write('# Component number: ' + str(i+1) + '\n')
             new_g.write(' 0) gaussian               #  Component type\n')
-            new_g.write(' 1) ' + str(xctr) + ' '  + str(yctr) + ' 2 2  #  Position x, y\n')
+            new_g.write(' 1) ' + str(xs[i]) + ' '  + str(ys[i]) + ' 2 2  #  Position x, y\n')
             new_g.write(' 3) ' + str(mags[i]) + ' 1 # Integrated magnitude\n')
             new_g.write(' 4) ' + str(fwhms[i]) + ' 1 # FWHM [pix]\n')
             new_g.write(' 5) 0.0000      0          #     ----- \n')
@@ -168,7 +176,7 @@ def mge_to_galfit(mge_file, zeropoint, xctr=None, yctr=None, pa=-7.5697, img=Non
             new_g.write(' 7) 0.0000      0          #     ----- \n')
             new_g.write(' 8) 0.0000      0          #     ----- \n')
             new_g.write(' 9) ' + str(qs[i]) + ' 1 # Axis ratio (b/a)\n')
-            new_g.write('10) ' + str(pa) + '     2          #  Position angle (PA) [deg: Up=0, Left=90]\n')
+            new_g.write('10) ' + str(pas[i]) + '     2          #  Position angle (PA) [deg: Up=0, Left=90]\n')
             new_g.write(' Z) 0                      #  Skip this model in output image?  (yes=1, no=0)\n')
 
     return mags, fwhms, qs, pas
@@ -360,8 +368,8 @@ if __name__ == "__main__":
             gf + 'ugc_2698_regH_n10_constraintfile_06_psff002.txt',
             gf + 'ugc_2698_regH_n10_constraintfile_04_psff002.txt']
     # IMGs
-    regH = gf + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits'
-    ahcorr = gf + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan.fits'
+    regH = gf + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0_skysub.fits'
+    ahcorr = gf + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_skysub.fits'
     imgs = [ahcorr, ahcorr, regH, regH]
     # Masks
     comb_mask = gf + 'f160w_combinedmask_px010.fits'
@@ -371,10 +379,10 @@ if __name__ == "__main__":
     galfit_outs = [gf + 'galfit_ahcorr_n10_06_psff002_zp24.fits', gf + 'galfit_ahcorr_n10_04_psff002_zp24.fits',
                    gf + 'galfit_regH_n10_06_psff002_zp24.fits', gf + 'galfit_regH_n10_04_psff002_zp24.fits']
     # New converted MGE text files
-    mge_convs = [base + 'conv_u2698_ahcorr_n10_mge_06_psff002.txt', base + 'conv_u2698_ahcorr_n10_mge_04_psff002.txt',
-                 base + 'conv_u2698_regH_n10_mge_06_psff002.txt', base + 'conv_u2698_regH_n10_mge_04_psff002.txt']
-    # New GALFIT run files!
-    galfit_runs = [gf + 'galfit_params_u2698_ahcorr_n10_06_zp24.txt', gf + 'galfit_params_u2698_ahcorr_n10_04_zp24.txt',
+    mge_convs = [gf + 'conv_u2698_ahcorr_n10_mge_06_psff002.txt', gf + 'conv_u2698_ahcorr_n10_mge_04_psff002.txt',
+                 gf + 'conv_u2698_regH_n10_mge_06_psff002.txt', gf + 'conv_u2698_regH_n10_mge_04_psff002.txt']
+    # New GALFIT param files!
+    galfit_pars = [gf + 'galfit_params_u2698_ahcorr_n10_06_zp24.txt', gf + 'galfit_params_u2698_ahcorr_n10_04_zp24.txt',
                    gf + 'galfit_params_u2698_regH_n10_06_zp24.txt', gf + 'galfit_params_u2698_regH_n10_04_zp24.txt']
     # Copy file (galfit file of which I'm copying the structure)
     copyf = gf + 'galfit_params_mge_055_zp25.txt'
@@ -382,7 +390,7 @@ if __name__ == "__main__":
     for c in range(len(cons)):
         write_constraintfile(output=cons[c], q_lo=q_los[c], num=nums[c])
         cv = mge_to_galfit(mges[c], zp, img=imgs[c], mask=masks[c], constraint=cons[c], copy_file=copyf,
-                           galfit_out=galfit_outs[c], write_new=mge_convs[c], new_galfit=galfit_runs[c])
+                           galfit_out=galfit_outs[c], write_new=mge_convs[c], new_galfit=galfit_pars[c])
 
     print(oop)
 
