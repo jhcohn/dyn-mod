@@ -32,17 +32,16 @@ def fit_psf(psf_file, plotem=False):
     psfimg = hdu[0].data
     hdu.close()
 
-    f = find_galaxy(psfimg, binning=1, fraction=0.02, level=None, nblob=1, plot=plotem, quiet=False)
+    f_p = find_galaxy(psfimg, binning=1, fraction=0.02, level=None, nblob=1, plot=plotem, quiet=False)
     if plotem:
         plt.show()
         plt.clf()
-    psf_ang1 = f.theta  # theta = 151.3, xctr = 51.37, yctr = 50.44, eps = 0.031, major axis = 28.9 pix
-    psf_xc1 = f.xmed
-    psf_yc1 = f.ymed
-    psf_eps = f.eps
+    psf_ang1 = f_p.theta  # theta = 151.3, xctr = 51.37, yctr = 50.44, eps = 0.031, major axis = 28.9 pix
+    psf_xc1 = f_p.xmed
+    psf_yc1 = f_p.ymed
+    psf_eps = f_p.eps
 
     # sectors photometry first! Specify just want 1 sector
-    plt.clf()
     sp = sectors_photometry(psfimg, psf_eps, psf_ang1, psf_xc1, psf_yc1, n_sectors=1, minlevel=0, plot=plotem)
     if plotem:
         plt.show()  # Allow plot to appear on the screen
@@ -56,7 +55,8 @@ def fit_psf(psf_file, plotem=False):
     return m1d
 
 
-def fit_u2698(input_image, input_mask, psf_file, num=None, write_out=None, plots=False, qlims=None):
+def fit_u2698(input_image, input_mask, psf_file, pfrac=0.01, num=None, write_out=None, plots=False, qlims=None,
+              cps=True, sky=0.37):
     """
     This function fits an mge to UGC 2698
 
@@ -64,13 +64,14 @@ def fit_u2698(input_image, input_mask, psf_file, num=None, write_out=None, plots
 
     We model an HST/WFC3/F160W image of UGC 2698.
 
+    cps: if input_image is in units of counts per second, set cps=True; else if in counts, set cps=False
     """
 
     scale1 = 0.1     # (arcsec/pixel) PC1. This is used as scale and flux reference!
 
     hdu = fits.open(input_image)
     img1 = hdu[0].data
-    img1 -= 0.37  # subtract sky  # BUCKET SAVE NEW VERSIONS OF IMGS WITH SKY SUBTRACTED OR PUT SKY COMPONENT IN GALFIT
+    img1 -= sky  # subtract sky  # NOTE: ALSO SAVED NEW VERSIONS OF IMGS WITH SKY SUBTRACTED FOR USE IN GALFIT
     # NOTE: both ahcorr and regH images have the same flux values
     hdu.close()
 
@@ -86,7 +87,7 @@ def fit_u2698(input_image, input_mask, psf_file, num=None, write_out=None, plots
     test_img1 = img1 * maskimg
 
     # The geometric parameters below were obtained using my FIND_GALAXY program
-    f = find_galaxy(img1, binning=1, fraction=0.01, level=None, nblob=1, plot=plots, quiet=False)
+    f = find_galaxy(img1, binning=1, fraction=pfrac, level=None, nblob=1, plot=plots, quiet=False)
     if plots:
         plt.show()
         plt.clf()
@@ -94,33 +95,9 @@ def fit_u2698(input_image, input_mask, psf_file, num=None, write_out=None, plots
     xc1 = f.xmed
     yc1 = f.ymed
     eps = f.eps
-    print(xc1, yc1)  # testimg: (491.58373124948986, 879.84644288856066); img1: (491.35568183143056, 879.92930964133632)
-    #print(oop)
-    # ahcorr, binning=1, fraction=0.05: 490.40 880.37, theta=98.0, eps=0.304
-    # ahcorr, binning=3, fraction=0.05: 490.39 880.37, theta=97.9, eps=0.305
-    # ahcorr, binning=5, fraction=0.05: 490.38 880.38, theta=98.0, eps=0.305
-    # ahcorr, binning=1, fraction=0.1: 489.99 879.95, theta=96.3, eps=0.284
-    # ahcorr, binning=3, fraction=0.1: 490.00 879.91, theta=96.2, eps=0.284
-    # ahcorr, binning=5, fraction=0.1: 489.99 879.93, theta=96.2, eps=0.284
-    # ahcorr, binning=1, fraction=0.2: 487.69 878.85, theta=91.4, eps=0.251
-    # ahcorr, binning=3, fraction=0.2: 487.53 878.84, theta=91.2, eps=0.249
-    # ahcorr, binning=5, fraction=0.2: 487.52 878.88, theta=91.2, eps=0.249
+    print(xc1, yc1, ang1, eps)
 
-    # regH, binning=1, fraction=0.05: 490.34 880.47, theta=98.0, eps=0.304
-    # regH, binning=3, fraction=0.05: 490.33 880.47, theta=97.9, eps=0.305
-    # regH, binning=5, fraction=0.05: 490.32 880.49, theta=98.0, eps=0.305
-    # regH, binning=1, fraction=0.1: 489.92 880.01, theta=96.3, eps=0.284
-    # regH, binning=3, fraction=0.1: 489.93 879.97, theta=96.2, eps=0.284
-    # regH, binning=5, fraction=0.1: 489.92 880.00, theta=96.2, eps=0.284
-    # regH, binning=1, fraction=0.1: 487.52 878.86, theta=91.4, eps=0.251
-    # regH, binning=3, fraction=0.1: 487.35 878.86, theta=91.2, eps=0.249
-    # regH, binning=5, fraction=0.1: 487.34 878.90, theta=91.2, eps=0.248
-
-    # WHERE DID THESE COME FROM -- from Nuker profile fits in GALFIT? Or?
-    # xc1 = 491.1538
-    # yc1 = 880.6390
-
-    s1 = sectors_photometry(img1, eps, ang1, xc1, yc1, minlevel=0, mask=maskimg, plot=plots)
+    s1 = sectors_photometry(img1, eps, ang1, xc1, yc1, minlevel=0, mask=maskimg, plot=plots)  # sky subtr, so minlevel=0
     if plots:
         plt.show()  # Allow plot to appear on the screen
         plt.clf()
@@ -129,8 +106,7 @@ def fit_u2698(input_image, input_mask, psf_file, num=None, write_out=None, plots
     angle = s1.angle
     counts = s1.counts
 
-    # The PSF needs to be the one for the high-resolution image used in the centre.
-    # Here this is the WFC3/F160W image (we use a Gaussian PSF for simplicity)
+    # PSF for the WFC3/F160W image (we use a Gaussian PSF for simplicity)
     m_psf = fit_psf(psf_file)
     sigma_psf = m_psf.sol[1]
     norm_psf = m_psf.sol[0] / np.sum(m_psf.sol[0])
@@ -163,7 +139,11 @@ def fit_u2698(input_image, input_mask, psf_file, num=None, write_out=None, plots
         outname = write_out
         with open(outname, 'w+') as o:
             o.write('# UGC 2698 MGE using mge_fit_mine.py\n')
-            o.write('# Counts Sigma_pix qObs xc yc ang\n')
+            o.write('# ang = find_galaxy.theta: "Position angle measured clock-wise from the image X axis"\n')
+            cs = 'Counts'
+            if cps:
+                cs = 'Counts_per_sec'
+            o.write('# ' + cs + ' Sigma_pix qObs xc yc ang\n')
             for j in range(len(m.sol[0])):
                 o.write(str(m.sol[0][j]) + ' ' + str(m.sol[1][j]) + ' ' + str(m.sol[2][j]) + ' ' + str(xc1) + ' ' +
                         str(yc1) + ' ' + str(ang1) + '\n')
@@ -226,7 +206,7 @@ def display_mod(galfit_out=None):
     test_img = img1 * maskimg
 
     # The geometric parameters below were obtained using my FIND_GALAXY program
-    f = find_galaxy(test_img, binning=1, fraction=0.1, level=None, nblob=1, plot=True, quiet=False)
+    f = find_galaxy(img1, binning=1, fraction=0.1, level=None, nblob=1, plot=True, quiet=False)
     plt.show()
     '''
     # USING AHCORR (DUST-CORRECTED H-BAND), REGULAR MASK (and binning=1, fraction=0.1)
@@ -320,27 +300,130 @@ if __name__ == '__main__':
 
     print("\nFitting UGC 2698-----------------------------------\n")
 
-    # dust-corrected H-band, without dust-mask (10 gaussians)
     base = '/Users/jonathancohn/Documents/dyn_mod/galfit_u2698/'
-    ahcorr_img = base + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan.fits'
+    ahcorr_cps = base + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_cps.fits'
+    ahcorr_counts = base + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_counts.fits'
     reg_mask = base + 'f160w_maskedgemask_px010.fits'
-    regH_img = base + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits'
+    regH_img = base + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_nonan_cps.fits'
+    regH_counts = base + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_nonan_counts.fits'
     comb_mask = base + 'f160w_combinedmask_px010.fits'
     psf_file = base + 'ugc2698_f160w_pxfr075_pxs010_rapid_psf_drz_sci_clipped2no0.fits'
 
-    out_ah = base + 'ugc_2698_ahcorr_n10_mge_06_psff002.txt'  # None  # 'ugc_2698_ahcorr_n11_mge_04.txt'
-    out_ah4 = base + 'ugc_2698_ahcorr_n10_mge_04_psff002.txt'
-    out_rh = base + 'ugc_2698_regH_n10_mge_06_psff002.txt'
-    out_rh4 = base + 'ugc_2698_regH_n10_mge_04_psff002.txt'
-    num = 10
-    ql = [0.6, 1.]
-    ql4 = [0.4, 1.]
+    out_ah5 = base + 'mge_ugc_2698_ahcorr_n10_05_pf001_cps.txt'
+    out_ah6 = base + 'mge_ugc_2698_ahcorr_n10_06_pf001_cps.txt'  # None  # 'ugc_2698_ahcorr_n11_mge_04.txt'
+    out_ah4 = base + 'ugc_2698_ahcorr_n9_mge_04_psff002.txt'
+    out_rh6 = base + 'ugc_2698_regH_n9_mge_06_psff002.txt'
+    out_rh4 = base + 'ugc_2698_regH_n9_mge_04_psff002.txt'
+    out_ah = base + 'mge_ugc_2698_ahcorr_n10_pf001_cps.txt'
+    out_rh = base + 'mge_ugc_2698_regH_n10_pf001_cps.txt'
+    out_ahcounts = base + 'mge_ugc_2698_ahcorr_linear_pf001_counts.txt'  # mge_ugc_2698_ahcorr_n10_pf001_counts
+    out_rhcounts = base + 'mge_ugc_2698_regH_linear_pf001_counts.txt'
+    out_rhcps = base + 'mge_ugc_2698_regH_linear_pf001_cps.txt'
 
-    fit_u2698(ahcorr_img, reg_mask, psf_file, num=num, write_out=out_ah4, qlims=ql4, plots=True)
-    fit_u2698(ahcorr_img, reg_mask, psf_file, num=num, write_out=out_ah, qlims=ql, plots=True)
-    fit_u2698(regH_img, comb_mask, psf_file, num=num, write_out=out_rh4, qlims=ql4, plots=True)
-    fit_u2698(regH_img, comb_mask, psf_file, num=num, write_out=out_rh, qlims=ql, plots=True)
+    sky_counts = 339.493665331
+    rms_counts = 21.5123034564
+    sky_cps = 0.37709936
+    rms_cps = 0.0239433389818
+    num = None  # 10
+    ql6 = [0.6, 1.]
+    ql5 = [0.5, 1.]
+    ql4 = [0.4, 1.]
+    pf = 0.01
+
+    fit_u2698(regH_counts, comb_mask, psf_file, pfrac=pf, num=num, write_out=out_rhcounts, qlims=None, plots=True,
+              cps=False, sky=sky_counts)
     print(oop)
+    fit_u2698(regH_img, comb_mask, psf_file, pfrac=pf, num=num, write_out=out_rhcps, qlims=None, plots=True,
+              cps=True, sky=sky_cps)
+    print(oop)
+    fit_u2698(ahcorr_counts, reg_mask, psf_file, pfrac=pf, num=num, write_out=out_ahcounts, qlims=None, plots=True,
+              cps=False, sky=sky_counts)  # 338.8114
+    print(oop)
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=pf, num=num, write_out=out_ah5, qlims=ql5, plots=True)
+    fit_u2698(regH_img, comb_mask, psf_file, pfrac=pf, num=num, write_out=out_rh, qlims=None, plots=True)
+    print(oop)
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=pf, num=num, write_out=out_ah, qlims=None, plots=True)
+    fit_u2698(regH_img, comb_mask, psf_file, pfrac=pf, num=num, write_out=out_rh, qlims=None, plots=True)
+    print(oop)
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.02, num=num, write_out=None, qlims=ql5, plots=False)
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.03, num=num, write_out=None, qlims=ql5, plots=False)
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.04, num=num, write_out=None, qlims=ql5, plots=False)
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.05, num=num, write_out=None, qlims=ql5, plots=False)
+    print(oop)
+    fit_u2698(ahcorr_img, reg_mask, psf_file, num=num, write_out=out_ah4, qlims=ql4, plots=True)
+    fit_u2698(ahcorr_img, reg_mask, psf_file, num=num, write_out=out_ah6, qlims=ql6, plots=True)
+    fit_u2698(regH_img, comb_mask, psf_file, num=num, write_out=out_rh4, qlims=ql4, plots=True)
+    fit_u2698(regH_img, comb_mask, psf_file, num=num, write_out=out_rh6, qlims=ql6, plots=True)
+    print(oop)
+    '''  #
+    IMG1
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.05, num=num, write_out=None, qlims=ql5, plots=False)
+    # 491.4505251361511, 879.66976803463479 (a bit shifted; probably should be ~880-881)
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.03, num=num, write_out=None, qlims=ql5, plots=False)
+    # 491.36437904527077, 879.9134055002786 (a bit shifted, but better than above)
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.01, num=num, write_out=None, qlims=ql5, plots=False)
+    # 491.36437904527077, 879.9134055002786 (a bit shifted,same as above)
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.0075, num=num, write_out=None, qlims=ql5, plots=False)
+    # 491.36437904527077, 879.9134055002786 (same as above)
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.005, num=num, write_out=None, qlims=ql5, plots=False)
+    # 491.4431968696681, 879.9734944374386 (a bit better)
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.0025, num=num, write_out=None, qlims=ql5, plots=False)
+    # 491.44627677000807, 879.95515611820576 (a tiny bit worse)
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.002, num=num, write_out=None, qlims=ql5, plots=False)
+    # 491.45790454942824, 879.95950711328237
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.0015, num=num, write_out=None, qlims=ql5, plots=False)
+    # 491.48646540287677, 879.99319790554887
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.001, num=num, write_out=None, qlims=ql5, plots=False)
+    # 811.45635993532062, 1179.050969939296 HORRIBLE!
+    
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.01, num=num, write_out=None, qlims=ql5, plots=False)
+    #491.355681831 879.929309641
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.02, num=num, write_out=None, qlims=ql5, plots=False)
+    #491.382178879 879.988405578
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.03, num=num, write_out=None, qlims=ql5, plots=False)
+    #491.364379045 879.9134055
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.04, num=num, write_out=None, qlims=ql5, plots=False)
+    #491.429928147 879.648566635
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.05, num=num, write_out=None, qlims=ql5, plots=False)
+    #491.450525136 879.669768035
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.06, num=num, write_out=None, qlims=ql5, plots=False)
+    #491.540395065 879.730832415
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.07, num=num, write_out=None, qlims=ql5, plots=False)
+    #491.497614815 879.821165695
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.08, num=num, write_out=None, qlims=ql5, plots=False)
+    #683.090132296 1058.50026125
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.09, num=num, write_out=None, qlims=ql5, plots=False)
+    #681.794088312 1057.28524263
+    
+    TESTIMG
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.001, num=num, write_out=None, qlims=ql5, plots=False)
+    #491.4500028 879.952142988
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.002, num=num, write_out=None, qlims=ql5, plots=False)
+    #491.437416947 879.972154554
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.003, num=num, write_out=None, qlims=ql5, plots=False)
+    #491.497414716 879.932725165
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.004, num=num, write_out=None, qlims=ql5, plots=False)
+    #491.489475065 879.961478177
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.005, num=num, write_out=None, qlims=ql5, plots=False)
+    #491.496320619 879.953463891
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.006, num=num, write_out=None, qlims=ql5, plots=False)
+    #491.391923676 879.931646223
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.007, num=num, write_out=None, qlims=ql5, plots=False)
+    #491.418584102 879.932159354
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.008, num=num, write_out=None, qlims=ql5, plots=False)
+    #491.545252285 879.951583076
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.009, num=num, write_out=None, qlims=ql5, plots=False)
+    #491.607532648 879.883632699
+    # '''  #
+
+
+    '''  #
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.01, num=num, write_out=None, qlims=ql6, plots=True)
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.02, num=num, write_out=None, qlims=ql6, plots=True)
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.03, num=num, write_out=None, qlims=ql6, plots=True)
+    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.04, num=num, write_out=None, qlims=ql6, plots=True)
+    print(oop)
+    # '''  #
 
     display_mod(galfit_out='galfit.72')
     # IMPORTANT NOTE: m_Vega zeropoint for F160W = m_AB - 1.39 = 25.95 - 1.39 = 24.56 (F160W~H?)
@@ -358,191 +441,5 @@ if __name__ == '__main__':
     print(oop)
 
     fit_u2698(img, mask, write_out=outname, num=num, qlims=ql)
-
-'''
-############################################
-  Total_Counts  Sigma_Pixels      qObs
-############################################
-      9342.36      1.82213            1
-      1999.81      2.72397            1
-        12111      5.01764            1
-      30723.2      7.44695     0.605945
-      68232.8      12.5351     0.769006
-      93288.7      25.0499     0.753742
-      99019.7      54.1949     0.663729
-       162588      88.9077     0.707725
-       166389      174.463     0.733191
-       196010      505.144     0.785429
-
-
-
-  Total_Counts  Sigma_Pixels      qObs
-############################################
-      9104.31      1.80429            1
-      1994.43      2.73585            1
-      10603.9      4.69608            1
-      30319.6       7.4939     0.602674
-      23105.5       10.078     0.827892
-      53889.6      14.1119     0.745498
-      90717.1      25.9335     0.761944
-      83508.1      55.3055     0.630831
-       153750      81.6541      0.73941
-      33830.9       147.68            1
-      12248.8      164.898     0.404042
-       129416      168.936     0.684078
-      36981.4      294.837            1
-         3191      558.949     0.184736
-       172209      558.949     0.738044
-++++++++++++++++++++++++++++++++++++++++++++
-
-
-############################################
-  Total_Counts  Sigma_Pixels      qObs
-############################################
-      1062.94      1.83785     0.702801
-      9605.44      2.55936     0.704422
-      37898.2      5.63516      0.70118
-      1735.33      7.69404     0.191735
-      45599.8      10.3421     0.760172
-      43784.9      15.1333     0.748806
-      88172.8      26.0086     0.764245
-        82879      55.0517     0.630104
-       154973      81.6569     0.738075
-      34088.9      147.728            1
-      11501.7      167.444      0.39655
-       129631      168.857      0.68322
-        37018      294.871            1
-      3153.37      558.949     0.184362
-       172182      558.949     0.738117
-++++++++++++++++++++++++++++++++++++++++++++
-
-
-# BELOW: using better 2D-gaussian-based PSF and not using the dust mask
-############################################
-  Total_Counts  Sigma_Pixels      qObs
-############################################
-      1157.91      1.82863     0.701628
-      9430.11      2.54726     0.702732
-        37000      5.58782     0.700525
-      1742.02      7.66752     0.189333
-      31953.1      9.78372     0.751368
-      34462.8      12.6929      0.76841
-      26868.4      16.8582     0.735097
-      85918.2      26.2533     0.766337
-      80699.6      55.1753     0.625563
-       155313      81.1197     0.739494
-      30804.3      147.723            1
-      14434.3      166.975     0.415181
-       130802      167.728     0.694388
-      37233.6      294.281            1
-      3351.58      558.949      0.18673
-       172155      558.949     0.738193
-++++++++++++++++++++++++++++++++++++++++++++
-
-
-# MGE FIT 1D FOR PSF:
-############################################
- Computation time: 0.08 seconds
-  Total Iterations:  8
-Nonzero Gaussians:  8
- Unused Gaussians:  7
- Chi2: 1.192 
- STDEV: 0.1606
- MEANABSDEV: 0.09709
-############################################
- Total_Counts      Sigma
-############################################
-     0.146607     0.679721
-     0.162065      1.36287
-  0.000591738      3.27422
-   0.00519833       4.2905
-   0.00183743      6.95761
-   0.00111433      10.4357
-   0.00021939      19.0168
-  0.000112128      38.3946
-############################################
-look
-[[1.46607120e-01 1.62064550e-01 5.91737513e-04 5.19833186e-03
-  1.83743233e-03 1.11433121e-03 2.19389570e-04 1.12127639e-04]
- [6.79720513e-01 1.36287440e+00 3.27422206e+00 4.29049532e+00
-  6.95760865e+00 1.04357095e+01 1.90167687e+01 3.83946290e+01]]
-
-
-# BELOW: MGE for 2698 using the PSF from mgefit1d
-############################################
-  Total_Counts  Sigma_Pixels      qObs
-############################################
-      1614.18      1.88377     0.695413
-       9624.5      2.53562     0.695396
-      37366.8      5.60134      0.69543
-      1920.69      7.47509     0.191258
-      29510.8      9.61615     0.753008
-      54363.7      13.5609     0.750675
-      91670.3      25.3629     0.762905
-        84953      54.5601     0.632941
-       154734      81.7813     0.738034
-        32438      147.737            1
-      12764.7      166.029     0.404675
-       129929      168.694     0.688262
-      37001.7      294.766            1
-      3209.33      558.949     0.184371
-       172204      558.949     0.738063
-
-
-# Same as immediately above, but with qbounds][0.4, 1.0]
-############################################
-  Total_Counts  Sigma_Pixels      qObs
-############################################
-      3250.33      2.04194          0.4
-      8070.39      2.60906     0.723649
-      34123.1      5.57814     0.729482
-       6459.8      6.48883          0.4
-        45336      10.4746      0.75228
-      42386.7      15.0798     0.748743
-      88146.9        25.95     0.763055
-      82669.8      54.9177     0.630267
-       154801      81.5853     0.737208
-      38367.1      147.348            1
-      11470.9      166.308          0.4
-       123244      168.288      0.67855
-      36150.6      296.136            1
-      5566.44      296.864          0.4
-       172801      558.949     0.736923
-++++++++++++++++++++++++++++++++++++++++++++
-
-# Same as immediately above, but with qbounds][0.5, 1.0]
-############################################
-  Total_Counts  Sigma_Pixels      qObs
-############################################
-      8313.43      2.22579     0.556158
-      7933.53      3.81251     0.920391
-      18092.3      5.61535         0.55
-      23377.1       6.7435     0.727228
-      48969.2      11.2483     0.758479
-      32992.7       15.695     0.740096
-      87784.8      25.8775     0.764633
-      81025.4      54.5412      0.63036
-       156381       81.464     0.730236
-      38353.4      144.002            1
-        74216      164.445     0.742556
-      43249.4      167.139         0.55
-        22989      208.773         0.55
-      35787.1      296.649            1
-       173480      558.949     0.735674
-++++++++++++++++++++++++++++++++++++++++++++
-
-run PSF in MGE code (start with find galaxy etc)
-use that to characterize PSF later (1-D PSF)
-mge fit 1d
-then normalize output gaussians
-
-also make 1D surface brightness profiles
-*e.g. iraf or pyraf ellipse task
-# BUCKET: run ellipse task on main galaxy (dust-corr) and on GALFIT output, then plot both
-# ellipse task should show 1D surf brightness
-
-For my prelim: I'll do similar first-pass gas modeling of more CEGs or of other galaxies at upper-mass end
-'''
-
 
 # NOTE: GOT 0.05 ERROR WHEN I USED ZP J) 25.95, BUT NOT WHEN I USED ZP J) 24.697

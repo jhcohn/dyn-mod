@@ -7,8 +7,252 @@ hband = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci.fits'
 new_psf = 'ugc2698_f160w_pxfr075_pxs010_rapid_psf_drz_sci_no0.fits'
 newclipped_psf = 'ugc2698_f160w_pxfr075_pxs010_rapid_psf_drz_sci_clippedno0.fits'  # no0, clipped [200:698,600:1160]
 newclipped_psf2 = 'ugc2698_f160w_pxfr075_pxs010_rapid_psf_drz_sci_clipped2no0.fits'  # no0, clipped [100:798,500:1260]
-new_hband = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits'
+new_hband = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits'  # orig H-band; NaNs->0
+hband_cps = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_nonan_cps.fits'  # orig H-band; NaNs->0, texp=1
+hband_counts = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_nonan_counts.fits'  # orig H-band; NaNs->0, data*texp
 new_hbandmult = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_multexptime.fits'
+skysub_regH = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0_skysub.fits'  # orig H-band, nan->0, subtract 0.37
+masked_skysub_rH = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0_skysub_combinedmask.fits'  # orig H-band, nan->0, subtract 0.37, multiply by combinedmask
+dustmask = 'f160w_dust_mask_px010.fits'
+edgemask = 'f160w_edgemask_px010.fits'
+mask = 'f160w_mask_px010.fits'
+cmask = 'f160w_combinedmask_px010.fits'  # edge, regular, and dust mask
+mask2 = 'f160w_maskedgemask_px010.fits'  # edge, regular mask
+hband_dustcorr = 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci.fits'  # dust-corrected UGC 2698 H-band, from Ben
+new_h_dustcorr = 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan.fits'  # dust-corrected Hband, nan->0
+skysub_ahcorr = 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_skysub.fits'  # ahcorr, nan->0, subtract 0.37
+masked_skysub_ah = 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_skysub_maskedgemask.fits'  # ahcorr, nan->0, subtract 0.37, multiply by maskedgemask
+hband_dustcorr_cps = 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_cps.fits'  # ahcorr, nan->0, texp=1
+hband_dustcorr_counts = 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_counts.fits'  # ahcorr, nan->0, data*texp
+masked_dustcorr_cps = 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_cps_maskedgemask.fits'  # ahcorr, nan->0, texp=1, multiply by maskedgemask
+masked_dustcorr_counts = 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_counts_maskedgemask.fits'  # ahcorr, nan->0, data*texp, multiply by maskedgemask
+base = '/Users/jonathancohn/Documents/dyn_mod/galfit_u2698/'
+
+
+# DETERMINE SKY BELOW!!
+with fits.open(hband_counts) as hb:  # hband_dustcorr_counts
+    print(hb.info())
+    hdrh = hb[0].header
+    datah = hb[0].data
+skyreg = datah[1160:1185,60:85]
+print(np.median(skyreg), np.mean(skyreg))
+n = np.shape(skyreg)[0] * np.shape(skyreg)[1]
+rms = np.sqrt((1. / n) * (np.sum(skyreg**2)))
+print(rms)
+rms_deviation = np.sqrt((1. / n) * np.sum((np.mean(skyreg) - skyreg)**2))
+print(rms_deviation)
+# cps: median, mean = (0.37687877, 0.37709936); rms = 0.377858732438; rms_deviation = 0.0239433389818
+# counts: median, mean = (338.61319, 338.8114); rms = 339.493665331; rms_deviation = 21.5123034564 (yay same for hband_counts and hband_dustcorr_counts)
+
+# Run cps GALFIT with: galfit -skyped 0.38 -skyrms 0.02 galfit_params_u2698_ahcorr_n10_pf001_cps_zp24.txt
+# Run counts GALFIT with: galfit -skyped 339.493665331 -skyrms 21.5123034564 galfit_params_u2698_ahcorr_n10_pf001_counts_zp24.txt
+print(oop)
+
+
+with fits.open(new_hband) as hd:
+    print(hd.info())
+    hdrd = hd[0].header
+    datad = hd[0].data
+
+datad *= 898.467164
+hdrd['history'] = 'multiplied image by exptime, so get it in units of counts (instead of counts/sec)'
+fits.writeto(base + hband_counts, datad, hdrd)  # ahcorr texp=898.467164
+print(oop)
+
+
+with fits.open(hband_dustcorr_counts) as hb:
+    print(hb.info())
+    hdrh = hb[0].header
+    datah = hb[0].data
+
+with fits.open(mask2) as hdu_regmask:
+    print(hdu_regmask.info())
+    # print(hdu_h[0].header)
+    hdrrm = hdu_regmask[0].header
+    datarm = hdu_regmask[0].data
+
+datah *= datarm
+hdrh['history'] = 'multiplied by the regular mask (f160w_maskedgemask_px010.fits)'
+fits.writeto(base + masked_dustcorr_counts, datah, hdrh)  # ahcorr data*texp maskedgemask
+print(oop)
+
+
+with fits.open(new_h_dustcorr) as hd:
+    print(hd.info())
+    hdrd = hd[0].header
+    datad = hd[0].data
+
+datad *= 898.467164
+hdrd['EXPTIME'] = 898.467164
+hdrd['GAIN'] = 2.5
+hdrd['NCOMBINE'] = 2
+hdrd['history'] = 'multiplied image by exptime, so get it in units of counts (instead of counts/sec)'
+hdrd['history'] = 'set EXPTIME=898.467164'
+hdrd['history'] = 'set GAIN=2.5'
+hdrd['history'] = 'set NCOMBINE=2'
+fits.writeto(base + hband_dustcorr_counts, datad, hdrd)  # ahcorr texp=898.467164
+print(oop)
+
+
+with fits.open(hband_dustcorr_cps) as hb:
+    print(hb.info())
+    hdrh = hb[0].header
+    datah = hb[0].data
+
+with fits.open(mask2) as hdu_regmask:
+    print(hdu_regmask.info())
+    # print(hdu_h[0].header)
+    hdrrm = hdu_regmask[0].header
+    datarm = hdu_regmask[0].data
+
+datah *= datarm
+hdrh['history'] = 'multiplied by the regular mask (f160w_maskedgemask_px010.fits)'
+fits.writeto(base + masked_dustcorr_cps, datah, hdrh)  # ahcorr texp=1 maskedgemask
+print(oop)
+
+
+with fits.open(new_hband) as hb:
+    print(hb.info())
+    hdrh = hb[0].header
+    datah = hb[0].data
+
+# datah /= 898.467164
+hdrh['EXPTIME'] = 1.0
+hdrh['history'] = 'set new exptime to 1s, bc image in units of counts/sec'
+
+with fits.open(new_h_dustcorr) as hd:
+    print(hd.info())
+    hdrd = hd[0].header
+    datad = hd[0].data
+
+# datad /= 898.467164
+hdrd['EXPTIME'] = 1.0
+hdrd['GAIN'] = 2.5
+hdrd['NCOMBINE'] = 2
+hdrd['history'] = 'set new exptime to 1s, bc image in units of counts/sec'
+hdrd['history'] = 'set GAIN=2.5'
+hdrd['history'] = 'set NCOMBINE=2'
+fits.writeto(base + hband_cps, datah, hdrh)  # regH texp=1
+fits.writeto(base + hband_dustcorr_cps, datad, hdrd)  # ahcorr texp=1
+print(oop)
+
+# no-nans (replaced with 0s), sky-subtracted images for ahcorr and regH
+with fits.open(skysub_ahcorr) as hdun:
+    print(hdun.info())
+    # print(hdu_h[0].header)
+    hdrn = hdun[0].header
+    datan = hdun[0].data
+with fits.open(skysub_regH) as hdurh:
+    print(hdurh.info())
+    # print(hdu_h[0].header)
+    hdrrh = hdurh[0].header
+    datarh = hdurh[0].data
+
+# masked
+with fits.open(mask2) as hdu_regmask:
+    print(hdu_regmask.info())
+    # print(hdu_h[0].header)
+    hdrrm = hdu_regmask[0].header
+    datarm = hdu_regmask[0].data
+with fits.open(cmask) as hdu_cmask:
+    print(hdu_cmask.info())
+    # print(hdu_h[0].header)
+    hdrcm = hdu_cmask[0].header
+    datacm = hdu_cmask[0].data
+
+datan *= datarm  # multiply ahcorr by regular mask
+datarh *= datacm  # multiply regH by combined mask
+hdrn['history'] = 'multiplied by the regular mask (f160w_maskedgemask_px010.fits)'
+hdrrh['history'] = 'multiplied by the combined dust mask (f160w_combinedmask_px010.fits)'
+fits.writeto(base + masked_skysub_ah, datan, hdrn)  # sky-subtracted ahcorr
+fits.writeto(base + masked_skysub_rH, datarh, hdrrh)  # sky-subtracted regH
+
+print("don't go below here")
+print(oop)
+
+
+# Save new sky-subtracted versions of ahcorr and regH
+with fits.open(new_h_dustcorr) as hdun:  # ahcorr
+    print(hdun.info())
+    # print(hdu_h[0].header)
+    hdrn = hdun[0].header
+    datan = hdun[0].data
+with fits.open(new_hband) as hdurh:  # regH
+    print(hdurh.info())
+    # print(hdu_h[0].header)
+    hdrrh = hdurh[0].header
+    datarh = hdurh[0].data
+
+datan -= 0.37  # sky subtraction
+datarh -= 0.37
+datan[datan==-0.37] = 0.
+datarh[datarh==-0.37] = 0.
+hdrn['history'] = 'subtracted 0.37 from the image to remove sky'
+hdrrh['history'] = 'subtracted 0.37 from the image to remove sky'
+fits.writeto(base + skysub_ahcorr, datan, hdrn)  # sky-subtracted ahcorr
+fits.writeto(base + skysub_regH, datarh, hdrrh)  # sky-subtracted regH
+
+print("don't go below here")
+print(oop)
+
+
+
+with fits.open(newclipped_psf2) as hdun:
+    print(hdun.info())
+    # print(hdu_h[0].header)
+    hdrn = hdun[0].header
+    datan = hdun[0].data
+
+plt.imshow(datan, origin='lower', vmin=0., vmax=1e-5)  # vmin=0., vmax=1e5) # vmin=np.amin(datan), vmax=1e-5
+plt.colorbar()
+plt.show()
+print(oop)
+
+
+
+print("don't go below here")
+print(oop)
+
+
+with fits.open(base + hband_dustcorr) as hdun:
+    print(hdun.info())
+    # print(hdu_h[0].header)
+    hdrn = hdun[0].header
+    datan = hdun[0].data
+
+print(np.isnan(datan).any())
+datan[np.isnan(datan)] = 0.
+print(np.isnan(datan).any())
+hdrn['history'] = 'replaced NaNs with 0s'
+fits.writeto(base + new_h_dustcorr, datan, hdrn)  # new_psf
+print(oop)
+
+
+masks = [mask, edgemask]  # masks = [mask, dustmask, edgemask]
+combined_mask = np.zeros(shape=(1231, 1620))
+
+for m in masks:
+    with fits.open(m) as hdun:
+        print(hdun.info())
+        # print(hdu_h[0].header)
+        hdrn = hdun[0].header
+        datan = hdun[0].data
+
+        combined_mask += datan
+
+plt.imshow(combined_mask, vmin=np.amin(combined_mask), vmax=np.amax(combined_mask), origin='lower')
+plt.colorbar()
+plt.show()
+
+hdrn['history'] = 'added f160w_edgemask_px010, and f160w_mask_px010'  # [600:1160, 200:698]  # f160w_dust_mask_px010,
+fits.writeto(mask2, combined_mask, hdrn)  # new_psf
+print(oop)
+
+hdrn['history'] = 'added f160w_dust_mask_px010, f160w_edgemask_px010, and f160w_mask_px010'  # [600:1160, 200:698]
+fits.writeto(cmask, combined_mask, hdrn)  # new_psf
+
+print(oop)
+
 
 with fits.open(newclipped_psf2) as hdun:
     print(hdun.info())
