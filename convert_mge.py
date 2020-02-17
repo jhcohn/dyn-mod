@@ -308,8 +308,8 @@ if __name__ == "__main__":
     conv_rhe = gf + 'conv_mge_ugc_2698_rhe_linear_pf001.txt'
     conv_rre = gf + 'conv_mge_ugc_2698_rre_linear_pf001.txt'
     # IMGs
-    re = base + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_nonan_e.fits'  # regH image!
-    ahe = base + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_e.fits'  # ahcorr image!
+    re = gf + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_nonan_e.fits'  # regH image!
+    ahe = gf + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_e.fits'  # ahcorr image!
     # Masks
     comb_mask = gf + 'f160w_combinedmask_px010.fits'  # include dust mask!
     reg_mask = gf + 'f160w_maskedgemask_px010.fits'  # don't include dust mask!
