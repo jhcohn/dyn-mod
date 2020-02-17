@@ -56,7 +56,7 @@ def fit_psf(psf_file, plotem=False):
 
 
 def fit_u2698(input_image, input_mask, psf_file, pfrac=0.01, num=None, write_out=None, plots=False, qlims=None,
-              cps=True, sky=0.37):
+              eps=True, sky=0.37):
     """
     This function fits an mge to UGC 2698
 
@@ -64,7 +64,7 @@ def fit_u2698(input_image, input_mask, psf_file, pfrac=0.01, num=None, write_out
 
     We model an HST/WFC3/F160W image of UGC 2698.
 
-    cps: if input_image is in units of counts per second, set cps=True; else if in counts, set cps=False
+    eps: if input_image is in units of electrons per second, set eps=True; else if in electrons, set eps=False
     """
 
     scale1 = 0.1     # (arcsec/pixel) PC1. This is used as scale and flux reference!
@@ -140,10 +140,10 @@ def fit_u2698(input_image, input_mask, psf_file, pfrac=0.01, num=None, write_out
         with open(outname, 'w+') as o:
             o.write('# UGC 2698 MGE using mge_fit_mine.py\n')
             o.write('# ang = find_galaxy.theta: "Position angle measured clock-wise from the image X axis"\n')
-            cs = 'Counts'
-            if cps:
-                cs = 'Counts_per_sec'
-            o.write('# ' + cs + ' Sigma_pix qObs xc yc ang\n')
+            es = 'Electrons'
+            if eps:
+                es = 'Electrons_per_sec'
+            o.write('# ' + es + ' Sigma_pix qObs xc yc ang\n')
             for j in range(len(m.sol[0])):
                 o.write(str(m.sol[0][j]) + ' ' + str(m.sol[1][j]) + ' ' + str(m.sol[2][j]) + ' ' + str(xc1) + ' ' +
                         str(yc1) + ' ' + str(ang1) + '\n')
@@ -350,113 +350,11 @@ if __name__ == '__main__':
     ### then do regH with dust mask: make sure sky is correct, try just doing it directly how I've been doing it
     ### then do regH with dust mask, with PSF (same as before; pop inner component output by mge fit sectors and replace with psf)
 
-    print(oop)
-    fit_u2698(regH_counts, reg_mask, psf_file, pfrac=pf, num=num, write_out=out_rr_counts, qlims=None, plots=False,
-              cps=False, sky=sky_counts)
-    fit_u2698(regH_img, reg_mask, psf_file, pfrac=pf, num=num, write_out=out_rr_cps, qlims=None, plots=False,
-              cps=True, sky=sky_cps)
-    print(oop)
-    fit_u2698(regH_counts, comb_mask, psf_file, pfrac=pf, num=num, write_out=out_rhcounts, qlims=None, plots=False,
-              cps=False, sky=sky_counts)
-    fit_u2698(regH_img, comb_mask, psf_file, pfrac=pf, num=num, write_out=out_rhcps, qlims=None, plots=False,
-              cps=True, sky=sky_cps)
-    print(oop)
-    fit_u2698(ahcorr_cps, reg_mask, psf_file, pfrac=pf, num=num, write_out=out_ahcps, qlims=None, plots=True,
-              cps=False, sky=sky_cps)
-    fit_u2698(ahcorr_counts, reg_mask, psf_file, pfrac=pf, num=num, write_out=out_ahcounts, qlims=None, plots=True,
-              cps=False, sky=sky_counts)
-    print(oop)
-    print(oop)
-    fit_u2698(ahcorr_counts, reg_mask, psf_file, pfrac=pf, num=num, write_out=out_ahcounts, qlims=None, plots=True,
-              cps=False, sky=sky_counts)  # 338.8114
-    print(oop)
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=pf, num=num, write_out=out_ah5, qlims=ql5, plots=True)
-    fit_u2698(regH_img, comb_mask, psf_file, pfrac=pf, num=num, write_out=out_rh, qlims=None, plots=True)
-    print(oop)
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=pf, num=num, write_out=out_ah, qlims=None, plots=True)
-    fit_u2698(regH_img, comb_mask, psf_file, pfrac=pf, num=num, write_out=out_rh, qlims=None, plots=True)
-    print(oop)
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.02, num=num, write_out=None, qlims=ql5, plots=False)
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.03, num=num, write_out=None, qlims=ql5, plots=False)
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.04, num=num, write_out=None, qlims=ql5, plots=False)
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.05, num=num, write_out=None, qlims=ql5, plots=False)
-    print(oop)
-    fit_u2698(ahcorr_img, reg_mask, psf_file, num=num, write_out=out_ah4, qlims=ql4, plots=True)
-    fit_u2698(ahcorr_img, reg_mask, psf_file, num=num, write_out=out_ah6, qlims=ql6, plots=True)
-    fit_u2698(regH_img, comb_mask, psf_file, num=num, write_out=out_rh4, qlims=ql4, plots=True)
-    fit_u2698(regH_img, comb_mask, psf_file, num=num, write_out=out_rh6, qlims=ql6, plots=True)
-    print(oop)
-    '''  #
-    IMG1
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.05, num=num, write_out=None, qlims=ql5, plots=False)
-    # 491.4505251361511, 879.66976803463479 (a bit shifted; probably should be ~880-881)
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.03, num=num, write_out=None, qlims=ql5, plots=False)
-    # 491.36437904527077, 879.9134055002786 (a bit shifted, but better than above)
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.01, num=num, write_out=None, qlims=ql5, plots=False)
-    # 491.36437904527077, 879.9134055002786 (a bit shifted,same as above)
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.0075, num=num, write_out=None, qlims=ql5, plots=False)
-    # 491.36437904527077, 879.9134055002786 (same as above)
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.005, num=num, write_out=None, qlims=ql5, plots=False)
-    # 491.4431968696681, 879.9734944374386 (a bit better)
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.0025, num=num, write_out=None, qlims=ql5, plots=False)
-    # 491.44627677000807, 879.95515611820576 (a tiny bit worse)
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.002, num=num, write_out=None, qlims=ql5, plots=False)
-    # 491.45790454942824, 879.95950711328237
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.0015, num=num, write_out=None, qlims=ql5, plots=False)
-    # 491.48646540287677, 879.99319790554887
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.001, num=num, write_out=None, qlims=ql5, plots=False)
-    # 811.45635993532062, 1179.050969939296 HORRIBLE!
-    
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.01, num=num, write_out=None, qlims=ql5, plots=False)
-    #491.355681831 879.929309641
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.02, num=num, write_out=None, qlims=ql5, plots=False)
-    #491.382178879 879.988405578
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.03, num=num, write_out=None, qlims=ql5, plots=False)
-    #491.364379045 879.9134055
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.04, num=num, write_out=None, qlims=ql5, plots=False)
-    #491.429928147 879.648566635
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.05, num=num, write_out=None, qlims=ql5, plots=False)
-    #491.450525136 879.669768035
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.06, num=num, write_out=None, qlims=ql5, plots=False)
-    #491.540395065 879.730832415
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.07, num=num, write_out=None, qlims=ql5, plots=False)
-    #491.497614815 879.821165695
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.08, num=num, write_out=None, qlims=ql5, plots=False)
-    #683.090132296 1058.50026125
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.09, num=num, write_out=None, qlims=ql5, plots=False)
-    #681.794088312 1057.28524263
-    
-    TESTIMG
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.001, num=num, write_out=None, qlims=ql5, plots=False)
-    #491.4500028 879.952142988
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.002, num=num, write_out=None, qlims=ql5, plots=False)
-    #491.437416947 879.972154554
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.003, num=num, write_out=None, qlims=ql5, plots=False)
-    #491.497414716 879.932725165
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.004, num=num, write_out=None, qlims=ql5, plots=False)
-    #491.489475065 879.961478177
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.005, num=num, write_out=None, qlims=ql5, plots=False)
-    #491.496320619 879.953463891
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.006, num=num, write_out=None, qlims=ql5, plots=False)
-    #491.391923676 879.931646223
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.007, num=num, write_out=None, qlims=ql5, plots=False)
-    #491.418584102 879.932159354
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.008, num=num, write_out=None, qlims=ql5, plots=False)
-    #491.545252285 879.951583076
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.009, num=num, write_out=None, qlims=ql5, plots=False)
-    #491.607532648 879.883632699
-    # '''  #
+    fit_u2698(re, reg_mask, psf_file, pfrac=pf, num=num, write_out=out_rre, plots=False, eps=False, sky=sky_e)
+    fit_u2698(re, comb_mask, psf_file, pfrac=pf, num=num, write_out=out_rhe, plots=False, eps=False, sky=sky_e)
+    fit_u2698(ahe, reg_mask, psf_file, pfrac=pf, num=num, write_out=out_ahe, plots=False, eps=False, sky=sky_e)
 
-
-    '''  #
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.01, num=num, write_out=None, qlims=ql6, plots=True)
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.02, num=num, write_out=None, qlims=ql6, plots=True)
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.03, num=num, write_out=None, qlims=ql6, plots=True)
-    fit_u2698(ahcorr_img, reg_mask, psf_file, pfrac=0.04, num=num, write_out=None, qlims=ql6, plots=True)
-    print(oop)
-    # '''  #
-
-    display_mod(galfit_out='galfit.72')
+    # display_mod(galfit_out='galfit.72')
     # IMPORTANT NOTE: m_Vega zeropoint for F160W = m_AB - 1.39 = 25.95 - 1.39 = 24.56 (F160W~H?)
     # http://www.astronomy.ohio-state.edu/~martini/usefuldata.html (conversion AB-Vega)
     # https://hst-docs.stsci.edu/display/WFC3IHB/9.3+Calculating+Sensitivities+from+Tabulated+Data (F160W AB zeropoint)

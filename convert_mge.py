@@ -110,7 +110,7 @@ def paper_to_galfit(table_file, mag_sol=3.32, pix_scale=0.06, t_exp=1354.46, zp=
 
 
 def mge_to_galfit(mge_file, zeropoint, img=None, mask=None, copy_file=None, galfit_out=None, write_new=None,
-                  new_galfit=None, constraint=None, texp=None, sky=None, rms=None, gain=2.5):  # pa=-7.5697
+                  new_galfit=None, constraint=None, texp=None, sky=None, rms=None, gain=1.0):  # pa=-7.5697
 
     mags = []
     fwhms = []
@@ -124,7 +124,7 @@ def mge_to_galfit(mge_file, zeropoint, img=None, mask=None, copy_file=None, galf
             cols = line.split()
             if not line.startswith('#'):
                 if texp is not None:
-                    mags.append(zeropoint - 2.5*np.log10(gain) - 2.5 * np.log10(float(cols[0]) / texp))
+                    mags.append(zeropoint - 2.5 * np.log10(float(cols[0]) / texp))  # - 2.5*np.log10(gain)
                 else:
                     mags.append(zeropoint - 2.5 * np.log10(float(cols[0])))
                 fwhms.append(2 * np.sqrt(2 * np.log(2.)) * float(cols[1]))  # FWHM =~ 2.355 sigma
@@ -283,85 +283,71 @@ if __name__ == "__main__":
     base = '/Users/jonathancohn/Documents/mge/'
     gf = '/Users/jonathancohn/Documents/dyn_mod/galfit_u2698/'
 
-    #galfit_to_wiki(gf + 'galfit_params_ahcorr_mge_n11_04_zp25.txt', gf + 'wiki_ahcorr_n11_04_mge.txt')  # wiki_mge055_zp25_take4.txt
-    #galfit_to_wiki(gf + 'galfit.parameters.txt', gf + 'wiki_Ben_ahcorr_mge.txt')  # wiki_mge055_zp25_take4.txt
-    #galfit_to_wiki(gf + 'galfit.72', gf + 'wiki_mge_ahcorr_n10_055_zp25.txt')  # wiki_mge055_zp25_take4.txt
     # galfit_to_wiki(gf + 'galfit.78', gf + 'wiki_Ben_ahcorr_mge_out.txt')
-    # galfit_to_wiki(gf + 'galfit.86', gf + 'wiki_galfit_out_u2698_ahcorr_n10_05_pf001_cps.txt')
-    # galfit_to_wiki(gf + 'galfit.87', gf + 'wiki_galfit_out_u2698_ahcorr_n10_pf001_counts.txt')
     # galfit_to_wiki(gf + 'galfit.88', gf + 'wiki_galfit_out_u2698_ahcorr_linear_pf001_counts.txt')
     # print(oop)
 
     ### AFTER CORRECTING STUFF ###
     zp = 24.6949  # 24.697  # 25.95  # 24.697
     texp = 898.467164
-    sky_counts = 339.493665331
-    rms_counts = 21.5123034564
-    sky_cps = 0.377858732438
-    rms_cps = 0.0239433389818
+    sky_e = 339.493665331
+    rms_e = 21.5123034564
+    sky_eps = 0.377858732438
+    rms_eps = 0.0239433389818
     # MGEs
-    mge_regH_cps = gf + 'mge_ugc_2698_regH_linear_pf001_cps.txt'
-    mge_regH_counts = gf + 'mge_ugc_2698_regH_linear_pf001_counts.txt'
-    mge_ahcorr_cps = gf + 'mge_ugc_2698_ahcorr_linear_pf001_cps.txt'  # mge_ugc_2698_ahcorr_n10_pf001_counts
-    mge_ahcorr_counts = gf + 'mge_ugc_2698_ahcorr_linear_pf001_counts.txt'  # mge_ugc_2698_ahcorr_n10_pf001_counts
-    mge_regreg_cps = gf + 'mge_ugc_2698_regH_regm_linear_pf001_cps.txt'
-    mge_regreg_counts = gf + 'mge_ugc_2698_regH_regm_linear_pf001_counts.txt'
-    # mges = [gf + 'mge_ugc_2698_ahcorr_n10_05_pf001_cps.txt', gf + 'mge_ugc_2698_regH_n10_pf001_cps.txt']
-    n_regH_cps = 11
-    n_regH_counts = 11
-    n_regreg = 11
-    n_counts = 9  # 8
-    # nums = [10, 10]  # [10, 10, 9, 9]
+    mge_rhe = gf + 'mge_ugc_2698_rhe_linear_pf001.txt'
+    mge_ahe = gf + 'mge_ugc_2698_ahe_linear_pf001.txt'
+    mge_rre = gf + 'mge_ugc_2698_rre_linear_pf001.txt'
+    # N components; q limits
+    n_ahe = 10
+    n_rhe = 11
+    n_rre = 11
     qs = None
-    q_los = [0.5, None]
-    # New converted MGE text files
-    mge_conv_ah_cps = gf + 'conv_mge_ugc_2698_ahcorr_linear_pf001_cps.txt'  # ahcorr_n10_pf001_counts.txt'
-    mge_conv_ah_counts = gf + 'conv_mge_ugc_2698_ahcorr_linear_pf001_counts.txt'  # ahcorr_n10_pf001_counts.txt'
-    mge_conv_regH_cps = gf + 'conv_mge_ugc_2698_regH_linear_pf001_cps.txt'
-    mge_conv_regH_counts = gf + 'conv_mge_ugc_2698_regH_linear_pf001_counts.txt'
-    mge_conv_regreg_cps = gf + 'conv_mge_ugc_2698_regreg_linear_pf001_cps.txt'
-    mge_conv_regreg_counts = gf + 'conv_mge_ugc_2698_regreg_linear_pf001_counts.txt'
-    # mge_convs = [gf + 'conv_mge_u2698_ahcorr_n10_05_pf001_cps.txt', gf + 'conv_mge_u2698_regH_n10_pf001_cps.txt']
+    # New converted MGE text files (to write)
+    conv_ahe = gf + 'conv_mge_ugc_2698_ahe_linear_pf001.txt'
+    conv_rhe = gf + 'conv_mge_ugc_2698_rhe_linear_pf001.txt'
+    conv_rre = gf + 'conv_mge_ugc_2698_rre_linear_pf001.txt'
     # IMGs
-    # regH = gf + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_nonan_cps.fits'
-    regH_cps = gf + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_nonan_cps.fits'
-    regH_counts = gf + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_nonan_counts.fits'
-    ahcorr_cps = gf + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_cps.fits'
-    ahcorr_counts = gf + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_counts.fits'
-    # imgs = [ahcorr, regH]
+    re = base + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_nonan_e.fits'  # regH image!
+    ahe = base + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_e.fits'  # ahcorr image!
     # Masks
-    comb_mask = gf + 'f160w_combinedmask_px010.fits'
-    reg_mask = gf + 'f160w_maskedgemask_px010.fits'
-    masks = [reg_mask, comb_mask]
+    comb_mask = gf + 'f160w_combinedmask_px010.fits'  # include dust mask!
+    reg_mask = gf + 'f160w_maskedgemask_px010.fits'  # don't include dust mask!
     # New GALFIT param files!
-    galfit_par_ah_cps = gf + 'galfit_params_u2698_ahcorr_linear_pf001_cps_zp24.txt'  # _ahcorr_n10_pf001_counts_zp24.txt
-    galfit_par_ah_counts = gf + 'galfit_params_u2698_ahcorr_linear_pf001_counts_zp24.txt'  # _ahcorr_n10_pf001_counts_zp24.txt
-    galfit_par_regH_cps = gf + 'galfit_params_u2698_regH_linear_pf001_cps_zp24.txt'
-    galfit_par_regH_counts = gf + 'galfit_params_u2698_regH_linear_pf001_counts_zp24.txt'
-    galfit_par_regreg_cps = gf + 'galfit_params_u2698_regreg_linear_pf001_cps_zp24.txt'
-    galfit_par_regreg_counts = gf + 'galfit_params_u2698_regreg_linear_pf001_counts_zp24.txt'
-    # galfit_pars = [gf + 'galfit_params_u2698_ahcorr_n10_05_pf001_cps_zp24.txt',
-    #                gf + 'galfit_params_u2698_regH_n10_pf001_cps_zp24.txt']
+    pars_gal_ahe = gf + 'galfit_params_u2698_ahe_linear_pf001_zp24.txt'
+    pars_gal_rhe = gf + 'galfit_params_u2698_rhe_linear_pf001_zp24.txt'
+    pars_gal_rre = gf + 'galfit_params_u2698_rre_linear_pf001_zp24.txt'
     # New GALFIT output names (GALFIT output image blocks)
-    galfit_out_ah_cps = gf + 'galfit_out_ahcorr_linear_pf001_cps_zp24.fits'  # ahcorr_n10_pf001_counts_zp24.fits
-    galfit_out_ah_counts = gf + 'galfit_out_ahcorr_linear_pf001_counts_zp24.fits'  # ahcorr_n10_pf001_counts_zp24.fits
-    galfit_out_regH_cps = gf + 'galfit_out_regH_linear_pf001_cps_zp24.fits'
-    galfit_out_regH_counts = gf + 'galfit_out_regH_linear_pf001_counts_zp24.fits'
-    galfit_out_regreg_cps = gf + 'galfit_out_regreg_linear_pf001_cps_zp24.fits'
-    galfit_out_regreg_counts = gf + 'galfit_out_regreg_linear_pf001_counts_zp24.fits'
-    # galfit_outs = [gf + 'galfit_out_ahcorr_n10_05_pf001_cps_zp24.fits', gf + 'galfit_out_regH_n10_pf001_cps_zp24.fits']
+    out_gal_ahe = gf + 'galfit_out_u2698_ahe_linear_pf001_zp24.txt'
+    out_gal_rhe = gf + 'galfit_out_u2698_rhe_linear_pf001_zp24.txt'
+    out_gal_rre = gf + 'galfit_out_u2698_rre_linear_pf001_zp24.txt'
     # Constraint files
-    cons_ah_cps = gf + 'cons_ugc_2698_ahcorr_linear_pf001_cps.txt'  # ahcorr_n10_pf001_counts.txt
-    cons_ah_counts = gf + 'cons_ugc_2698_ahcorr_linear_pf001_counts.txt'  # ahcorr_n10_pf001_counts.txt
-    cons_regH_cps = gf + 'cons_ugc_2698_regH_linear_pf001_cps.txt'
-    cons_regH_counts = gf + 'cons_ugc_2698_regH_linear_pf001_counts.txt'
-    cons_regreg_cps = gf + 'cons_ugc_2698_regreg_linear_pf001_cps.txt'
-    cons_regreg_counts = gf + 'cons_ugc_2698_regreg_linear_pf001_counts.txt'
-    # cons = [gf + 'cons_ugc_2698_ahcorr_n10_05_pf001_cps.txt', gf + 'cons_ugc_2698_regH_n10_pf001_cps.txt']
+    cons_8 = gf + 'cons_ugc_2698_n8.txt'
+    cons_9 = gf + 'cons_ugc_2698_n9.txt'
+    cons_10 = gf + 'cons_ugc_2698_n10.txt'  # ahe
+    cons_11 = gf + 'cons_ugc_2698_n11.txt'  # rhe, rre
+    cons_12 = gf + 'cons_ugc_2698_n12.txt'
     # Copy file (galfit file of which I'm copying the structure)
     copyf = gf + 'galfit_params_mge_055_zp25.txt'
-    # Loop!
 
+    # ahe, rhe, rre
+    cv = mge_to_galfit(mge_ahe, zp, img=ahe, mask=reg_mask, constraint=cons_10, copy_file=copyf, galfit_out=out_gal_ahe,
+                       write_new=conv_ahe, new_galfit=pars_gal_ahe, sky=sky_e, rms=rms_e, texp=texp)
+    cv = mge_to_galfit(mge_rhe, zp, img=re, mask=comb_mask, constraint=cons_11, copy_file=copyf, galfit_out=out_gal_rhe,
+                       write_new=conv_rhe, new_galfit=pars_gal_rhe, sky=sky_e, rms=rms_e, texp=texp)
+    cv = mge_to_galfit(mge_rre, zp, img=re, mask=reg_mask, constraint=cons_11, copy_file=copyf, galfit_out=out_gal_rre,
+                       write_new=conv_rre, new_galfit=pars_gal_rre, sky=sky_e, rms=rms_e, texp=texp)
+
+    '''  #
+    # OLD STUFF BELOW
+    # write constraint files
+    write_constraintfile(output=cons_8, q_lo=qs, num=8)  # q_los[c]
+    write_constraintfile(output=cons_9, q_lo=qs, num=9)  # q_los[c]
+    write_constraintfile(output=cons_10, q_lo=qs, num=10)  # q_los[c]
+    write_constraintfile(output=cons_11, q_lo=qs, num=11)  # q_los[c]
+    write_constraintfile(output=cons_12, q_lo=qs, num=12)  # q_los[c]
+
+    print(oop)
     # REGREG
     write_constraintfile(output=cons_regreg_cps, q_lo=qs, num=n_regreg)  # q_los[c]
     cv = mge_to_galfit(mge_regreg_cps, zp, img=regH_cps, mask=reg_mask, constraint=cons_regreg_cps,
@@ -388,6 +374,7 @@ if __name__ == "__main__":
     cv = mge_to_galfit(mge_counts, zp, img=ahcorr_counts, mask=reg_mask, constraint=cons_counts, copy_file=copyf,
                        galfit_out=galfit_out_counts, write_new=mge_conv_counts, new_galfit=galfit_par_counts)
     print(oop)
+    # '''  #
 
     '''  #
     # galfit_to_wiki(gf+'galfit.73', gf+'wiki_regH_combmask_n10_q06.txt')
@@ -405,139 +392,3 @@ if __name__ == "__main__":
                        new_galfit=gf + 'galfit_params_regH_combinedmask_mge_n10_q06_zp25.txt')  # galfit run file
     print(oop)
     # '''  #
-
-
-    ### BEFORE CORRECTING STUFF ###
-
-    '''  #
-    # WHAT I SHOULD HAVE BEEN DOING WITH AKIN'S STUFF
-    # galfit_to_wiki(gf+'galfit_params_akin_mge_fixedmodel_orig.txt', gf+'wiki_galfit_input_akin_mge_orig.txt')
-    # print(oop)
-    paper_to_galfit(table_file=base+'yildirim_table_2698.txt', mag_sol=3.32, pix_scale=0.06, t_exp=1354.46, zp=24.6949,
-                    apcorr=0., dust=0.075, xctr=880.7209, yctr=491.2107, pa=-7.5697, dist=89.*1e6,
-                    img=gf+'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits',  # input image
-                    mask=gf+'f160w_maskedgemask_px010.fits',  # mask image
-                    copy_file=gf + 'galfit_params_mge_055_zp25.txt',  # copy structure of this galfit file
-                    galfit_out=gf + 'galfit_akin_mge_fixedmodel_out_orig.fits',  # output name in galfit file
-                    new_galfit=gf + 'galfit_params_akin_mge_fixedmodel_orig.txt',  # new galfit file to write/run!
-                    convert_to_app=False, compare_file='galfit_input_akin_mge_orig.txt')
-    print(oop)
-    # '''  #
-    ###
-
-    ''' #
-    # regular H-band, dust corrected mask, N=10 (output n=9), q>=0.4
-    galfit_to_wiki(gf+'galfit.75', gf+'wiki_regH_combmask_mge_n10_n8_q04.txt')
-    print(oop)
-    mge_in = gf + 'ugc_2698_regH_combmask_n10_mge_04.txt'  # MGE output by mge_fit_mine.py, to convert to GALFIT's input
-    con_file = gf + 'galfit_regH_combmask_mge_constraintfile_n10_q04.txt'  # new constraint file to create
-    write_constraintfile(output=con_file, mag_bright=None, mag_dim=None, re_lo=None, re_hi=None, q_lo=0.40, num=9)
-    cv = mge_to_galfit(mge_in, zp, img=gf + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits',
-                       mask=gf + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits',
-                       constraint=con_file,  # constraint file to use in galfit
-                       copy_file=gf + 'galfit_params_mge_055_zp25.txt',  # galfit file I'm copying the structure of
-                       galfit_out=gf + 'galfit_regH_combmask_mge_n10_q04_zp25.fits',  # output in galfit file
-                       write_new=base + 'mge_fit_mine_params_regH_combinedmask_n10_q04_zp25.txt',  # converted mge
-                       new_galfit=gf + 'galfit_params_regH_combinedmask_mge_n10_q04_zp25.txt')  # galfit run file
-    print(oop)
-    # ''' #
-
-    '''  #
-    # regular H-band, dust corrected mask, N=10 (output n=9), q>=0.6
-    galfit_to_wiki(gf+'galfit.73', gf+'wiki_regH_combmask_n10_q06.txt')
-    print(oop)
-
-    mge_in = gf+'ugc_2698_regH_combmask_n10_mge_06.txt'
-    con_file = gf+'galfit_regH_combmask_mge_constraintfile_n10_q06.txt'
-    write_constraintfile(output=con_file, mag_bright=None, mag_dim=None, re_lo=None, re_hi=None, q_lo=0.60, num=9)
-    cv = mge_to_galfit(mge_in, zp, img=gf+'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits',
-                       mask=gf+'f160w_combinedmask_px010.fits',
-                       constraint=con_file,  # constraint file to use in galfit
-                       copy_file=gf + 'galfit_params_mge_055_zp25.txt',  # galfit file I'm copying the structure of
-                       galfit_out=gf + 'galfit_regH_combmask_mge_n10_q06_zp25.fits',  # output in galfit file
-                       write_new=base + 'mge_fit_mine_params_regH_combinedmask_n10_q06_zp25.txt',  # converted mge
-                       new_galfit=gf + 'galfit_params_regH_combinedmask_mge_n10_q06_zp25.txt')  # galfit run file
-    print(oop)
-    # '''  #
-
-    '''  #
-    # regular H-band, dust corrected mask, N=10
-    mge_in = gf+'ugc_2698_regH_combmask_n11_q055_mge.txt'  # 'ugc_2698_regH_combmask_n10_q055_mge.txt'
-    # N=11=input, N=10=output!
-    cv = mge_to_galfit(mge_in, zp, img=gf+'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits',
-                       mask=gf+'f160w_combinedmask_px010.fits',
-                       constraint=gf+'galfit_f160w_mge_constraintfile_n10_055.txt',  # constraint file to use in galfit
-                       copy_file=gf + 'galfit_params_mge_055_zp25.txt',  # galfit file I'm copying the structure of
-                       galfit_out=gf + 'galfit_regH_combmask_mge_n10_055_zp25.fits',  # output in galfit file
-                       write_new=base + 'mge_fit_mine_params_regH_combmask_n10_055_zp25.txt',  # converted mge
-                       new_galfit=gf + 'galfit_params_regH_combmask_mge_n10_055_zp25.txt')  # galfit run file
-    print(oop)
-    # '''  #
-
-    '''  #
-    mge_in = gf + 'ugc_2698_regH_combmask_mge.txt[
-    # FOR regular H-band, with dust-corrected mask
-    converted_vals = mge_to_galfit(mge_in, zp, img=gf+'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits',
-                                   mask=gf+'f160w_combinedmask_px010.fits',
-                                   copy_file=gf + 'galfit_params_mge_055_zp25.txt',
-                                   galfit_out=gf + 'galfit_regH_combmask_mge_055_zp25.fits',  # output in galfit file
-                                   write_new=base + 'mge_fit_mine_params_regH_combmask_055_zp25.txt',  # converted mge
-                                   new_galfit=gf + 'galfit_params_regH_combmask_mge_055_zp25.txt')  # galfit run file
-    # '''  #
-
-    ###
-
-    '''  #
-    # dust-corrected H-band, no dust mask, N=11, qbounds=[0.4, 1.]
-    galfit_to_wiki(gf+'galfit.77', gf+'wiki_ahcorr_mge_n11_q04.txt')
-    print(oop)
-
-    # N=11=input, N=10=output!
-    mge_in = gf+'ugc_2698_ahcorr_n11_mge_04.txt'
-    cv = mge_to_galfit(mge_in, zp, img=gf+'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan.fits',
-                       mask=gf+'f160w_maskedgemask_px010.fits',
-                       constraint=gf+'galfit_f160w_mge_constraintfile_n11_04.txt',  # constraint file to use in galfit
-                       copy_file=gf + 'galfit_params_mge_055_zp25.txt',  # galfit file I'm copying the structure of
-                       galfit_out=gf + 'galfit_ahcorr_mge_n11_04_zp25.fits',  # output in galfit file
-                       write_new=base + 'mge_fit_mine_params_ahcorr_n11_04_zp25.txt',  # converted mge
-                       new_galfit=gf + 'galfit_params_ahcorr_mge_n11_04_zp25.txt')  # galfit run file
-    print(oop)
-    # '''  #
-
-    '''  #
-    # dust-corrected H-band, no dust mask, N=10, qbounds=[0.4, 1.]
-    # N=10=input, N=9=output!
-    mge_in = gf+'ugc_2698_ahcorr_n10_mge_04.txt'
-    cv = mge_to_galfit(mge_in, zp, img=gf+'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan.fits',
-                       mask=gf+'f160w_maskedgemask_px010.fits',
-                       constraint=gf+'galfit_f160w_mge_constraintfile_n10_04.txt',  # constraint file to use in galfit
-                       copy_file=gf + 'galfit_params_mge_055_zp25.txt',  # galfit file I'm copying the structure of
-                       galfit_out=gf + 'galfit_ahcorr_mge_n10_04_zp25.fits',  # output in galfit file
-                       write_new=base + 'mge_fit_mine_params_ahcorr_n10_04_zp25.txt',  # converted mge
-                       new_galfit=gf + 'galfit_params_ahcorr_mge_n10_04_zp25.txt')  # galfit run file
-    print(oop)
-    # '''  #
-
-    '''  #
-    # dust-corrected H-band, no dust mask, N=10
-    # N=11=input, N=10=output!
-    mge_in = gf+'ugc_2698_ahcorr_n10_mge.txt'
-    cv = mge_to_galfit(mge_in, zp, img=gf+'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan.fits',
-                       mask=gf+'f160w_maskedgemask_px010.fits',
-                       constraint=gf+'galfit_f160w_mge_constraintfile_n10_055.txt',  # constraint file to use in galfit
-                       copy_file=gf + 'galfit_params_mge_055_zp25.txt',  # galfit file I'm copying the structure of
-                       galfit_out=gf + 'galfit_ahcorr_mge_n10_055_zp25.fits',  # output in galfit file
-                       write_new=base + 'mge_fit_mine_params_ahcorr_n10_055_zp25.txt',  # converted mge
-                       new_galfit=gf + 'galfit_params_ahcorr_mge_n10_055_zp25.txt')  # galfit run file
-    print(oop)
-    # '''  #
-
-    '''  #
-    # FOR dust-corrected H-band, with no dust mask
-    # args['file'] = base+'ugc_2698_f160w_ahcorr_mge.txt'
-    converted_vals = mge_to_galfit(args['file'], zp, mask=gf+'f160w_maskedgemask_px010.fits',
-                                   copy_file=gf + 'galfit_pars2.txt',
-                                   galfit_out=gf + 'galfit_mge_055_zp25.fits', write_new=base+'mge_fit_mine_params_055_zp25.txt',
-                                   new_galfit=gf + 'galfit_params_mge_055_zp25.txt')
-    # '''  #
-    print(cv)
