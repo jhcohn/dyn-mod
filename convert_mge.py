@@ -110,7 +110,7 @@ def paper_to_galfit(table_file, mag_sol=3.32, pix_scale=0.06, t_exp=1354.46, zp=
 
 
 def mge_to_galfit(mge_file, zeropoint, img=None, mask=None, copy_file=None, galfit_out=None, write_new=None,
-                  new_galfit=None, constraint=None, texp=None, gain=2.5):  # pa=-7.5697
+                  new_galfit=None, constraint=None, texp=None, sky=None, rms=None, gain=2.5):  # pa=-7.5697
 
     mags = []
     fwhms = []
@@ -124,7 +124,7 @@ def mge_to_galfit(mge_file, zeropoint, img=None, mask=None, copy_file=None, galf
             cols = line.split()
             if not line.startswith('#'):
                 if texp is not None:
-                    mags.append(zeropoint - 2.5 * np.log10(float(cols[0])) + 2.5 * np.log10(texp/gain))
+                    mags.append(zeropoint - 2.5*np.log10(gain) - 2.5 * np.log10(float(cols[0]) / texp))
                 else:
                     mags.append(zeropoint - 2.5 * np.log10(float(cols[0])))
                 fwhms.append(2 * np.sqrt(2 * np.log(2.)) * float(cols[1]))  # FWHM =~ 2.355 sigma
@@ -154,8 +154,9 @@ def mge_to_galfit(mge_file, zeropoint, img=None, mask=None, copy_file=None, galf
             for line in cf:
                 wline = line
                 if not line.startswith('# Component number: '):
-                    if line.startswith('# Chi'):
-                        wline = '# run with: galfit -skyped ' + str(sky) + ' -skyrms ' + str(rms) + new_galfit + '\n'
+                    if line.startswith('#  Chi'):
+                        wline = '# run with: galfit -skyped ' + str(sky) + ' -skyrms ' + str(rms) + ' ' + new_galfit +\
+                                '\n'
                     elif line.startswith('A)'):
                         wline = 'A) '  + img + '      # Input data image (FITS file)\n'
                     elif line.startswith('B)'):
@@ -293,72 +294,99 @@ if __name__ == "__main__":
 
     ### AFTER CORRECTING STUFF ###
     zp = 24.6949  # 24.697  # 25.95  # 24.697
+    texp = 898.467164
+    sky_counts = 339.493665331
+    rms_counts = 21.5123034564
+    sky_cps = 0.377858732438
+    rms_cps = 0.0239433389818
     # MGEs
     mge_regH_cps = gf + 'mge_ugc_2698_regH_linear_pf001_cps.txt'
     mge_regH_counts = gf + 'mge_ugc_2698_regH_linear_pf001_counts.txt'
-    mge_counts = gf + 'mge_ugc_2698_ahcorr_linear_pf001_counts.txt'  # mge_ugc_2698_ahcorr_n10_pf001_counts
-    mges = [gf + 'mge_ugc_2698_ahcorr_n10_05_pf001_cps.txt', gf + 'mge_ugc_2698_regH_n10_pf001_cps.txt']
+    mge_ahcorr_cps = gf + 'mge_ugc_2698_ahcorr_linear_pf001_cps.txt'  # mge_ugc_2698_ahcorr_n10_pf001_counts
+    mge_ahcorr_counts = gf + 'mge_ugc_2698_ahcorr_linear_pf001_counts.txt'  # mge_ugc_2698_ahcorr_n10_pf001_counts
+    mge_regreg_cps = gf + 'mge_ugc_2698_regH_regm_linear_pf001_cps.txt'
+    mge_regreg_counts = gf + 'mge_ugc_2698_regH_regm_linear_pf001_counts.txt'
+    # mges = [gf + 'mge_ugc_2698_ahcorr_n10_05_pf001_cps.txt', gf + 'mge_ugc_2698_regH_n10_pf001_cps.txt']
     n_regH_cps = 11
     n_regH_counts = 11
+    n_regreg = 11
     n_counts = 9  # 8
-    nums = [10, 10]  # [10, 10, 9, 9]
+    # nums = [10, 10]  # [10, 10, 9, 9]
     qs = None
     q_los = [0.5, None]
     # New converted MGE text files
-    mge_conv_counts = gf + 'conv_mge_ugc_2698_ahcorr_linear_pf001_counts.txt'  # ahcorr_n10_pf001_counts.txt'
+    mge_conv_ah_cps = gf + 'conv_mge_ugc_2698_ahcorr_linear_pf001_cps.txt'  # ahcorr_n10_pf001_counts.txt'
+    mge_conv_ah_counts = gf + 'conv_mge_ugc_2698_ahcorr_linear_pf001_counts.txt'  # ahcorr_n10_pf001_counts.txt'
     mge_conv_regH_cps = gf + 'conv_mge_ugc_2698_regH_linear_pf001_cps.txt'
     mge_conv_regH_counts = gf + 'conv_mge_ugc_2698_regH_linear_pf001_counts.txt'
-    mge_convs = [gf + 'conv_mge_u2698_ahcorr_n10_05_pf001_cps.txt', gf + 'conv_mge_u2698_regH_n10_pf001_cps.txt']
+    mge_conv_regreg_cps = gf + 'conv_mge_ugc_2698_regreg_linear_pf001_cps.txt'
+    mge_conv_regreg_counts = gf + 'conv_mge_ugc_2698_regreg_linear_pf001_counts.txt'
+    # mge_convs = [gf + 'conv_mge_u2698_ahcorr_n10_05_pf001_cps.txt', gf + 'conv_mge_u2698_regH_n10_pf001_cps.txt']
     # IMGs
-    regH = gf + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_nonan_cps.fits'
+    # regH = gf + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_nonan_cps.fits'
     regH_cps = gf + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_nonan_cps.fits'
     regH_counts = gf + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_nonan_counts.fits'
-    ahcorr = gf + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_cps.fits'
+    ahcorr_cps = gf + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_cps.fits'
     ahcorr_counts = gf + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_counts.fits'
-    imgs = [ahcorr, regH]
+    # imgs = [ahcorr, regH]
     # Masks
     comb_mask = gf + 'f160w_combinedmask_px010.fits'
     reg_mask = gf + 'f160w_maskedgemask_px010.fits'
     masks = [reg_mask, comb_mask]
     # New GALFIT param files!
-    galfit_par_counts = gf + 'galfit_params_u2698_ahcorr_linear_pf001_counts_zp24.txt'  # _ahcorr_n10_pf001_counts_zp24.txt
+    galfit_par_ah_cps = gf + 'galfit_params_u2698_ahcorr_linear_pf001_cps_zp24.txt'  # _ahcorr_n10_pf001_counts_zp24.txt
+    galfit_par_ah_counts = gf + 'galfit_params_u2698_ahcorr_linear_pf001_counts_zp24.txt'  # _ahcorr_n10_pf001_counts_zp24.txt
     galfit_par_regH_cps = gf + 'galfit_params_u2698_regH_linear_pf001_cps_zp24.txt'
     galfit_par_regH_counts = gf + 'galfit_params_u2698_regH_linear_pf001_counts_zp24.txt'
-    galfit_pars = [gf + 'galfit_params_u2698_ahcorr_n10_05_pf001_cps_zp24.txt',
-                   gf + 'galfit_params_u2698_regH_n10_pf001_cps_zp24.txt']
+    galfit_par_regreg_cps = gf + 'galfit_params_u2698_regreg_linear_pf001_cps_zp24.txt'
+    galfit_par_regreg_counts = gf + 'galfit_params_u2698_regreg_linear_pf001_counts_zp24.txt'
+    # galfit_pars = [gf + 'galfit_params_u2698_ahcorr_n10_05_pf001_cps_zp24.txt',
+    #                gf + 'galfit_params_u2698_regH_n10_pf001_cps_zp24.txt']
     # New GALFIT output names (GALFIT output image blocks)
-    galfit_out_counts = gf + 'galfit_out_ahcorr_linear_pf001_counts_zp24.fits'  # ahcorr_n10_pf001_counts_zp24.fits
+    galfit_out_ah_cps = gf + 'galfit_out_ahcorr_linear_pf001_cps_zp24.fits'  # ahcorr_n10_pf001_counts_zp24.fits
+    galfit_out_ah_counts = gf + 'galfit_out_ahcorr_linear_pf001_counts_zp24.fits'  # ahcorr_n10_pf001_counts_zp24.fits
     galfit_out_regH_cps = gf + 'galfit_out_regH_linear_pf001_cps_zp24.fits'
     galfit_out_regH_counts = gf + 'galfit_out_regH_linear_pf001_counts_zp24.fits'
-    galfit_outs = [gf + 'galfit_out_ahcorr_n10_05_pf001_cps_zp24.fits', gf + 'galfit_out_regH_n10_pf001_cps_zp24.fits']
+    galfit_out_regreg_cps = gf + 'galfit_out_regreg_linear_pf001_cps_zp24.fits'
+    galfit_out_regreg_counts = gf + 'galfit_out_regreg_linear_pf001_counts_zp24.fits'
+    # galfit_outs = [gf + 'galfit_out_ahcorr_n10_05_pf001_cps_zp24.fits', gf + 'galfit_out_regH_n10_pf001_cps_zp24.fits']
     # Constraint files
-    cons_counts = gf + 'cons_ugc_2698_ahcorr_linear_pf001_counts.txt'  # ahcorr_n10_pf001_counts.txt
+    cons_ah_cps = gf + 'cons_ugc_2698_ahcorr_linear_pf001_cps.txt'  # ahcorr_n10_pf001_counts.txt
+    cons_ah_counts = gf + 'cons_ugc_2698_ahcorr_linear_pf001_counts.txt'  # ahcorr_n10_pf001_counts.txt
     cons_regH_cps = gf + 'cons_ugc_2698_regH_linear_pf001_cps.txt'
     cons_regH_counts = gf + 'cons_ugc_2698_regH_linear_pf001_counts.txt'
-    cons = [gf + 'cons_ugc_2698_ahcorr_n10_05_pf001_cps.txt', gf + 'cons_ugc_2698_regH_n10_pf001_cps.txt']
+    cons_regreg_cps = gf + 'cons_ugc_2698_regreg_linear_pf001_cps.txt'
+    cons_regreg_counts = gf + 'cons_ugc_2698_regreg_linear_pf001_counts.txt'
+    # cons = [gf + 'cons_ugc_2698_ahcorr_n10_05_pf001_cps.txt', gf + 'cons_ugc_2698_regH_n10_pf001_cps.txt']
     # Copy file (galfit file of which I'm copying the structure)
     copyf = gf + 'galfit_params_mge_055_zp25.txt'
     # Loop!
 
+    # REGREG
+    write_constraintfile(output=cons_regreg_cps, q_lo=qs, num=n_regreg)  # q_los[c]
+    cv = mge_to_galfit(mge_regreg_cps, zp, img=regH_cps, mask=reg_mask, constraint=cons_regreg_cps,
+                       copy_file=copyf, galfit_out=galfit_out_regreg_cps, write_new=mge_conv_regreg_cps,
+                       new_galfit=galfit_par_regreg_cps, sky=sky_cps, rms=rms_cps, texp=None)
+
+    write_constraintfile(output=cons_regreg_counts, q_lo=qs, num=n_regreg)  # q_los[c]
+    cv = mge_to_galfit(mge_regreg_counts, zp, img=regH_cps, mask=reg_mask, constraint=cons_regreg_counts,
+                       copy_file=copyf, galfit_out=galfit_out_regreg_counts, write_new=mge_conv_regreg_counts,
+                       new_galfit=galfit_par_regreg_counts, sky=sky_counts, rms=rms_counts, texp=texp)
+    print(oop)
+    # REGH
     write_constraintfile(output=cons_regH_cps, q_lo=qs, num=n_regH_cps)  # q_los[c]
     cv = mge_to_galfit(mge_regH_cps, zp, img=regH_cps, mask=comb_mask, constraint=cons_regH_cps,
                        copy_file=copyf, galfit_out=galfit_out_regH_cps, write_new=mge_conv_regH_cps,
-                       new_galfit=galfit_par_regH_cps, texp=None)
-    print(oop)
+                       new_galfit=galfit_par_regH_cps, sky=sky_cps, rms=rms_cps, texp=None)
     write_constraintfile(output=cons_regH_counts, q_lo=qs, num=n_regH_counts)  # q_los[c]
     cv = mge_to_galfit(mge_regH_counts, zp, img=regH_counts, mask=comb_mask, constraint=cons_regH_counts,
                        copy_file=copyf, galfit_out=galfit_out_regH_counts, write_new=mge_conv_regH_counts,
-                       new_galfit=galfit_par_regH_counts, texp=898.467164)
+                       new_galfit=galfit_par_regH_counts, sky=sky_counts, rms=rms_counts, texp=texp)
     print(oop)
+    # AHCORR
     write_constraintfile(output=cons_counts, q_lo=qs, num=n_counts)  # q_los[c]
     cv = mge_to_galfit(mge_counts, zp, img=ahcorr_counts, mask=reg_mask, constraint=cons_counts, copy_file=copyf,
                        galfit_out=galfit_out_counts, write_new=mge_conv_counts, new_galfit=galfit_par_counts)
-    print(oop)
-    for c in range(len(cons)):
-        write_constraintfile(output=cons[c], q_lo=q_los[c], num=nums[c])  # q_los[c]
-        cv = mge_to_galfit(mges[c], zp, img=imgs[c], mask=masks[c], constraint=cons[c], copy_file=copyf,
-                           galfit_out=galfit_outs[c], write_new=mge_convs[c], new_galfit=galfit_pars[c])
-
     print(oop)
 
     '''  #

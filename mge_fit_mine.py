@@ -303,10 +303,14 @@ if __name__ == '__main__':
     base = '/Users/jonathancohn/Documents/dyn_mod/galfit_u2698/'
     ahcorr_cps = base + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_cps.fits'
     ahcorr_counts = base + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_counts.fits'
+    ahe = base + 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_e.fits'
     reg_mask = base + 'f160w_maskedgemask_px010.fits'
+
     regH_img = base + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_nonan_cps.fits'
     regH_counts = base + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_nonan_counts.fits'
+    re = base + 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_nonan_e.fits'
     comb_mask = base + 'f160w_combinedmask_px010.fits'
+
     psf_file = base + 'ugc2698_f160w_pxfr075_pxs010_rapid_psf_drz_sci_clipped2no0.fits'
 
     out_ah5 = base + 'mge_ugc_2698_ahcorr_n10_05_pf001_cps.txt'
@@ -316,25 +320,52 @@ if __name__ == '__main__':
     out_rh4 = base + 'ugc_2698_regH_n9_mge_04_psff002.txt'
     out_ah = base + 'mge_ugc_2698_ahcorr_n10_pf001_cps.txt'
     out_rh = base + 'mge_ugc_2698_regH_n10_pf001_cps.txt'
+
     out_ahcounts = base + 'mge_ugc_2698_ahcorr_linear_pf001_counts.txt'  # mge_ugc_2698_ahcorr_n10_pf001_counts
+    out_ahcps = base + 'mge_ugc_2698_ahcorr_linear_pf001_cps.txt'
+    out_ahe =  base + 'mge_ugc_2698_ahe_linear_pf001.txt'  # ahcorr, regmask, units=e
+
     out_rhcounts = base + 'mge_ugc_2698_regH_linear_pf001_counts.txt'
     out_rhcps = base + 'mge_ugc_2698_regH_linear_pf001_cps.txt'
+    out_rhe = base + 'mge_ugc_2698_rhe_linear_pf001.txt'  # regH, combmask, units=e
 
-    sky_counts = 339.493665331
-    rms_counts = 21.5123034564
-    sky_cps = 0.37709936
+    out_rr_counts = base + 'mge_ugc_2698_regH_regm_linear_pf001_counts.txt'
+    out_rr_cps = base + 'mge_ugc_2698_regH_regm_linear_pf001_cps.txt'
+    out_rre = base + 'mge_ugc_2698_rre_linear_pf001.txt'  # regH, regmask, units=e
+
+    sky_e = 339.493665331
+    rms_e = 21.5123034564
+    sky_cps = 0.377858732438
     rms_cps = 0.0239433389818
+
     num = None  # 10
     ql6 = [0.6, 1.]
     ql5 = [0.5, 1.]
     ql4 = [0.4, 1.]
+
     pf = 0.01
 
-    fit_u2698(regH_counts, comb_mask, psf_file, pfrac=pf, num=num, write_out=out_rhcounts, qlims=None, plots=True,
+    ### do regH with reg (not dust) mask
+    ### then do regH with reg (not dust) mask WITH PSF in GALFIT (remove innermost mge component and replace with psf for first guess)
+    ### then do regH with dust mask: make sure sky is correct, try just doing it directly how I've been doing it
+    ### then do regH with dust mask, with PSF (same as before; pop inner component output by mge fit sectors and replace with psf)
+
+    print(oop)
+    fit_u2698(regH_counts, reg_mask, psf_file, pfrac=pf, num=num, write_out=out_rr_counts, qlims=None, plots=False,
+              cps=False, sky=sky_counts)
+    fit_u2698(regH_img, reg_mask, psf_file, pfrac=pf, num=num, write_out=out_rr_cps, qlims=None, plots=False,
+              cps=True, sky=sky_cps)
+    print(oop)
+    fit_u2698(regH_counts, comb_mask, psf_file, pfrac=pf, num=num, write_out=out_rhcounts, qlims=None, plots=False,
+              cps=False, sky=sky_counts)
+    fit_u2698(regH_img, comb_mask, psf_file, pfrac=pf, num=num, write_out=out_rhcps, qlims=None, plots=False,
+              cps=True, sky=sky_cps)
+    print(oop)
+    fit_u2698(ahcorr_cps, reg_mask, psf_file, pfrac=pf, num=num, write_out=out_ahcps, qlims=None, plots=True,
+              cps=False, sky=sky_cps)
+    fit_u2698(ahcorr_counts, reg_mask, psf_file, pfrac=pf, num=num, write_out=out_ahcounts, qlims=None, plots=True,
               cps=False, sky=sky_counts)
     print(oop)
-    fit_u2698(regH_img, comb_mask, psf_file, pfrac=pf, num=num, write_out=out_rhcps, qlims=None, plots=True,
-              cps=True, sky=sky_cps)
     print(oop)
     fit_u2698(ahcorr_counts, reg_mask, psf_file, pfrac=pf, num=num, write_out=out_ahcounts, qlims=None, plots=True,
               cps=False, sky=sky_counts)  # 338.8114

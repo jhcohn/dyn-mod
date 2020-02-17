@@ -10,6 +10,7 @@ newclipped_psf2 = 'ugc2698_f160w_pxfr075_pxs010_rapid_psf_drz_sci_clipped2no0.fi
 new_hband = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0.fits'  # orig H-band; NaNs->0
 hband_cps = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_nonan_cps.fits'  # orig H-band; NaNs->0, texp=1
 hband_counts = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_nonan_counts.fits'  # orig H-band; NaNs->0, data*texp
+hband_e = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_nonan_e.fits'  # orig H-band; NaNs->0, data*texp, gain->1
 new_hbandmult = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_multexptime.fits'
 skysub_regH = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0_skysub.fits'  # orig H-band, nan->0, subtract 0.37
 masked_skysub_rH = 'ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci_no0_skysub_combinedmask.fits'  # orig H-band, nan->0, subtract 0.37, multiply by combinedmask
@@ -24,6 +25,7 @@ skysub_ahcorr = 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_skysub.f
 masked_skysub_ah = 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_skysub_maskedgemask.fits'  # ahcorr, nan->0, subtract 0.37, multiply by maskedgemask
 hband_dustcorr_cps = 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_cps.fits'  # ahcorr, nan->0, texp=1
 hband_dustcorr_counts = 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_counts.fits'  # ahcorr, nan->0, data*texp
+hband_ahe = 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_e.fits'  # ahcorr, nan->0, data*texp, gain->1
 masked_dustcorr_cps = 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_cps_maskedgemask.fits'  # ahcorr, nan->0, texp=1, multiply by maskedgemask
 masked_dustcorr_counts = 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan_counts_maskedgemask.fits'  # ahcorr, nan->0, data*texp, multiply by maskedgemask
 base = '/Users/jonathancohn/Documents/dyn_mod/galfit_u2698/'
@@ -46,6 +48,29 @@ print(rms_deviation)
 
 # Run cps GALFIT with: galfit -skyped 0.38 -skyrms 0.02 galfit_params_u2698_ahcorr_n10_pf001_cps_zp24.txt
 # Run counts GALFIT with: galfit -skyped 339.493665331 -skyrms 21.5123034564 galfit_params_u2698_ahcorr_n10_pf001_counts_zp24.txt
+print(oop)
+
+
+with fits.open(hband_dustcorr_counts) as hd:
+    print(hd.info())
+    hdrd = hd[0].header
+    datad = hd[0].data
+
+del hdrd['GAIN']  # remove incorrect gain entry
+hdrd['CCDGAIN'] = 1.0
+hdrd['history'] = 'changed gain to 1, because image is actually in e, NOT counts (was originally e/sec)'
+fits.writeto(base + hband_ahe, datad, hdrd)  # ahcorr, correcting header info
+print(oop)
+
+
+with fits.open(hband_counts) as hd:
+    print(hd.info())
+    hdrd = hd[0].header
+    datad = hd[0].data
+
+hdrd['CCDGAIN'] = 1.0
+hdrd['history'] = 'changed gain to 1, because image is actually in e, NOT counts (was originally e/sec)'
+fits.writeto(base + hband_e, datad, hdrd)  # regH, correcting header info
 print(oop)
 
 
