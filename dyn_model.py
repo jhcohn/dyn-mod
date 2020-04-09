@@ -129,6 +129,7 @@ def get_fluxes(data_cube, data_mask, write_name=None):
     collapsed_fluxes = np.zeros(shape=(len(data[0]), len(data[0][0])))
     for zi in range(len(data)):
         collapsed_fluxes += data[zi] * mask[zi] * abs(f_step)
+        #     velwidth = constants.c_kms * (1 + zred) * fstep / f_0
 
     hdu.close()  # close data
     hdu_m.close()  # close mask
@@ -454,15 +455,11 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
     print(len(masked_pix), len(z_ax))
     n_pts = len(masked_pix) * len(z_ax)
     print(n_pts)
+
     # n_pts = 4508 if all_pix == 16. 6302 if all_pix != 0. 5566 if all_pix >= 8 [red_chi2=1.766].
     # 1.56*6302/1.788 -> want ~5500 (5498)
     #print(oop)
 
-    #plt.imshow(ell_4[0], origin='lower')
-    #plt.title('Ellipse after 4x4 binning')
-    #plt.colorbar()
-    #plt.show()
-    #print(oop)
 
     '''  #
     plt.imshow(weight, origin='lower')
@@ -493,7 +490,6 @@ def model_grid(resolution=0.05, s=10, x_loc=0., y_loc=0., mbh=4 * 10 ** 8, inc=n
         # HERE: I DEFINE THE ELLIPSE ON THE 4x4-PIXEL SCALE! THIS RESULTS IN 116 PIXELS PER SLICE, FOR CHI^2_nu=1.841
         ell_mask = ellipse_fitting(ap_4, rfit, xell / ds, yell / ds, resolution * ds, theta_ell, q_ell)
         # create ellipse mask
-        print(len(ap_4[0]), len(ap_4[0][0]), xell, xell / ds, yell, yell / ds, rfit, rfit / resolution / ds)
         print(np.sum(ell_mask))
         plt.imshow(ell_mask, origin='lower')
         plt.title('Ellipse constructed on 4x4-binned grid')
@@ -655,7 +651,9 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=
         hdub.close()
         l_in[l_in < 0.] = 0.
         # https://github.com/scikit-image/scikit-image/issues/2551 (it was returning nans)
-        # add to skimage/restoration/deconvolution.py (before line 389): relative_blur[np.isnan(relative_blur)] = 0
+        # open skimage/restoration/deconvolution.py
+        # find this line (~line 389): im_deconv *= convolve_method(relative_blur, psf_mirror, 'same')
+        # Insert a new line before that line: relative_blur[np.isnan(relative_blur)] = 0
         l_o = restoration.richardson_lucy(l_in, l_b, lucy_it, clip=False)  # need clip=False
         print('lucy process done in ' + str(time.time() - t_pyraf) + 's')  # ~1s
 
