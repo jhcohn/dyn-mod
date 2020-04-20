@@ -216,7 +216,7 @@ class ModelGrid:
 
     def __init__(self, resolution=0.05, os=4, x_loc=0., y_loc=0., mbh=4e8, inc=np.deg2rad(60.), vsys=None, vrad=0.,
                  dist=17., theta=np.deg2rad(200.), input_data=None, lucy_out=None, out_name=None, beam=None, rfit=1.,
-                 q_ell=1., theta_ell=0., xell=360., yell=350., bl=False, enclosed_mass=None, menc_type=False,
+                 q_ell=1., theta_ell=0., xell=360., yell=350., bl=False, enclosed_mass=None, menc_type=0,
                  ml_ratio=1., sig_type='flat', sig_params=None, f_w=1., noise=None, ds=None, zrange=None, xyrange=None,
                  reduced=False, freq_ax=None, f_0=0., fstep=0., opt=True, quiet=False, n_params=12):
         self.resolution = resolution
@@ -256,6 +256,7 @@ class ModelGrid:
         self.opt = opt
         self.quiet = quiet
         self.n_params = n_params
+        self.constants = Constants()  # INSTANTIATE ASTRONOMICAL CONSTANTS
         self.weight = None  # init here, but built in model_grid.create_grid()
         self.z_ax = None
         self.freq_obs = None
@@ -313,13 +314,10 @@ class ModelGrid:
         output_cube: not actively using; requires create_frid and convolve_cube to be run first; create output cube file        
         # BUCKET TO DO: include moment map functions too!
     """
-    t_begin = time.time()
-
-    # INSTANTIATE ASTRONOMICAL CONSTANTS
-    constants = Constants()
+    # t_begin = time.time()
 
     def create_grid(self):
-        # TO DO: continue from here! Following: https://www.w3schools.com/python/python_classes.asp
+        # Following: https://www.w3schools.com/python/python_classes.asp
 
         # SUBPIXELS (reshape deconvolved flux map [lucy_out] sxs subpixels, so subpix has flux=(real pixel flux)/s**2)
         if not self.quiet:
@@ -335,11 +333,11 @@ class ModelGrid:
 
         # convert from frequency (Hz) to velocity (km/s), with freq_ax in Hz
         if self.opt:  # v_opt
-            z_ax = np.asarray([self.vsys + ((self.f_0 - freq) / freq) * (constants.c / constants.m_per_km) for freq in
-                               self.freq_ax])
+            z_ax = np.asarray([self.vsys + ((self.f_0 - freq) / freq) * (self.constants.c / self.constants.m_per_km) for
+                               freq in self.freq_ax])
         else:  # v_rad
-            z_ax = np.asarray([self.vsys + ((self.f_0 - freq) / f_0) * (constants.c / constants.m_per_km) for freq in
-                               self.freq_ax])
+            z_ax = np.asarray([self.vsys + ((self.f_0 - freq) / self.f_0) * (self.constants.c / self.constants.m_per_km)
+                               for freq in self.freq_ax])
 
         # RESCALE subpix_deconvolved, z_ax, freq_ax TO CONTAIN ONLY THE SUB-CUBE REGION WHERE EMISSION ACTUALLY EXISTS
         subpix_deconvolved = subpix_deconvolved[self.os * self.xyrange[2]:self.os * self.xyrange[3],
@@ -381,12 +379,12 @@ class ModelGrid:
         y_bh_ac = (y_loc - y_ctr / self.os) * self.resolution
 
         # CONVERT FROM ARCSEC TO PHYSICAL UNITS (pc)
-        x_bhoff = self.dist * 10 ** 6 * np.tan(x_bh_ac / constants.arcsec_per_rad)  # tan(off) = x_disk/dist --> x = d*tan(off)
-        y_bhoff = self.dist * 10 ** 6 * np.tan(y_bh_ac / constants.arcsec_per_rad)  # 206265 arcsec/rad
+        x_bhoff = self.dist * 10 ** 6 * np.tan(x_bh_ac / self.constants.arcsec_per_rad)  # tan(off) = x_disk/dist --> x = d*tan(off)
+        y_bhoff = self.dist * 10 ** 6 * np.tan(y_bh_ac / self.constants.arcsec_per_rad)  # 206265 arcsec/rad
 
         # convert all x,y observed grid positions to pc
-        x_obs = np.asarray([self.dist * 10 ** 6 * np.tan(x / constants.arcsec_per_rad) for x in x_obs_ac])  # 206265 arcsec/rad
-        y_obs = np.asarray([self.dist * 10 ** 6 * np.tan(y / constants.arcsec_per_rad) for y in y_obs_ac])  # 206265 arcsec/rad
+        x_obs = np.asarray([self.dist * 10 ** 6 * np.tan(x / self.constants.arcsec_per_rad) for x in x_obs_ac])  # 206265 arcsec/rad
+        y_obs = np.asarray([self.dist * 10 ** 6 * np.tan(y / self.constants.arcsec_per_rad) for y in y_obs_ac])  # 206265 arcsec/rad
 
         # CONVERT FROM x_obs, y_obs TO x_disk, y_disk [pc]
         x_disk_ac = (x_obs_ac[None, :] - x_bh_ac) * np.cos(self.theta) + (y_obs_ac[:, None] - y_bh_ac) * np.sin(self.theta)  # arcsec
@@ -399,8 +397,8 @@ class ModelGrid:
         R = np.sqrt((y_disk ** 2 / np.cos(self.inc) ** 2) + x_disk ** 2)  # radius R of each point in the disk (2d array)
 
         # CALCULATE KEPLERIAN VELOCITY DUE TO ENCLOSED STELLAR MASS
-        if menc_type == 0:  # if calculating v(R) due to stars directly from MGE parameters
-            if not quiet:
+        if self.menc_type == 0:  # if calculating v(R) due to stars directly from MGE parameters
+            if not self.quiet:
                 print('mge')
             test_rad = np.linspace(np.amin(R_ac), np.amax(R_ac), 100)
 
@@ -410,13 +408,13 @@ class ModelGrid:
             v_c_r = interpolate.interp1d(test_rad, v_c, kind='cubic', fill_value='extrapolate')
 
             # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
-            vel = np.sqrt((constants.G_pc * self.mbh / R) + v_c_r(R_ac)**2)
-        elif menc_type == 1:  # elif using a file with v_circ(R) due to stellar mass
-            if not quiet:
+            vel = np.sqrt((self.constants.G_pc * self.mbh / R) + v_c_r(R_ac)**2)
+        elif self.menc_type == 1:  # elif using a file with v_circ(R) due to stellar mass
+            if not self.quiet:
                 print('v(r)')
             radii = []
             v_circ = []
-            with open(enclosed_mass) as em:  # note: current file has units v_circ^2/(M/L) --> v_circ = np.sqrt(col * (M/L))
+            with open(self.enclosed_mass) as em:  # note: current file has units v_circ^2/(M/L) --> v_circ = np.sqrt(col * (M/L))
                 for line in em:
                     cols = line.split()  # note: currently using model "B1" = 2nd col in file (file has 4 cols of models)
                     radii.append(float(cols[0]))  # file lists radii in pc
@@ -425,14 +423,14 @@ class ModelGrid:
             v_c_r = interpolate.interp1d(radii, v_circ, fill_value='extrapolate')  # create a function to interpolate v_circ
 
             # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
-            vel = np.sqrt(v_c_r(R) * self.ml_ratio + (constants.G_pc * self.mbh / R))  # velocities sum in quadrature
+            vel = np.sqrt(v_c_r(R) * self.ml_ratio + (self.constants.G_pc * self.mbh / R))  # velocities sum in quadrature
 
-        elif menc_type == 2:  # elif using a file directly with stellar mass as a function of R
-            if not quiet:
+        elif self.menc_type == 2:  # elif using a file directly with stellar mass as a function of R
+            if not self.quiet:
                 print('M(R)')
             radii = []
             m_stellar = []
-            with open(enclosed_mass) as em:
+            with open(self.enclosed_mass) as em:
                 for line in em:
                     cols = line.split()
                     cols[1] = cols[1].replace('D', 'e')
@@ -443,7 +441,7 @@ class ModelGrid:
             m_R = self.mbh + ml_const * m_star_r(R)  # Use m_star_r function to interpolate mass at all radii R (2d array)
 
             # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
-            vel = np.sqrt(constants.G_pc * m_R / R)  # Keplerian velocity vel at each point in the disk
+            vel = np.sqrt(self.constants.G_pc * m_R / R)  # Keplerian velocity vel at each point in the disk
 
         # CALCULATE LINE-OF-SIGHT VELOCITY AT EACH POINT (x_disk, y_disk) IN THE DISK (km/s)
         alpha = abs(np.arctan(y_disk / (np.cos(self.inc) * x_disk)))  # alpha meas. from +x (minor axis) toward +y (major axis)
@@ -464,12 +462,12 @@ class ModelGrid:
         sigma = get_sig(r=R, sig0=self.sig_params[0], r0=self.sig_params[1], mu=self.sig_params[2], sig1=self.sig_params[3])[self.sig_type]
 
         # CONVERT v_los TO OBSERVED FREQUENCY MAP
-        self.zred = self.vsys / constants.c_kms  # redshift
-        self.freq_obs = (self.f_0 / (1+self.zred)) * (1 - v_los / constants.c_kms)  # convert v_los to f_obs
+        self.zred = self.vsys / self.constants.c_kms  # redshift
+        self.freq_obs = (self.f_0 / (1+self.zred)) * (1 - v_los / self.constants.c_kms)  # convert v_los to f_obs
 
         # CONVERT OBSERVED DISPERSION (turbulent) TO FREQUENCY WIDTH
         sigma_grid = np.zeros(shape=R.shape) + sigma  # make sigma (whether already R-shaped or constant) R-shaped
-        self.delta_freq_obs = (self.f_0 / (1 + self.zred)) * (sigma_grid / constants.c_kms)  # convert sigma to delta_f
+        self.delta_freq_obs = (self.f_0 / (1 + self.zred)) * (sigma_grid / self.constants.c_kms)  # convert sigma to delta_f
 
         # WEIGHTS FOR LINE PROFILES: apply weights to gaussian velocity profiles for each subpixel
         self.weight = subpix_deconvolved  # [Jy/beam Hz]
@@ -495,7 +493,7 @@ class ModelGrid:
             cube_model[fr] = self.weight * np.exp(-(self.freq_ax[fr] - self.freq_obs) ** 2 / (2 * self.delta_freq_obs ** 2))
 
         # RE-SAMPLE BACK TO CORRECT PIXEL SCALE (take average of sxs sub-pixels for real alma pixel) --> intrinsic data cube
-        if os == 1:
+        if self.os == 1:
             intrinsic_cube = cube_model
         else:
             intrinsic_cube = rebin(cube_model, self.os)  # intrinsic_cube = block_reduce(cube_model, s, np.mean)
@@ -559,16 +557,15 @@ class ModelGrid:
         print(n_pts, len(masked_pix))  # rfit=1.2 --> 6440 (140/slice); 6716 (146/slice) for fully inclusive ellipse
         # print(oop)  # rfit=1.05 --> 4968 (108/slice)  # rfit=1.136 --> 5704 (124/slice) (see 16 April 2018 meeting)
         print(r'chi^2=', chi_sq)
-        if not quiet:
-            print('total model constructed in {0} seconds'.format(time.time() - t_begin))  # ~213s
+        # if not quiet:
+            # print('total model constructed in {0} seconds'.format(time.time() - t_begin))  # ~213s
 
         if self.reduced:
-            print(r'chi^2=', chi_sq)
             print(r'Reduced chi^2=', chi_sq / (n_pts - self.n_params))  # n_params = number of free parameters (from load)
             chi_sq /= (n_pts - self.n_params)  # convert to reduced chi^2; else just return full chi^2
         if n_pts == 0.:
             print(self.resolution, self.xell, self.yell)
-            print('n_pts = ' + str(n_pts))
+            print('WARNING! STOP! There are no pixels inside the fitting ellipse! n_pts = ' + str(n_pts))
             chi_sq = np.inf
         return chi_sq  # Reduced or Not depending on reduced = True or False
 
@@ -629,15 +626,14 @@ def par_dicts(parfile, q=False):
         return params, priors, nfree
 
 
-def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=None, lucy_it=None, data=None,
-               data_mask=None, grid_size=None, res=1., x_std=1., y_std=1., pa=0., ds=4, zrange=None, xyerr=None):
+def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it=None, data=None, data_mask=None,
+               grid_size=None, res=1., x_std=1., y_std=1., pa=0., ds=4, zrange=None, xyerr=None):
     """
 
     :param lucy_out: output from running lucy on data cube and beam PSF; if it doesn't exist, create it!
     :param lucy_mask: file name of collapsed mask file to use in lucy process (if lucy_out doesn't exist)
     :param lucy_b: file name of input beam (built in make_beam()) to use for lucy process (if lucy_out doesn't exist)
     :param lucy_in: file name of input summed flux map to use for lucy process (if lucy_out doesn't exist)
-    :param lucy_o: file name that will become the lucy_out, used in lucy process (if lucy_out doesn't exist)
     :param lucy_it: number of iterations to run in lucy process (if lucy_out doesn't exist)
     :param data: input data cube of observations
     :param data_mask: input mask cube of each slice of the data, for constructing the weight map
@@ -674,15 +670,6 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=
     # DECONVOLVE FLUXES WITH BEAM PSF
     if not Path(lucy_out).exists():  # to use iraf, must "source activate iraf27" on command line
         t_pyraf = time.time()
-        '''  #
-        import pyraf
-        from pyraf import iraf
-        from iraf import stsdas, analysis, restore
-        restore.lucy(lucy_in, lucy_b, lucy_o, niter=lucy_it, maskin=lucy_mask, goodpixval=1, limchisq=1E-3)  # lucy
-        print('lucy process done in ' + str(time.time() - t_pyraf) + 's')  # ~10.6s
-        if lucy_out is None:  # lucy_output should be defined, but just in case:
-            lucy_out = lucy_o[:-3]  # don't include "[0]" on the file name ("[0]" is required for lucy process)
-        # '''  #
         from skimage import restoration  # need to be in "three" environment (source activate three == tres)
         hduin = fits.open(lucy_in)
         l_in = hduin[0].data
@@ -717,40 +704,20 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_o=
     return lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise
 
 
-def test_qell2(input_data, params, l_in, q_ell, rfit, pa):
-    ell_mask = ellipse_fitting(input_data, rfit, params['xell'], params['yell'], params['resolution'],
-                               pa, q_ell)  # create ellipse mask
+def test_qell2(input_data, params, l_in, q_ell, rfit, pa, figname):
+    figname += '_' + str(q_ell) + '_' + str(pa) + '_' + str(rfit) + '.png'
+    ell_mask = ellipse_fitting(input_data, rfit, params['xell'], params['yell'], params['resolution'], pa, q_ell)
+
     fig = plt.figure()
     ax = plt.gca()
     plt.imshow(l_in, origin='lower')
     plt.colorbar()
     from matplotlib import patches
     e1 = patches.Ellipse((params['xell'], params['yell']), 2 * rfit / params['resolution'],
-                         2 * rfit / params['resolution'] * q_ell,
-                         angle=pa, linewidth=2, edgecolor='w',
-                         fill=False)  # np.rad2deg(params['theta_ell'])
+                         2 * rfit / params['resolution'] * q_ell, angle=pa, linewidth=2, edgecolor='w', fill=False)
     ax.add_patch(e1)
     plt.title(r'q = ' + str(q_ell) + r', PA = ' + str(pa) + ' deg, rfit = ' + str(rfit) + ' arcsec')
-    plt.savefig('/Users/jonathancohn/Documents/dyn_mod/ugc_2698/ellipse_plots/' + str(q_ell) + '_' + str(pa) + '_' +
-                str(rfit) + '.png', dpi=300)
-
-
-def test_qell(input_data, params, l_in, q_ell):
-    ell_mask = ellipse_fitting(input_data, params['rfit'], params['xell'], params['yell'], params['resolution'],
-                               params['theta_ell'], q_ell)  # create ellipse mask
-    fig = plt.figure()
-    ax = plt.gca()
-    plt.imshow(l_in, origin='lower')
-    plt.colorbar()
-    from matplotlib import patches
-    e1 = patches.Ellipse((params['xell'], params['yell']), 2 * params['rfit'] / params['resolution'],
-                         2 * params['rfit'] / params['resolution'] * q_ell,
-                         angle=params['theta_ell'], linewidth=2, edgecolor='w',
-                         fill=False)  # np.rad2deg(params['theta_ell'])
-    ax.add_patch(e1)
-    plt.title(r'q = ' + str(q_ell) + r', PA = ' + str(params['theta_ell']) + ' deg, rfit = ' + str(params['rfit'])
-              + ' arcsec')
-    plt.show()
+    plt.savefig(figname, dpi=300)
 
 
 if __name__ == "__main__":
@@ -776,9 +743,9 @@ if __name__ == "__main__":
 
     # CREATE THINGS THAT ONLY NEED TO BE CALCULATED ONCE (collapse fluxes, lucy, noise)
     mod_ins = model_prep(data=params['data'], ds=params['ds'], lucy_out=params['lucy'], lucy_mask=params['lucy_mask'],
-                         lucy_b=params['lucy_b'], lucy_in=params['lucy_in'], lucy_o=params['lucy_o'],
-                         lucy_it=params['lucy_it'], data_mask=params['mask'], grid_size=params['gsize'],
-                         res=params['resolution'], x_std=params['x_fwhm'], y_std=params['y_fwhm'], pa=params['PAbeam'],
+                         lucy_b=params['lucy_b'], lucy_in=params['lucy_in'], lucy_it=params['lucy_it'],
+                         data_mask=params['mask'], grid_size=params['gsize'], res=params['resolution'],
+                         x_std=params['x_fwhm'], y_std=params['y_fwhm'], pa=params['PAbeam'],
                          xyerr=[params['xerr0'], params['xerr1'], params['yerr0'], params['yerr1']],
                          zrange=[params['zi'], params['zf']])
 
@@ -800,136 +767,9 @@ if __name__ == "__main__":
                    theta_ell=np.deg2rad(params['theta_ell']), xell=params['xell'], yell=params['yell'], fstep=fstep,
                    f_0=f_0, bl=params['bl'], xyrange=[params['xi'], params['xf'], params['yi'], params['yf']],
                    n_params=n_free)
+    mg.create_grid()
+    mg.convolve_cube()
+    chi_sq = mg.chi2()
 
-    print('True Total: ' + str(time.time() - t0_true))  # 3.93s YAY!  # 23s for 6 models (16.6 for 4 models)
-    print(chi2)  # NOTE: right now, chi^2_nu (with my lucy + v(R)) = 1.9, chi^2_nu (with my lucy + mge) = 9.98
-
-'''  #
-    plt.imshow(lucy_out, origin='lower')
-    plt.colorbar()
-    plt.show()
-
-    hdu = fits.open('/Users/jonathancohn/Documents/dyn_mod/ugc_2698/ugc_2698_scikit_lucyout_n10.fits')
-    lo2 = hdu[0].data
-    hdu.close()
-    plt.imshow(lucy_out - lo2, origin='lower')
-    plt.colorbar()
-    plt.show()
-    print(oop)
-# '''  #
-# TO DO:
-# MAIN. Implement MGE as Jonelle requested[X], explore number of pixels in ellipse issue[ ], start playing with UGC[X]
-# Do Parallelization![ ] --> install mpi4py first!!!
-## pip install mpi4py --> error: "error: Cannot compile MPI programs. Check your configuration!!!"
-###https://stackoverflow.com/questions/28440834/error-when-installing-mpi4py --> brew install mpich
-####sudo find / -name mpicc [returned two lines]: /usr/local/bin/mpicc ; /usr/local/Cellar/mpich/3.3/bin/mpicc
-#####pip install mpi4py --> worked!
-######NOW import mpi4py works, but from mpi4py import MPI returns an error:
-#
-#  Traceback (most recent call last):
-#  File "<stdin>", line 1, in <module>
-# ImportError: dlopen(/Users/jonathancohn/anaconda3/envs/iraf27/lib/python2.7/site-packages/mpi4py/MPI.so, 2): Symbol not found: ___addtf3
-#  Referenced from: /usr/local/opt/gcc/lib/gcc/8/libquadmath.0.dylib
-#  Expected in: /usr/lib/libSystem.B.dylib
-# in /usr/local/opt/gcc/lib/gcc/8/libquadmath.0.dylib
-#
-#######Tried uninstalling/reinstalling, no success.
-# add model_prep to dyn_emcee[X]
-# Tighten all the priors![X]
-# Later (after done matching with Ben): prevent mu from going negative![X]
-# play with softening parameter?[X] --> don't worry about it anymore!
-# maybe put noise calc in model_prep function?[X]
-# switch to using scikit-image (instead of iraf27) --> can do everything in python 3![X]
-# LONG-TERM: Do reading![ ]
-
-# CONVERGENCE: http://joergdietrich.github.io/emcee-convergence.html
-
-# emcee paper: https://arxiv.org/pdf/1202.3665.pdf
-# https://en.wikipedia.org/wiki/Reduced_chi-squared_statistic
-# https://en.wikipedia.org/wiki/Variance
-# https://en.wikipedia.org/wiki/Standard_deviation
-
-'''
-(three) Jonathans-MacBook-Pro:~ jonathancohn$ brew install wget
-Warning: wget 1.20.3 is already installed, it's just not linked
-You can use `brew link wget` to link this version.
-(three) Jonathans-MacBook-Pro:~ jonathancohn$ brew link wget
-Linking /usr/local/Cellar/wget/1.20.3... 
-Error: Could not symlink share/locale/be/LC_MESSAGES/wget.mo
-/usr/local/share/locale/be/LC_MESSAGES is not writable.
-
-Finally this worked: https://github.com/Homebrew/legacy-homebrew/issues/13276
-(three) Jonathans-MacBook-Pro:~ jonathancohn$ sudo chown -R $USER:admin /usr/local/share
-(three) Jonathans-MacBook-Pro:~ jonathancohn$ brew link wget
-Linking /usr/local/Cellar/wget/1.20.3... 42 symlinks created
-(Went ahead and ran brew reinstall wget [not sure if doing so was necessary tho])
-wget --version now returns something sensible!
-
-Followed instructions here: https://mpi4py.readthedocs.io/en/stable/install.html for wget (except downloaded manually,
-because link listed with wget didn't work --> https://bitbucket.org/mpi4py/mpi4py/downloads/)
-Once downloaded manually, I did the tar step and so on as shown in the link. The mpiexec test worked, but can only use
-n=2. Using n=3 or more resulted in the following error:
-    There are not enough slots available in the system to satisfy the 3 slots
-    that were requested by the application:
-        python
-
-    Either request fewer slots for your application, or make more slots available
-    for use.
-Also got new error now when from emcee.utils import MPIPool() ; pool = MPIPool():
-  File "<stdin>", line 1, in <module>
-  File "/Users/jonathancohn/anaconda3/envs/three/lib/python3.6/site-packages/emcee/mpi_pool.py", line 66, in __init__
-    raise ValueError("Tried to create an MPI pool, but there "
-ValueError: Tried to create an MPI pool, but there was only one MPI process available. Need at least two.
-
-From here: https://emcee.readthedocs.io/en/stable/_modules/emcee/mpi_pool.html --> self.comm.Get_size() = 1 -->
-self.size = 0 --> returns the above "Tried to create..." error
-
-Hmm doing this: https://superuser.com/questions/1101311/how-many-cores-does-my-mac-have -->
-Jonathans-MacBook-Pro:~ jonathancohn$ sysctl hw.physicalcpu hw.logicalcpu
-hw.physicalcpu: 2
-hw.logicalcpu: 4
-
-OKAY, bc emcee notes some issues with MPIPool that may be fixed in their newest version:
-I have done: conda uninstall emcee
-And followed github isntructions here: https://emcee.readthedocs.io/en/latest/user/install/ to install latest version
-# Note: "conda install -c conda-forge emcee" still installed the old version (2.2.1)
-# Github installed new version! (3.0rc)
-Then, installed schwimmbad using: conda install -c conda-forge schwimmbad
-# (see here: https://schwimmbad.readthedocs.io/en/latest/install.html)
-
-
-Note: MPI mac links I was using:
-https://stackoverflow.com/questions/28440834/error-when-installing-mpi4py/39886686
-https://webcache.googleusercontent.com/search?q=cache:ACFACM98t7sJ:https://stackoverflow.com/questions/49621061/python-fails-to-import-mpi4py%3Frq%3D1+&cd=3&hl=en&ct=clnk&gl=us
-https://mpi4py.readthedocs.io/en/stable/install.html
-https://stackoverflow.com/questions/42703861/how-to-use-mpi-on-mac-os-x
-
-Gelman-Rubin:
-http://www.stat.columbia.edu/~gelman/research/published/itsim.pdf
-http://joergdietrich.github.io/emcee-convergence.html
-
-
-Made emcee_test.py using multiprocessing (see https://emcee.readthedocs.io/en/latest/tutorials/parallel/)
-# It works!
-
-In the meantime I broke something... had to reinstall astropy (also had to reinstall numpy earlier)
-# also matplotlib & scipy
-# Now emcee appears to be running again!
-# However...doesn't appear to be faster. Each model is taking ~3.5+ seconds to construct
-# multiprocessing --> time in emcee 382.5468270778656
-# WITHOUT multiprocessing --> time in emcee 197.06733584403992
-
-# with nthreads=8 in emcee --> time in emcee 86.91327118873596
-# with nthreads=6 in emcee --> time in emcee 108.76913213729858
-# with nthreads=4 in emcee --> time in emcee 122.8170599937439
-# with nthreads=2 in emcee --> time in emcee 98.797208070755
-# with nthreads=None in emcee --> time in emcee 99.95753860473633
-# with no nthreads parameter in emcee --> time in emcee 107.43310499191284
-
-# Note: https://emcee.readthedocs.io/en/latest/tutorials/parallel/ suggests overhead in parallelization is to blame for
-# lack of 4x better computing time (note: printing the cpu count thing shows I have 4 CPUs too)
-
-DO HPRC account request!
-
-Prioritize parallelization on cluster
-'''
+    print('True Total time: ' + str(time.time() - t0_true) + ' seconds')  # 3.93s YAY!  # 23s for 6 models (16.6 for 4 models)
+    print(r'$\chi^2_{\nu}$ = ' + str(chi_sq))  # NOTE: right now, chi^2_nu (with my lucy + v(R)) = 1.9, chi^2_nu (with my lucy + mge) = 9.98
