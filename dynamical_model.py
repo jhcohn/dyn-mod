@@ -371,7 +371,7 @@ class ModelGrid:
         self.opt = opt
         self.quiet = quiet
         self.n_params = n_params
-        # Parameters to be built in create_grid() or convolve_cube() functions inside the class
+        # Parameters to be built in create_grid(), convolve_cube(), or chi2 functions inside the class
         self.weight = None
         self.z_ax = None
         self.freq_obs = None
@@ -379,6 +379,7 @@ class ModelGrid:
         self.input_data_masked = None
         self.delta_freq_obs = None
         self.convolved_cube = None
+        self.ell_ds = None
     """
     Build grid for dynamical modeling!
     
@@ -428,7 +429,8 @@ class ModelGrid:
         create_grid: creates model grid from input params, calculates weight map, freq map, and delta-freq map
         convolve_cube: requires create_grid to be run first; convolve the model cube with the ALMA beam
         chi2: requires create_grid and convolve_cube to be run first; calculates chi2 and/or reduced chi2
-        output_cube: not actively using; requires create_frid and convolve_cube to be run first; create output cube file        
+        output_cube: not actively using; requires create_grid and convolve_cube to be run first; create output cube file
+        test_ellipse: use to check how the fitting-ellipse looks with respect to the weight map         
         # BUCKET TO DO: include moment map functions too!
     """
 
@@ -438,7 +440,7 @@ class ModelGrid:
         # SUBPIXELS (reshape deconvolved flux map [lucy_out] sxs subpixels, so subpix has flux=(real pixel flux)/s**2)
         if not self.quiet:
             print('start')
-        if self.os == 1:  # subpix_deconvolved is identical to lucy_out, with sxs subpixels per pixel & total flux conserved
+        if self.os == 1:  # subpix_deconvolved == lucy_out, but with sxs subpixels per pixel & total flux conserved
             subpix_deconvolved = self.lucy_out
         else:
             subpix_deconvolved = np.zeros(shape=(len(self.lucy_out) * self.os, len(self.lucy_out[0]) * self.os))
@@ -499,8 +501,8 @@ class ModelGrid:
         y_bhoff = self.dist * 10 ** 6 * np.tan(y_bh_ac / self.arcsec_per_rad)  # 206265 arcsec/rad
 
         # convert all x,y observed grid positions to pc
-        x_obs = np.asarray([self.dist * 10 ** 6 * np.tan(x / self.arcsec_per_rad) for x in x_obs_ac])  # 206265 arcsec/rad
-        y_obs = np.asarray([self.dist * 10 ** 6 * np.tan(y / self.arcsec_per_rad) for y in y_obs_ac])  # 206265 arcsec/rad
+        x_obs = np.asarray([self.dist * 10 ** 6 * np.tan(x / self.arcsec_per_rad) for x in x_obs_ac])
+        y_obs = np.asarray([self.dist * 10 ** 6 * np.tan(y / self.arcsec_per_rad) for y in y_obs_ac])
 
         # CONVERT FROM x_obs, y_obs TO 2D ARRAYS OF x_disk, y_disk [arcsec] and [pc] versions
         x_disk_ac = (x_obs_ac[None, :] - x_bh_ac) * np.cos(self.theta) +\
@@ -595,13 +597,12 @@ class ModelGrid:
         # NOTE: MAYBE multiply by fstep here, after collapsing and lucy process, rather than during collapse
         # NOTE: would then need to multiply by ~1000 factor or something large there, bc otherwise lucy cvg too fast
 
-        # print(self.c_kms * (1 - (fstep / f_0) * (1+zred)))
+        # print(self.c_kms * (1 - (self.fstep / self.f_0) * (1+self.zred)))
 
         # BEN_LUCY COMPARISON ONLY (only use for comparing to model with Ben's lucy map, which is in different units)
         if self.bl:  # (multiply by vel_step because Ben's lucy map is actually in Jy/beam km/s units)
             self.weight *= self.fstep * 6.783  # NOTE: 6.783 == beam size / channel width in km/s
-            # channel width = 1.537983987579E+07 Hz --> v_width = c * (1 - f_0 / (fstep / (1+zred)))
-            # 2698: channel width = 1.537983987576E+07 --> vwidth = 3e5 * (1 -
+            # channel width = 1.537983987579E+07 Hz --> v_width = self.c * (1 - self.f_0 / (self.fstep / (1+self.zred)))
 
         if not self.quiet:
             print(str(time.time() - t_grid) + ' seconds in create_grid()')
@@ -609,7 +610,7 @@ class ModelGrid:
 
     def convolve_cube(self):
         # BUILD GAUSSIAN LINE PROFILES!!!
-        cube_model = np.zeros(shape=(len(self.freq_ax), len(self.freq_obs), len(self.freq_obs[0])))  # initialize model cube
+        cube_model = np.zeros(shape=(len(self.freq_ax), len(self.freq_obs), len(self.freq_obs[0])))  # initialize cube
         for fr in range(len(self.freq_ax)):
             cube_model[fr] = self.weight * np.exp(-(self.freq_ax[fr] - self.freq_obs) ** 2 /
                                                   (2 * self.delta_freq_obs ** 2))
@@ -629,86 +630,56 @@ class ModelGrid:
 
 
     def chi2(self):
-        # ONLY WANT TO FIT WITHIN ELLIPTICAL REGION! APPLY ELLIPTICAL MASK TO MODEL CUBE & INPUT DATA
+        # ONLY WANT TO FIT WITHIN ELLIPTICAL REGION! CREATE ELLIPSE MASK
         ell_mask = ellipse_fitting(self.convolved_cube, self.rfit, self.xell, self.yell, self.resolution,
                                    self.theta_ell, self.q_ell)  # create ellipse mask
-        unmasked_model = self.convolved_cube
-        unmasked_data = self.input_data[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
-                                 self.xyrange[0]:self.xyrange[1]]
-        self.convolved_cube *= ell_mask  # mask the convolved model cube
-        self.input_data_masked = self.input_data[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
-                                 self.xyrange[0]:self.xyrange[1]] * ell_mask  # mask the input data cube
 
-        ell_4 = rebin(ell_mask, self.ds)  # rebin the mask by the down-sampling factor
-        all_pix = np.ndarray.flatten(ell_4)  # all pixels in each slice
-        masked_pix = all_pix[all_pix >= 8]  # all_pix, but this time only the pixels that are "inside" the ellipse
-        n_pts = len(masked_pix) * len(self.z_ax)  # number of total pixels to be compared in chi^2 calculation!
-        print(len(masked_pix), len(self.z_ax), n_pts)
+        # CREATE A CLIPPED DATA CUBE SO THAT WE'RE LOOKING AT THE SAME EXACT x,y,z REGION AS IN THE MODEL CUBE
+        clipped_data = self.input_data[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
+                                       self.xyrange[0]:self.xyrange[1]]
 
-        data_4u = rebin(unmasked_data, self.ds)
-        ap_4u = rebin(unmasked_model, self.ds)
-        ell_4[ell_4 < 8] = 0.
-        ell_4u = np.nan_to_num(ell_4 / np.abs(ell_4))
-        data_4u *= ell_4u
-        ap_4u *= ell_4u[0]
-        npu = np.sum(ell_4u) * len(self.z_ax)
-        print(npu)  # == n_pts, good!
-        #plt.imshow(ell_4[0], origin='lower')
-        #plt.colorbar()
-        #plt.show()
+        # self.convolved_cube *= ell_mask  # mask the convolved model cube
+        # self.input_data_masked = self.input_data[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
+        #                          self.xyrange[0]:self.xyrange[1]] * ell_mask  # mask the input data cube
+
+        # REBIN THE ELLIPSE MASK BY THE DOWN-SAMPLING FACTOR
+        self.ell_ds = rebin(ell_mask, self.ds)[0]  # rebin the mask by the down-sampling factor
+        self.ell_ds[self.ell_ds < self.ds**2 / 2.] = 0.  # set all pix < 50% "inside" the ellipse to be outside -> mask
+        self.ell_ds = np.nan_to_num(self.ell_ds / np.abs(self.ell_ds))  # set all points in ellipse = 1, convert nan->0
+
+        # REBIN THE DATA AND MODEL BY THE DOWN-SAMPLING FACTOR: compare data and model in binned groups of dsxds pix
+        data_ds = rebin(clipped_data, self.ds)
+        ap_ds = rebin(self.convolved_cube, self.ds)
+
+        # APPLY THE ELLIPTICAL MASK TO MODEL CUBE & INPUT DATA
+        data_ds *= self.ell_ds
+        ap_ds *= self.ell_ds
+        n_pts = np.sum(self.ell_ds) * len(self.z_ax)  # total number of pixels compared in chi^2 calculation!
 
         chi_sq = 0.  # initialize chi^2
         cs = []  # initialize chi^2 per slice
 
-        # DOWN-SAMPLING: compare the data to the model by binning each in groups of dsxds pixels (separate from os)
-        data_4 = rebin(self.input_data_masked, self.ds)
-        ap_4 = rebin(self.convolved_cube, self.ds)
-
-        # DEFINE THE ELLIPSE MASK ON THE DOWN-SAMPLED PIXEL SCALE!
-        ell_mask = ellipse_fitting(ap_4, self.rfit, self.xell / self.ds, self.yell / self.ds, self.resolution * self.ds,
-                                   self.theta_ell, self.q_ell)
-        ell_4 = ell_mask
-        # THE BELOW IMAGES SUGGEST THAT THE HIGHER-UP-DEFINED ell_4 WORKS BETTER
-        #print(np.sum(ell_mask))
-        #cf = rebin(rebin(self.weight, self.ds), self.ds)[0]
-        #plt.imshow(ell_mask * cf, origin='lower')  # ell_mask
-        #plt.title('Ellipse constructed on 4x4-binned grid')
-        #plt.colorbar()
-        #plt.show()
-
-        #plt.imshow(ell_4[0] * cf, origin='lower')  # ell_mask
-        #plt.title('4x4-binned ellipse')
-        #plt.colorbar()
-        #plt.show()
-        #print(oop)
-
-
         z_ind = 0  # the actual index for the model-data comparison cubes
         for z in range(self.zrange[0], self.zrange[1]):  # for each relevant freq slice (ignore slices with only noise)
-            chi_sq += np.sum((ap_4u[z_ind] - data_4u[z_ind])**2 / self.noise[z_ind]**2)  # calculate chisq!
-            cs.append(np.sum((ap_4u[z_ind] - data_4u[z_ind])**2 / self.noise[z_ind]**2))  # chisq per slice
+            chi_sq += np.sum((ap_ds[z_ind] - data_ds[z_ind])**2 / self.noise[z_ind]**2)  # calculate chisq!
+            cs.append(np.sum((ap_ds[z_ind] - data_ds[z_ind])**2 / self.noise[z_ind]**2))  # chisq per slice
 
             z_ind += 1  # the actual index for the model-data comparison cubes
 
-        # CALCULATE REDUCED CHI^2
-        all_pix = np.ndarray.flatten(ell_4)  # all fitted pixels in each slice [len = 625 (yep)] [525 masked, 100 not]
-        # masked_pix = all_pix[all_pix >= 8]  # all_pix, but this time only the pixels that are actually inside ellipse
-        masked_pix = all_pix[all_pix != 0]  # all_pix, but this time only the pixels that are actually inside ellipse
-        n_pts = len(masked_pix) * len(self.z_ax)  # (zrange[1] - zrange[0])  # total number of pixels being compared
-        print(n_pts, len(masked_pix))  # rfit=1.2 --> 6440 (140/slice); 6716 (146/slice) for fully inclusive ellipse
-        # print(oop)  # rfit=1.05 --> 4968 (108/slice)  # rfit=1.136 --> 5704 (124/slice) (see 16 April 2018 meeting)
-        print(r'chi^2=', chi_sq)
-        print(chi_sq / (npu - self.n_params))
-        # if not quiet:
-            # print('total model constructed in {0} seconds'.format(time.time() - t_begin))  # ~213s
+        if not self.quiet:
+            print(np.sum(self.ell_ds), len(self.z_ax), n_pts)
+            print(r'chi^2=', chi_sq)
 
-        if self.reduced:
-            print(r'Reduced chi^2=', chi_sq / (n_pts - self.n_params))  # n_params = number of free parameters (from load)
+        if self.reduced:  # CALCULATE REDUCED CHI^2
             chi_sq /= (n_pts - self.n_params)  # convert to reduced chi^2; else just return full chi^2
-        if n_pts == 0.:
-            print(self.resolution, self.xell, self.yell)
+            if not self.quiet:
+                print(r'Reduced chi^2=', chi_sq)
+
+        if n_pts == 0.:  # PROBLEM WARNING
+            print(self.resolution, self.xell, self.yell, self.theta_ell, self.q_ell, self.rfit)
             print('WARNING! STOP! There are no pixels inside the fitting ellipse! n_pts = ' + str(n_pts))
             chi_sq = np.inf
+
         return chi_sq  # Reduced or Not depending on reduced = True or False
 
 
@@ -725,6 +696,20 @@ class ModelGrid:
             print('written!')
 
         return self.convolved_cube
+
+
+    def test_ellipse(self):
+        # USE BELOW FOR TESTING
+        cf = rebin(rebin(self.weight, self.os), self.ds)[0]  # re-binned weight map, for reference
+        plt.imshow(self.ell_ds * cf, origin='lower')  # masked weight map
+        plt.title('4x4-binned ellipse * weight map')
+        plt.colorbar()
+        plt.show()
+
+        plt.imshow(cf, origin='lower')  # re-binned weight map by itself, for reference
+        plt.title('4x4-binned weight map')
+        plt.colorbar()
+        plt.show()
 
 
 def test_qell2(input_data, params, l_in, q_ell, rfit, pa, figname):
