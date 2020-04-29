@@ -51,7 +51,7 @@ def par_dicts(parfile, q=False):
         import mge_vcirc_mine as mvm
         comp, surf_pots, sigma_pots, qobs = mvm.load_mge(params['mass'])
 
-        return params, priors, qobs, nfree
+        return params, priors, nfree, qobs
 
     else:
         return params, priors, nfree
@@ -319,10 +319,11 @@ def ellipse_fitting(cube, rfit, x0_sub, y0_sub, res, pa_disk, q):
 class ModelGrid:
 
     def __init__(self, resolution=0.05, os=4, x_loc=0., y_loc=0., mbh=4e8, inc=np.deg2rad(60.), vsys=None, vrad=0.,
-                 dist=17., theta=np.deg2rad(200.), input_data=None, lucy_out=None, out_name=None, beam=None, rfit=1.,
-                 q_ell=1., theta_ell=0., xell=360., yell=350., bl=False, enclosed_mass=None, menc_type=0,
-                 ml_ratio=1., sig_type='flat', sig_params=None, f_w=1., noise=None, ds=None, zrange=None, xyrange=None,
-                 reduced=False, freq_ax=None, f_0=0., fstep=0., opt=True, quiet=False, n_params=12):
+                 kappa=0., omega=0., dist=17., theta=np.deg2rad(200.), input_data=None, lucy_out=None, vtype='orig',
+                 out_name=None, beam=None, rfit=1., q_ell=1., theta_ell=0., xell=360., yell=350., bl=False,
+                 enclosed_mass=None, menc_type=0, ml_ratio=1., sig_type='flat', sig_params=None, f_w=1., noise=None,
+                 ds=None, zrange=None, xyrange=None, reduced=False, freq_ax=None, f_0=0., fstep=0., opt=True,
+                 quiet=False, n_params=8, data_mask=None):
         # Astronomical Constants:
         self.c = 2.99792458 * 10 ** 8  # [m / s]
         self.pc = 3.086 * 10 ** 16  # [m / pc]
@@ -334,107 +335,74 @@ class ModelGrid:
         self.G_pc = self.G * self.M_sol * (1. / self.pc) / self.m_per_km ** 2  # G [Msol^-1 * pc * km^2 * s^-2] (gross)
         self.c_kms = self.c / self.m_per_km  # [km / s]
         # Input Parameters
-        self.resolution = resolution
-        self.os = os
-        self.x_loc = x_loc
-        self.y_loc = y_loc
-        self.mbh = mbh
-        self.inc = inc
-        self.vsys = vsys
-        self.vrad = vrad
-        self.dist = dist
-        self.theta = theta
-        self.input_data = input_data
-        self.lucy_out = lucy_out
-        self.out_name = out_name
-        self.beam = beam
-        self.rfit = rfit
-        self.q_ell = q_ell
-        self.theta_ell = theta_ell
-        self.xell = xell
-        self.yell = yell
-        self.bl = bl
-        self.enclosed_mass = enclosed_mass
-        self.menc_type = menc_type
-        self.ml_ratio = ml_ratio
-        self.sig_type = sig_type
-        self.sig_params = sig_params
-        self.f_w = f_w
-        self.noise = noise
-        self.ds = ds
-        self.zrange = zrange
-        self.xyrange = xyrange
-        self.reduced = reduced
-        self.freq_ax = freq_ax
-        self.f_0 = f_0
-        self.fstep = fstep
-        self.opt = opt
-        self.quiet = quiet
-        self.n_params = n_params
+        self.resolution = resolution  # resolution of observations [arcsec/pixel]
+        self.os = os  # oversampling factor
+        self.x_loc = x_loc  # the location of the BH, as measured along the x axis of the data cube [pixels]
+        self.y_loc = y_loc  # the location of the BH, as measured along the y axis of the data cube [pixels]
+        self.mbh = mbh  # supermassive black hole mass [solar masses]
+        self.inc = inc  # inclination of the galaxy [radians]
+        self.vsys = vsys  # the systemic velocity [km/s]
+        self.vrad = vrad  # optional radial inflow term [km/s]
+        self.kappa = kappa  # optional radial inflow term; tie inflow to the overall line-of-sight velocity [unitless]
+        self.omega = omega  # optional velocity coefficient, used with kappa for radial inflow [unitless]
+        self.vtype = vtype  # 'vrad', 'kappa', 'omega', any other value for original (no radial velocity component)
+        self.dist = dist  # distance to the galaxy [Mpc]
+        self.pc_per_ac = self.dist * 1e6 / self.arcsec_per_rad  # small angle formula (convert dist to pc, from Mpc)
+        self.pc_per_pix = self.dist * 1e6 / self.arcsec_per_rad * self.resolution  # small angle formula, as above
+        self.theta = theta  # angle from +x_obs axis counterclockwise to the disk's blueshifted side (-x_disk) [radians]
+        self.zred = self.vsys / self.c_kms  # redshift
+        self.input_data = input_data  # input 3D data cube of observations
+        self.data_mask = data_mask  # 3D strictmask cube, used to mask the data
+        self.lucy_out = lucy_out  # deconvolved 2D fluxmap, output from running lucy-richardson on fluxmap and beam PSF
+        self.out_name = out_name  # optional; output name of the fits file to which to save the convolved model cube
+        self.beam = beam  # synthesized alma beam (output from model_ins)
+        self.rfit = rfit  # disk radius (elliptical semi-major axis) within which we compare the model and data [arcsec]
+        self.q_ell = q_ell  # axis ratio q of fitting ellipse [unitless]
+        self.theta_ell = theta_ell  # same as theta, but held fixed; used for the ellipse fitting region [radians]
+        self.xell = xell  # same as x_loc, but held fixed; used for the ellipse fitting region [pixels]
+        self.yell = yell  # same as y_loc, but held fixed; used for the ellipse fitting region [pixels]
+        self.bl = bl  # lucy weight map unit indicator (bl=False or 0 --> Jy/beam * Hz; bl=True or 1 --> Jy/beam * km/s)
+        self.enclosed_mass = enclosed_mass  # MGE file name, or similar file containing M(R) information [file]
+        self.menc_type = menc_type  # Determines how stellar mass is included [0->MGE; 1->v(R); 2->M(R)]
+        self.ml_ratio = ml_ratio  # The mass-to-light ratio of the galaxy [Msol / Lsol]
+        self.sig_type = sig_type  # Str determining what type of sigma to use. Can be 'flat', 'exp', or 'gauss'
+        self.sig_params = sig_params  # array of sigma parameters: [sig0, r0, mu, sig1]
+        self.f_w = f_w  # multiplicative weight factor for the line profiles [unitless]
+        self.noise = noise  # array of the estimated (ds x ds-binned) noise per slice (within the zrange) [Jy/beam]
+        self.ds = ds  # downsampling factor to use when averaging pixels together for actual model-data comparison [int]
+        self.zrange = zrange  # array with the slices of the data cube where real emission shows up [zi, zf]
+        self.xyrange = xyrange  # array with the subset of the cube (in pixels) that contains emission [xi, xf, yi, yf]
+        self.reduced = reduced  # if True, ModelGrid.chi2() returns the reduced chi^2 instead of the regular chi^2
+        self.freq_ax = freq_ax  # array of the frequency axis in the data cube, from bluest to reddest frequency [Hz]
+        self.f_0 = f_0  # rest frequency of the observed line in the data cube [Hz]
+        self.fstep = fstep  # frequency step in the frequency axis [Hz]
+        self.opt = opt  # frequency axis velocity convention; opt=True -> optical; opt=False -> radio
+        self.quiet = quiet  # if quiet=True, suppress printing out stuff!
+        self.n_params = n_params  # number of free parameters being fit, as counted from the param file in par_dicts()
         # Parameters to be built in create_grid(), convolve_cube(), or chi2 functions inside the class
-        self.weight = None
-        self.z_ax = None
-        self.freq_obs = None
-        self.zred = None
-        self.input_data_masked = None
-        self.delta_freq_obs = None
-        self.convolved_cube = None
-        self.ell_ds = None
+        self.z_ax = None  # velocity axis, constructed from freq_ax, f_0, and vsys, based on opt
+        self.weight = None  # 2D weight map, constructed from lucy_output (the deconvolved fluxmap)
+        self.freq_obs = None  # the 2D line-of-sight velocity map, converted to frequency
+        self.delta_freq_obs = None  # the 2D turbulent velocity map, converted to delta-frequency
+        self.clipped_data = None  # the data sub-cube that we compare to the model, clipped by zrange and xyrange
+        self.convolved_cube = None  # the model cube: create from convolving the intrinsic model cube with the ALMA beam
+        self.ell_ds = None  # mask defined by the elliptical fitting region, created on ds x ds down-sampled pixels
     """
     Build grid for dynamical modeling!
     
     Class structure following: https://www.w3schools.com/python/python_classes.asp
 
-    :param resolution: resolution of observations [arcsec/pixel]
-    :param os: oversampling factor
-    :param x_loc: the location of the BH, as measured along the x axis of the data cube [pixels]
-    :param y_loc: the location of the BH, as measured along the y axis of the data cube [pixels]
-    :param mbh: supermassive black hole mass [solar masses]
-    :param inc: inclination of the galaxy [radians]
-    :param vsys: if given, the systemic velocity [km/s]
-    :param vrad: radial inflow term [km/s]
-    :param dist: distance to the galaxy [Mpc]
-    :param theta: angle from the +x_obs axis counterclockwise to the blueshifted side of the disk (-x_disk) [radians]
-    :param input_data: input data cube of observations
-    :param lucy_out: output from running lucy on data cube and beam PSF
-    :param out_name: output name of the fits file to which to save the output v_los image (if None, don't save image)
-    :param beam: synthesized alma beam (output from model_ins)
-    :param q_ell: axis ratio q of fitting ellipse [unitless]
-    :param theta_ell: same as theta above, but held fixed during model fitting; used for the ellipse fitting region
-    :param xell: same as x_loc above, but held fixed during model fitting; used for the ellipse fitting region
-    :param yell: same as y_loc above, but held fixed during model fitting; used for the ellipse fitting region
-    :param enclosed_mass: file including data of the enclosed stellar mass of the galaxy (1st column should be radius
-        r in kpc and second column should be M_stars(<r) or velocity_circ(R) due to stars within R)
-    :param menc_type: Select how you incorporate enclosed stellar mass [0 for MGE; 1 for v(R) file; 2 for M(R) file]
-    :param ml_ratio: The mass-to-light ratio of the galaxy
-    :param sig_type: code for the type of sigma_turb we're using. Can be 'flat', 'exp', or 'gauss'
-    :param sig_params: list of parameters to be plugged into the get_sig() function. Number needed varies by sig_type
-    :param f_w: multiplicative weight factor for the line profiles
-    :param noise: array of the estimated (ds x ds-binned) noise per slice (within the desired zrange)
-    :param rfit: disk radius within which we will compare model and data [arcsec]
-    :param ds: downsampling factor to use when averaging pixels together for actual model-data comparison
-    :param chi2: if True, record chi^2 of model vs data! If False, ignore, and return convolved model cube
-    :param zrange: the slices of the data cube where the data shows up (i.e. isn't just noise) [zi, zf]
-    :param xyrange: the subset of the cube (in pixels) that we actually want to run data on [xi, xf, yi, yf]
-    :param reduced: if True, return reduced chi^2 instead of regular chi^2 (requires chi2=True, too)
-    :param freq_ax: array of the frequency axis in the data cube, from bluest to reddest frequency [Hz]
-    :param f_0: rest frequency of the observed line in the data cube [Hz]
-    :param fstep: frequency step in the frequency axis [Hz]
-    :param bl: lucy weight map unit indicator (bl=False or 0 --> Jy/beam * Hz; bl=True or 1 --> Jy/beam km/s)
-    :param opt: frequency axis velocity convention; if opt=True, optical velocity; if opt=False, radio velocity
-    :param quiet: suppress printing out stuff!
-    :param n_params: number of free parameters being fit (from param file!)
-
-    Class with functions:
-        create_grid: creates model grid from input params, calculates weight map, freq map, and delta-freq map
-        convolve_cube: requires create_grid to be run first; convolve the model cube with the ALMA beam
-        chi2: requires create_grid and convolve_cube to be run first; calculates chi2 and/or reduced chi2
-        output_cube: not actively using; requires create_grid and convolve_cube to be run first; create output cube file
-        test_ellipse: use to check how the fitting-ellipse looks with respect to the weight map         
-        # BUCKET TO DO: include moment map functions too!
+    Class functions:
+        grids: calculates weight map, freq_obs map, and delta_freq_obs map
+        convolution: grids must be run first; create the intrinsic model cube and convolve it with the ALMA beam
+        chi2: convolution must be run first; calculates chi^2 and/or reduced chi^2
+        output_cube: convolution must be run first; store model cube in a fits file
+        test_ellipse: grids must be run first; use to check how the fitting-ellipse looks with respect to the weight map
+        moment_0: convolution must be run first; create 0th moment map
+        moment_12: convolution must be run first; create 1st or 2nd moment map    
     """
 
-    def create_grid(self):
+    def grids(self):
         t_grid = time.time()
 
         # SUBPIXELS (reshape deconvolved flux map [lucy_out] sxs subpixels, so subpix has flux=(real pixel flux)/s**2)
@@ -571,7 +539,13 @@ class ModelGrid:
 
         # INCLUDE NEW RADIAL VELOCITY TERM
         vrad_sign = y_disk / abs(y_disk)  # With this sign convention: vrad > 0 -> outflow; vrad < 0 -> inflow!
-        v_los += self.vrad * vrad_sign * abs(np.sin(alpha) * np.sin(self.inc))  # See notebook for derivation!
+        if self.vtype == 'vrad':
+            v_los += self.vrad * vrad_sign * abs(np.sin(alpha) * np.sin(self.inc))  # See notebook for derivation!
+        elif self.vtype == 'kappa':  # use just kappa
+            v_los += self.kappa * vrad_sign * abs(vel * np.sin(alpha) * np.sin(self.inc))
+        elif self.vtype == 'omega':  # use omega and kappa both!
+            v_los *= self.omega
+            v_los += self.kappa * vrad_sign * abs(vel * np.sin(alpha) * np.sin(self.inc))
 
         # SET LINE-OF-SIGHT VELOCITY AT THE BLACK HOLE CENTER TO BE 0, SUCH THAT IT DOES NOT BLOW UP
         center = (R == 0.)  # Doing this is only relevant if we have pixel located exactly at the center
@@ -582,7 +556,6 @@ class ModelGrid:
                         sig1=self.sig_params[3])[self.sig_type]
 
         # CONVERT v_los TO OBSERVED FREQUENCY MAP
-        self.zred = self.vsys / self.c_kms  # redshift
         self.freq_obs = (self.f_0 / (1+self.zred)) * (1 - v_los / self.c_kms)  # convert v_los to f_obs
 
         # CONVERT OBSERVED DISPERSION (turbulent) TO FREQUENCY WIDTH
@@ -608,7 +581,7 @@ class ModelGrid:
             print(str(time.time() - t_grid) + ' seconds in create_grid()')
 
 
-    def convolve_cube(self):
+    def convolution(self):
         # BUILD GAUSSIAN LINE PROFILES!!!
         cube_model = np.zeros(shape=(len(self.freq_ax), len(self.freq_obs), len(self.freq_obs[0])))  # initialize cube
         for fr in range(len(self.freq_ax)):
@@ -635,8 +608,8 @@ class ModelGrid:
                                    self.theta_ell, self.q_ell)  # create ellipse mask
 
         # CREATE A CLIPPED DATA CUBE SO THAT WE'RE LOOKING AT THE SAME EXACT x,y,z REGION AS IN THE MODEL CUBE
-        clipped_data = self.input_data[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
-                                       self.xyrange[0]:self.xyrange[1]]
+        self.clipped_data = self.input_data[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
+                                            self.xyrange[0]:self.xyrange[1]]
 
         # self.convolved_cube *= ell_mask  # mask the convolved model cube
         # self.input_data_masked = self.input_data[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
@@ -648,7 +621,7 @@ class ModelGrid:
         self.ell_ds = np.nan_to_num(self.ell_ds / np.abs(self.ell_ds))  # set all points in ellipse = 1, convert nan->0
 
         # REBIN THE DATA AND MODEL BY THE DOWN-SAMPLING FACTOR: compare data and model in binned groups of dsxds pix
-        data_ds = rebin(clipped_data, self.ds)
+        data_ds = rebin(self.clipped_data, self.ds)
         ap_ds = rebin(self.convolved_cube, self.ds)
 
         # APPLY THE ELLIPTICAL MASK TO MODEL CUBE & INPUT DATA
@@ -684,19 +657,11 @@ class ModelGrid:
 
 
     def output_cube(self):  # if outputting actual cube itself
-        inds_to_try2 = np.asarray([[10, 10], [10, 15], [15, 10]])  # plot a few line profiles
-        import test_dyn_funcs as tdf
-        f_sys = self.f_0 / (1+self.zred)
-        tdf.compare(self.input_data_masked, self.convolved_cube, self.freq_ax / 1e9, inds_to_try2, f_sys / 1e9, 4)  # plot them!
-
         if not Path(self.out_name).exists():  # WRITE OUT RESULTS TO FITS FILE
             hdu = fits.PrimaryHDU(self.convolved_cube)
             hdul = fits.HDUList([hdu])
             hdul.writeto(self.out_name)
             print('written!')
-
-        return self.convolved_cube
-
 
     def test_ellipse(self):
         # USE BELOW FOR TESTING
@@ -710,6 +675,268 @@ class ModelGrid:
         plt.title('4x4-binned weight map')
         plt.colorbar()
         plt.show()
+
+
+    def moment_0(self, abs_diff, incl_beam, norm):
+        """
+        Create 0th moment map
+
+        :param abs_diff: True or False; if True, show absolute value of the residual
+        :param incl_beam: True or False; if True, include beam inset in the data panel
+        :param norm: True or False; if True, normalize residual by the data
+        :return: moment map plot
+        """
+        # if using equation from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
+        vel_ax = []
+        velwidth = self.c_kms * (1 + self.zred) * self.fstep / self.f_0
+        for v in range(len(self.freq_ax)):
+            vel_ax.append(self.c_kms * (1. - (self.freq_ax[v] / self.f_0) * (1 + self.zred)))
+
+        # full cube strictmask, clipped to the appropriate zrange
+        # (NOTE: would need to clip to xyrange, & rebin with ds, to compare data_ds & ap_ds. Seems wrong thing to do.)
+        clipped_mask = self.data_mask[self.zrange[0]:self.zrange[1]]
+
+        data_masked_m0 = np.zeros(shape=self.ell_mask.shape)
+        for z in range(len(vel_ax)):
+            data_masked_m0 += abs(velwidth) * self.clipped_data[z] * clipped_mask[z]
+
+        model_masked_m0 = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+        for zi in range(len(convolved_cube)):
+            model_masked_m0 += self.convolved_cube[zi] * abs(velwidth) * clipped_mask[zi]
+
+        fig = plt.figure()
+        grid = AxesGrid(fig, 111,
+                        nrows_ncols=(1, 3),
+                        axes_pad=0.01,
+                        cbar_mode='single',
+                        cbar_location='right',
+                        cbar_pad=0.1)
+        i = 0
+
+        # CONVERT TO mJy
+        data_masked_m0 *= 1e3
+        model_masked_m0 *= 1e3
+
+        subtr = 0.
+        if incl_beam:
+            beam_overlay = np.zeros(shape=self.ell_mask.shape)
+            beam_overlay[:self.beam.shape[0], (beam_overlay.shape[1] - self.beam.shape[1]):] = self.beam
+            print(beam_overlay.shape, self.beam.shape)
+            beam_overlay *= np.amax(data_masked_m0) / np.amax(beam_overlay)
+            data_masked_m0 += beam_overlay
+            subtr = beam_overlay
+        for ax in grid:
+            vmin = np.amin([np.nanmin(model_masked_m0), np.nanmin(data_masked_m0)])
+            vmax = np.amax([np.nanmax(model_masked_m0), np.nanmax(data_masked_m0)])
+            cbartitle0 = r'mJy/beam'
+            if i == 0:
+                im = ax.imshow(data_masked_m0, vmin=vmin, vmax=vmax, origin='lower')
+                ax.set_title(r'Moment 0 (data)')
+            elif i == 1:
+                im = ax.imshow(model_masked_m0, vmin=vmin, vmax=vmax, origin='lower')
+                ax.set_title(r'Moment 0 (model)')
+            elif i == 2:
+                title0 = 'Moment 0 residual (model-data)'
+                titleabs = 'Moment 0 residual abs(model-data)'
+                diff = model_masked_m0 - (data_masked_m0 - subtr)
+                if norm:
+                    diff /= data_masked_m0
+                    print(np.nanquantile(diff, [0.16, 0.5, 0.84]), 'typical differences; 0.16, 0.5, 0.84!')
+                    title0 += ' / data'
+                    titleabs += ' / data'
+                    cbartitle0 = 'Ratio [Residual / Data]'
+                if samescale:
+                    if abs_diff:
+                        diff = np.abs(diff)
+                        ax.set_title(titleabs)
+                    else:
+                        ax.set_title(title0)
+                    im = ax.imshow(diff, vmin=vmin, vmax=vmax, origin='lower')
+                else:  # then residual scale
+                    im = ax.imshow(diff, origin='lower', vmin=np.nanmin([diff, -diff]), vmax=np.nanmax([diff, -diff]))
+                    ax.set_title(title0)
+            i += 1
+
+            ax.set_xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
+            ax.set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+
+        cbar = grid.cbar_axes[0].colorbar(im)
+        cax = grid.cbar_axes[0]
+        axis = cax.axis[cax.orientation]
+        axis.label.set_text(cbartitle0)
+        plt.show()
+
+
+    def moment_12(self, abs_diff, incl_beam, norm, mom):
+        """
+        Create 1st or 2nd moment map
+        :param abs_diff: True or False; if True, show absolute value of the residual
+        :param incl_beam: True or False; if True, include beam inset in the data panel
+        :param norm: True or False; if True, normalize residual by the data
+        :param mom: moment, 1 or 2
+        :return: moment map plot
+        """
+        vel_ax = []
+        velwidth = self.c_kms * (1 + self.zred) * self.fstep / self.f_0
+        for v in range(len(self.freq_ax)):
+            vel_ax.append(self.c_kms * (1. - (self.freq_ax[v] / self.f_0) * (1 + self.zred)))
+
+        # full cube strictmask, clipped to the appropriate zrange
+        # (NOTE: would need to clip to xyrange, & rebin with ds, to compare data_ds & ap_ds. Seems wrong thing to do.)
+        clipped_mask = self.data_mask[self.zrange[0]:self.zrange[1]]
+
+        model_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+        model_denominator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+        for zi in range(len(self.convolved_cube)):
+            model_numerator += vel_ax[zi] * self.convolved_cube[zi] * clipped_mask[zi]
+            model_denominator += self.convolved_cube[zi] * clipped_mask[zi]
+        model_mom = model_numerator / model_denominator
+
+        data_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+        data_denominator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+        for zi in range(len(self.convolved_cube)):
+            data_numerator += vel_ax[zi] * self.clipped_data[zi] * clipped_mask[zi]
+            data_denominator += self.clipped_data[zi] * clipped_mask[zi]
+        data_mom = data_numerator / data_denominator
+
+        if mom == 2:
+            m2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            m2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            for zi in range(len(convolved_cube)):
+                m2_num += (vel_ax[zi] - model_mom)**2 * self.convolved_cube[zi] * clipped_mask[zi]
+                m2_den += self.convolved_cube[zi] * clipped_mask[zi]
+            m2 = np.sqrt(m2_num / m2_den) # * d1  # BUCKET: no need for MASKING using d1?
+
+            d2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            d2_n2 = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            d2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            for zi in range(len(convolved_cube)):
+                d2_n2 += self.clipped_data[zi] * (vel_ax[zi] - dmap)**2 * clipped_mask[zi] # * mask2d
+                d2_num += (vel_ax[zi] - dmap)**2 * self.clipped_data[zi] * clipped_mask[zi] # * mask2d
+                d2_den += self.clipped_data[zi] * clipped_mask[zi] # * mask2d
+            dfig = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0]))) + 1.  # create mask
+            dfig2 = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0]))) + 1.  # create mask
+            dfig[d2_n2 < 0.] = 0.  # d2_n2 matches d2_den on the sign aspect
+            dfig2[d2_den < 0.] = 0.
+            d2 = np.sqrt(d2_num / d2_den) # * d1  # BUCKET: no need for MASKING using d1?
+
+            fig = plt.figure()
+            grid = AxesGrid(fig, 111,
+                            nrows_ncols=(1, 3),
+                            axes_pad=0.01,
+                            cbar_mode='single',
+                            cbar_location='right',
+                            cbar_pad=0.1)
+            i = 0
+
+            subtr = 0.
+            if incl_beam:
+                d2 = np.nan_to_num(d2)
+                beam_overlay = np.zeros(shape=self.ell_mask.shape)
+                beam_overlay[:self.beam.shape[0], (beam_overlay.shape[1] - self.beam.shape[1]):] = self.beam
+                print(beam_overlay.shape, self.beam.shape)
+                beam_overlay *= np.amax(d2) / np.amax(beam_overlay)
+                d2 += beam_overlay
+                subtr = beam_overlay
+
+            for ax in grid:
+                vmin2 = np.amin([np.nanmin(d2), np.nanmin(m2)])
+                vmax2 = np.amax([np.nanmax(d2), np.nanmax(m2)])
+                cbartitle2 = r'km/s'
+                if i == 0:
+                    im = ax.imshow(d2, origin='lower', vmin=vmin2, vmax=vmax2)  # , cmap='RdBu_r'
+                    ax.set_title(r'Moment 2 (data)')
+                elif i == 1:
+                    im = ax.imshow(m2, origin='lower', vmin=vmin2, vmax=vmax2)  # , cmap='RdBu_r'
+                    ax.set_title(r'Moment 2 (model)')
+                elif i == 2:
+                    diff = m2 - (d2 - subtr)
+                    title2 = 'Moment 2 residual (model-data)'
+                    titleabs2 = 'Moment 2 residual abs(model-data)'
+                    if norm:
+                        diff /= d2
+                        print(np.nanquantile(diff, [0.16, 0.5, 0.84]), 'look median!')
+                        title2 += ' / data'
+                        titleabs2 += ' / data'
+                        cbartitle2 = 'Ratio [Residual / Data]'
+                    if abs_diff:
+                        diff = np.abs(diff)
+                        ax.set_title(titleabs2)
+                    else:
+                        ax.set_title(title2)
+                    if samescale:
+                        im = ax.imshow(diff, origin='lower', vmin=vmin2, vmax=vmax2)  # , cmap='RdBu'
+                    else:  # residscale
+                        im = ax.imshow(diff, origin='lower', vmin=np.nanmin([diff, -diff]),
+                                       vmax=np.nanmax([diff, -diff]))
+                        ax.set_title(title2)
+                i += 1
+
+                ax.set_xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
+                ax.set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+
+            cbar = ax.cax.colorbar(im)
+            cbar = grid.cbar_axes[0].colorbar(im)
+            cax = grid.cbar_axes[0]
+            axis = cax.axis[cax.orientation]
+            axis.label.set_text(cbartitle2)
+            plt.show()
+
+        elif mom == 1:
+            fig = plt.figure()
+            grid = AxesGrid(fig, 111,
+                            nrows_ncols=(1, 3),
+                            axes_pad=0.01,
+                            cbar_mode='single',
+                            cbar_location='right',
+                            cbar_pad=0.1)
+            i = 0
+
+            subtr = 0.
+            if incl_beam:
+                beam_overlay = np.zeros(shape=self.ell_mask.shape)
+                beam_overlay[:self.beam.shape[0], (beam_overlay.shape[1] - self.beam.shape[1]):] = self.beam
+                print(beam_overlay.shape, self.beam.shape)
+                beam_overlay *= np.amax(data_mom) / np.amax(beam_overlay)
+                data_mom += beam_overlay
+                subtr = beam_overlay
+
+            for ax in grid:
+                cbartitle1 = r'km/s'
+                vmin1 = np.amin([np.nanmin(data_mom), np.nanmin(model_mom)])
+                vmax1 = np.amax([np.nanmax(data_mom), np.nanmax(model_mom)])
+                if i == 0:
+                    im = ax.imshow(data_mom, origin='lower', vmin=vmin1, vmax=vmax1, cmap='RdBu_r')
+                    ax.set_title(r'Moment 1 (data)')
+                elif i == 1:
+                    im = ax.imshow(model_mom, origin='lower', vmin=vmin1, vmax=vmax1, cmap='RdBu_r')
+                    ax.set_title(r'Moment 1 (model)')
+                elif i == 2:
+                    title1 = 'Moment 1 residual (model - data)'
+                    diff = model_mom - (data_mom - subtr)
+                    if norm:
+                        diff /= data_mom
+                        print(np.nanquantile(diff, [0.16, 0.5, 0.84]), 'look median!')
+                        title1 += ' / data'
+                        cbartitle1 = 'Ratio [Residual / Data]'
+                    if samescale:
+                        im = ax.imshow(diff, origin='lower', vmin=vmin1, vmax=vmax1, cmap='RdBu')  # , cmap='RdBu'
+                    else:  # resid scale
+                        im = ax.imshow(diff, origin='lower', vmin=np.nanmin([diff, -diff]),
+                                       vmax=np.nanmax([diff, -diff]))  # cmap='RdBu'
+                    ax.set_title(title1)
+                i += 1
+
+                ax.set_xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
+                ax.set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+
+            cbar = ax.cax.colorbar(im)
+            cbar = grid.cbar_axes[0].colorbar(im)
+            cax = grid.cbar_axes[0]
+            axis = cax.axis[cax.orientation]
+            axis.label.set_text(cbartitle1)
+            plt.show()
+
 
 
 def test_qell2(input_data, params, l_in, q_ell, rfit, pa, figname):
@@ -765,7 +992,7 @@ if __name__ == "__main__":
 
     # CREATE MODEL CUBE!
     out = params['outname']
-    mg = ModelGrid(resolution=params['resolution'], os=params['s'], x_loc=params['xloc'], y_loc=params['yloc'],
+    mg = ModelGrid(resolution=params['resolution'], os=params['os'], x_loc=params['xloc'], y_loc=params['yloc'],
                    mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'], dist=params['dist'],
                    theta=np.deg2rad(params['PAdisk']), input_data=input_data, lucy_out=lucy_out, out_name=out,
                    beam=beam, rfit=params['rfit'], enclosed_mass=params['mass'], ml_ratio=params['ml_ratio'],
@@ -774,10 +1001,13 @@ if __name__ == "__main__":
                    ds=params['ds'], noise=noise, reduced=True, freq_ax=freq_ax, q_ell=params['q_ell'],
                    theta_ell=np.deg2rad(params['theta_ell']), xell=params['xell'], yell=params['yell'], fstep=fstep,
                    f_0=f_0, bl=params['bl'], xyrange=[params['xi'], params['xf'], params['yi'], params['yf']],
-                   n_params=n_free)
-    mg.create_grid()
-    mg.convolve_cube()
+                   n_params=n_free, data_mask=params['mask'])
+    mg.grids()
+    mg.convolution()
     chi_sq = mg.chi2()
+    lab = r'$\chi^2'
+    if reduced:
+        lab = r'$\chi^2_{\nu}$'
 
-    print('True Total time: ' + str(time.time() - t0_true) + ' seconds')  # 3.93s YAY!  # 23s for 6 models (16.6 for 4 models)
-    print(r'$\chi^2_{\nu}$ = ' + str(chi_sq))  # NOTE: right now, chi^2_nu (with my lucy + v(R)) = 1.9, chi^2_nu (with my lucy + mge) = 9.98
+    print('True Total time: ' + str(time.time() - t0_true) + ' seconds')  # ~1 second for a cube of 84x64x49
+    print(lab + r' = ' + str(chi_sq))
