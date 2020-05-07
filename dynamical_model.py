@@ -563,56 +563,20 @@ class ModelGrid:
 
         # CALCULATE KEPLERIAN VELOCITY DUE TO ENCLOSED STELLAR MASS
         vg = 0  # default to ignoring the gas mass!
-        if self.incl_gas:  # If incl_mass, overwrite vg with a gas mass estimate, add it in quadrature to velocity!
+        if self.incl_gas:  # If incl_mass, overwrite vg with a gas mass estimate, then add it in quadrature to velocity!
+            t_gas = time.time()  # FANTSTIC THIS ONLY ADDS ~0.015 seconds! DEPENDS ON len(rvals); using R, takes ~300s
             # pix per beam = 2pi sigx sigy [pix^2]
             pix_per_beam = 2. * np.pi * (0.197045 / self.resolution / 2.35482) * (0.103544 / self.resolution / 2.35482)
-            pc2_per_beam = pix_per_beam * self.pc_per_pix**2
-            # BUCKET TRY TO SPEED UP?! CURRENT CODE ADDS ~0.8 seconds (without gas mass, total is ~1 second)
-            # BUCKET: STRONGLY DEPENDS ON len(rvals)
-            t_gas = time.time()
-            '''  #
-            # CALCULATE VELOCITY WIDTH
-            v_width = self.c_kms * (1 + self.zred) * self.fstep / self.f_0  # velocity width [km/s]
+            pc2_per_beam = pix_per_beam * self.pc_per_pix**2  # pc^2 per beam = pix/beam * pc^2/pix
 
-            # BUCKET: move construction of collapsed_fluxes_vel to model_prep(), so only do it once? (Can't, bc self.zred)
-            # BUCKET: MOVE IT ANYWAY! Just set zred = vsys / c_kms, based on early vsys estimates
-            hdu_m = fits.open(self.data_mask)  # open the strictmask
-            mask = hdu_m[0].data
-            hdu_m.close()
-
-            # CONSTRUCT THE FLUX MAP IN UNITS Jy km/s beam^-1
-            collapsed_fluxes_vel = np.zeros(shape=(len(self.input_data[0]), len(self.input_data[0][0])))
-            for zi in range(len(self.input_data)):
-                collapsed_fluxes_vel += self.input_data[zi] * mask[zi] * v_width
-            print(time.time() - t_gas, 'look here time')
-            # collapsed_fluxes_vel[collapsed_fluxes_vel < 0] = 0.  # ignore negative values? probably not?
-
-            # DEFINE SEMI-MAJOR AXES FOR SAMPLING, THEN CALCULATE THE MEAN SURFACE BRIGHTNESS INSIDE ELLIPTICAL ANNULI
-            # semi_major = np.logspace(0., 1.84, num=12)  # [pix] make these params (0, 1.84, num=12) class inputs?
-            semi_major = np.linspace(0., 100., num=85)
-            # semi_major_axes from 0.02 to 1.4 arcsec = 1 to ~70 pix (~10^1.84 pix) [res = 0.02 arcsec/pix]
-            co_surf, co_errs = annuli_sb(collapsed_fluxes_vel, semi_major, self.theta_ell, self.q_ell,
-                                         self.xell + self.xyrange[0], self.yell + self.xyrange[2])
-            #co_surf.append(0)
-            #print(semi_major)
-            #np.concatenate(semi_major, [semi_major[-1] + (semi_major[-1] - semi_major[-2])])
-            #print(semi_major)
-            co_ell_sb = np.asarray(co_surf)  # convert the output list of mean CO surface brightnesses into an array
-            semi_majors_pc = semi_major[1:] * self.pc_per_pix  # convert semi-major axes from pix to pc!
-            
-            # THEN, convert co_ell_rad to be the mean annulus radius, not sma value!
-            co_ell_rad = (2. * semi_majors_pc + self.q_ell * semi_majors_pc) / 3.  # mean_ellipse_radius = (2a + b)/3
-            co_ell_sb = np.nan_to_num(co_ell_sb)
-            '''  #
-
-            co_ell_rad = self.co_rad * self.pc_per_pix  # convert from pix to pc
-            co_ell_sb = np.nan_to_num(self.co_sb)  # replace NaNs with 0s
+            co_annuli_radii = self.co_rad * self.pc_per_pix  # convert input annulus mean radii from pix to pc
+            co_annuli_sb = np.nan_to_num(self.co_sb)  # replace NaNs with 0s in input CO mean surface brightness profile
             print('cosb done')
-            # Set up integration bounds, numerical integration step size, & vectors "avals" & "rvals" for integration.
-            # maxr >> than the maximum CO radius s.t. the relative grav. potential contributions are small compared to
+            # Set up integration bounds, numerical step size, vectors r & a (see Binney & Tremaine eqn 2.157)
+            # maxr >> than maximum CO radius, s.t. relative gravitational potential contributions are small compared to
             # those near the disk edge.
             min_r = 0.  # integration lower bound [pix or pc]
-            max_r = 200 * self.pc_per_pix  # 450.  # integration upper bound [pc; semi-major axis on flux map is ~30pix]
+            max_r = 1500.  # upper bound [pc]; disk peak <~100pc, extend <~700pc; maxr >2x max CO radius
             nr = 500  # number of steps used in integration process
             del_r = (max_r - min_r) / nr  # integration step size [pc]
             avals = np.linspace(min_r,max_r,nr)  # [pc]  # range(min_r,max_r,(max_r-min_r)/del_r)
@@ -620,7 +584,7 @@ class ModelGrid:
 
             # convert from Jy km/s to Msol (Boizelle+17; Carilli & Walter 13, S2.4: https://arxiv.org/pdf/1301.0371.pdf)
             msol_per_jykms = 3.25e7 * self.alpha_co10 * self.f_he * self.dist ** 2 / \
-                             ((1 + self.zred) * self.r21 * (self.f_0/1e9) ** 2)  # (self.f_0/1e9)**2 if in GHz, but in Hz
+                             ((1 + self.zred) * self.r21 * (self.f_0/1e9) ** 2)  # f_0 in GHz, not Hz?!
             # equation for (1+z)^3 is for observed freq, but using rest freq -> nu0^2 = (nu*(1+z))^2
             # L_line [K km/s pc^2] = 3.25e7 [?] * (flux [Jy km/s]) * (DL [Mpc])**2 / ((1+z)**3 * (f_0 [Hz])**2)
             # [?] [Jy km/s] [Mpc^2] [Hz^-2] = K km/s pc^2 -> [?] = K Jy^-1 pc^2/Mpc^2 Hz^2
@@ -630,13 +594,15 @@ class ModelGrid:
             # [K km/s pc^2 Jy^-1 (km/s)^-1] * Msol pc^-2 K^-1 (km/s)^-1 = Jy^-1 Msol (km/s^-1) = [Msol (Jy km/s)^-1]
 
             # Fit the CO distribution w/ an exp profile (w/ scale radius & norm), then construct Sigma(R) for R=rvals
-            radius_pc = self.gas_radius * self.pc_per_pix  # convert free parameter from [pix] to [pc]
-            gas_norm_pc = self.gas_norm / self.pc_per_pix ** 2  # convert [Jy km/s / pix] to [Jy km/s / pc^2]
-            sigr2 = gas_norm_pc * np.cos(self.inc) * msol_per_jykms * np.exp(-rvals / radius_pc)  # [Msol pc^-2]
+            # CASE (2)
+            # radius_pc = self.gas_radius * self.pc_per_pix  # convert free parameter from [pix] to [pc]
+            # gas_norm_pc = self.gas_norm / self.pc_per_pix ** 2  # convert [Jy km/s / pix] to [Jy km/s / pc^2]
+            # sigr2 = gas_norm_pc * np.cos(self.inc) * msol_per_jykms * np.exp(-rvals / radius_pc)  # [Msol pc^-2]
 
+            # CASE (3)
             # Interpolate CO surface brightness vs elliptical mean radii, to construct Sigma(rvals).
             # Units [Jy km/s/beam] * [Msol/(Jy km/s)] / [pc^2/beam] = [Msol/pc^2]
-            sigr3_func_r = interpolate.interp1d(co_ell_rad, co_ell_sb, kind='zero', fill_value='extrapolate')
+            sigr3_func_r = interpolate.interp1d(co_annuli_radii, co_annuli_sb, kind='zero', fill_value='extrapolate')
             sigr3 = sigr3_func_r(rvals) * np.cos(self.inc) * msol_per_jykms / pc2_per_beam  # Msol pc^-2
             #plt.plot(co_ell_rad, co_ell_sb * np.cos(self.inc) * msol_per_jykms / pc2_per_beam, 'ro',
             #         label='CO flux map')
@@ -664,91 +630,47 @@ class ModelGrid:
             #plt.show()
             #print(oop)
             # BUCKET END TESTING PYTHON INTEGRATION
-            # print(oop)
-            # sigr3 = sigr3_func_r(R) * np.cos(self.inc) * jykms_to_msol  # calculate Msol/pc^2 profile for rvals!
 
             # Calculate the (inner) integral (see eqn 2.157 from Binney & Tremaine)
-            int1_a2 = np.zeros(shape=len(rvals))  # int1_a2=make_array(n_elements(rvals),value=0d); shape=len(rvals)
+            # int1_a2 = np.zeros(shape=len(rvals))
             int1_a3 = np.zeros(shape=len(rvals))
-            t_r = time.time()
-            # BUCKET MUST DO DERIVATIVES SOME OTHER WAY!!! THIS TAKES 256 SECONDS!!!!!!!
-            print(np.shape(rvals), np.shape(R), 'shape rvals, shape R')
-            print(np.amax(rvals), np.amax(R), 'max rvals [pc], max R [pc]')
-            tl = time.time()
-            for i in range(1, len(rvals)):
-                int1_a2[i] = np.sum(rvals[i:] * sigr2[i:] * del_r / np.sqrt(rvals[i:]**2 - avals[i-1]**2))
+            for i in range(1, len(rvals)):  # for i=1.,n_elements(rvals)-1 (BC IDL INDEXING INCLUSIVE!)
+                # int1_a2[i] = np.sum(rvals[i:] * sigr2[i:] * del_r / np.sqrt(rvals[i:]**2 - avals[i-1]**2))
                 int1_a3[i] = np.sum(rvals[i:] * sigr3[i:] * del_r / np.sqrt(rvals[i:]**2 - avals[i-1]**2))
-            print(time.time() - tl, 'time in loop')
-            #for i in range(1, len(R)):  # len(rvals) # for i=1.,n_elements(rvals)-1 (BC IDL INDEXING INCLUSIVE!)
-            #    print(time.time() - t_r)
-            #    t_r = time.time()
-            #    for j in range(1, len(R[0])):
-            #        # BUCKET: make int1_a2, int1_a3, R and sigr2 and sigr3 indexed as 2D arrays instead of as 1D arrays?!
-            #        int1_a2[i, j] = np.sum(R[i:, j:] * sigr2[i:, j:] * del_r /
-            #                               np.sqrt(R[i:, j:] ** 2 - R[i - 1, j - 1] ** 2))
-            #        int1_a3[i, j] = np.sum(R[i:, j:] * sigr3[i:, j:] * del_r /
-            #                               np.sqrt(R[i:, j:] ** 2 - R[i - 1, j - 1] ** 2))
-            #print(time.time() - t_r)
 
-            # Compute crude numerical differential wrt radius (d/da) for 2nd (outer) integral (eqn 2.157 Binney & Tremaine)
-            # int1_dda2 = np.zeros(shape=R.shape)  # len(rvals)
-            # int1_dda3 = np.zeros(shape=R.shape)
-            print(np.median(int1_a2), 'med int1')
-            int1_dda2 = np.zeros(shape=len(rvals))
+            # Crude numerical differential wrt radius (d/da) for 2nd (outer) integral (see eqn 2.157 Binney & Tremaine)
+            # int1_dda2 = np.zeros(shape=len(rvals))
             int1_dda3 = np.zeros(shape=len(rvals))
-            # Offset indices in int1_a* by 1 so that the difference is like a derivative
-            # BUCKET: make int1_dda2 and int1_dda3 and int1_a2 and int1_a3 indexed as 2D arrays instead of as 1D arrays?!
-            #int1_dda2[1:, 1:] = (int1_a2[1:, 1:] - int1_a2[0:-1, 0:-1]) / del_r
-            #int1_dda3[1:, 1:] = (int1_a3[1:, 1:] - int1_a3[0:-1, 0:-1]) / del_r
-            int1_dda2[1:] = (int1_a2[1:] - int1_a2[0:-1]) / del_r
-            int1_dda3[1:] = (int1_a3[1:] - int1_a3[0:-1]) / del_r
-            print(np.median(int1_dda2), 'med int1dda2')
+
+            # int1_dda2[1:] = (int1_a2[1:] - int1_a2[0:-1]) / del_r
+            int1_dda3[1:] = (int1_a3[1:] - int1_a3[0:-1]) / del_r  # Offset indices in int1_a* by 1 so diff -> deriv
 
             # Calculate the second (outer) integral (eqn 2.157 Binney & Tremaine)
-            #int2_r2 = np.zeros(shape=R.shape)  # int2_r2=make_array(n_elements(avals),value=0d); len(avals)
-            #int2_r3 = np.zeros(shape=R.shape)
-            int2_r2 = np.zeros(shape=len(avals))
+            # int2_r2 = np.zeros(shape=len(avals))
             int2_r3 = np.zeros(shape=len(avals))
-            tl2 = time.time()
             for i in range(1, len(rvals) - 1):  # only go to len(avals)-1 (in IDL: -2) bc index rvals[i+1]
-                int2_r2[i] = np.sum(avals[0:i] * int1_dda2[0:i] / np.sqrt(rvals[i+1]**2 - avals[0:i]**2) * del_r)
+                # int2_r2[i] = np.sum(avals[0:i] * int1_dda2[0:i] / np.sqrt(rvals[i+1]**2 - avals[0:i]**2) * del_r)
                 int2_r3[i] = np.sum(avals[0:i] * int1_dda3[0:i] / np.sqrt(rvals[i+1]**2 - avals[0:i]**2) * del_r)
-            print(time.time() - tl2, 'time in loop2')
-            print(np.median(int2_r2), 'med int2r2')
-            #t_r2 = time.time()
-            #for i in range(1, len(R) - 1):  # only go to len(avals)-1 (in IDL: -2) bc index rvals[i+1]
-            #    for j in range(1, len(R[0]) - 1):
-            #        # BUCKET: make int2_r2, int2_r3, self.R, int1_dda2, int1_dda3 indexed as 2D arrays instead of as 1D arrays?!
-            #        # int2_r2[i] = np.sum(avals[0:i] * int1_dda2[0:i] / np.sqrt(rvals[i+1]**2 - avals[0:i]**2) * del_r)
-            #        int2_r2[i, j] = np.sum(R[0:i, 0:j] * int1_dda2[0:i, 0:j] /
-            #                               np.sqrt(R[i + 1, j + 1] ** 2 - R[0:i, 0:j] ** 2) * del_r)
-            #        # int2_r3[i] = np.sum(avals[0:i] * int1_dda3[0:i] / np.sqrt(rvals[i+1]**2 - avals[0:i]**2) * del_r)
-            #        int2_r3[i, j] = np.sum(R[0:i, 0:j] * int1_dda3[0:i, 0:j] /
-            #                               np.sqrt(R[i + 1, j + 1] ** 2 - R[0:i, 0:j] ** 2) * del_r)
-            #print(time.time() - t_r2)
 
             # Numerical v_cg solution assuming an exponential mass distribution (vc2) & one following the CO sb (vc3)
-            vc2 = np.sqrt(np.abs(-4 * self.G_pc * int2_r2))
+            # vc2 = np.sqrt(np.abs(-4 * self.G_pc * int2_r2))
             vc3 = np.sqrt(np.abs(-4 * self.G_pc * int2_r3))
-            print(np.median(vc2),'med vc2')
-            #plt.plot(rvals, vc3, 'k+')
-            #plt.show()
 
-            # ADDING THIS TO EXTRAPOLATE TO MY R ARRAY
+            # INTERPOLATE/EXTRAPOLATE FROM velocity(rvals) TO velcoity(R)
+            # vc2_r = interpolate.interp1d(rvals, vc2, kind='zero', fill_value='extrapolate')
             vc3_r = interpolate.interp1d(rvals, vc3, kind='zero', fill_value='extrapolate')
-            vc2_r = interpolate.interp1d(rvals, vc2, kind='zero', fill_value='extrapolate')
 
             # Note that since potentials are additive, sum up the velocity contributions in quadrature:
-            vg3 = vc3_r(R)
-            vg2 = vc2_r(R)
-            print(R.shape)
-            plt.imshow(vg3, origin='lower', extent=[x_obs[0], x_obs[-1], y_obs[0], y_obs[-1]])
-            cbar = plt.colorbar()
-            cbar.set_label(r'km/s')
-            plt.xlabel(r'x\_obs [pc]')
-            plt.ylabel(r'y\_obs [pc]')
-            plt.show()
-            print(time.time() - t_gas, ' seconds spent in gas calculation')
+            # vg = vc2_r(R)
+            vg = vc3_r(R)
+            #plt.imshow(vg, origin='lower', extent=[x_obs[0], x_obs[-1], y_obs[0], y_obs[-1]])
+            #cbar = plt.colorbar()
+            #cbar.set_label(r'km/s')
+            #plt.xlabel(r'x\_obs [pc]')
+            #plt.ylabel(r'y\_obs [pc]')
+            #plt.show()
+            if not self.quiet:
+                print(time.time() - t_gas, ' seconds spent in gas calculation')
 
         if self.menc_type == 0:  # if calculating v(R) due to stars directly from MGE parameters
             if not self.quiet:
@@ -843,115 +765,6 @@ class ModelGrid:
 
         if not self.quiet:
             print(str(time.time() - t_grid) + ' seconds in grids()')
-
-
-    def gas_mass(self):
-        """
-        # DO CO PROFILE CALCULATIONS FOR GAS MASS
-        :return: the velocity due to the gas mass
-        """
-        t_gas = time.time()
-        # CALCULATE VELOCITY WIDTH
-        v_width = self.c_kms * (1 + self.zred) * self.fstep / self.f_0  # velocity width [Jy km/s beam^-1]
-
-        # BUCKET: move construction of collapsed_fluxes_vel to model_prep(), so only do it once? (Can't, bc self.zred)
-        # BUCKET: MOVE IT ANYWAY! Just set zred = vsys / c_kms, based on early vsys estimates
-        hdu_m = fits.open(self.data_mask)  # open the strictmask
-        mask = hdu_m[0].data
-        hdu_m.close()
-
-        # CONSTRUCT THE FLUX MAP IN UNITS Jy km/s beam^-1
-        collapsed_fluxes_vel = np.zeros(shape=(len(self.input_data[0]), len(self.input_data[0][0])))
-        for zi in range(len(self.input_data)):
-            collapsed_fluxes_vel += self.input_data[zi] * mask[zi] * v_width
-        # collapsed_fluxes_vel[collapsed_fluxes_vel < 0] = 0.  # ignore negative values? probably not?
-
-        # DEFINE SEMI-MAJOR AXES FOR SAMPLING, THEN CALCULATE THE MEAN SURFACE BRIGHTNESS INSIDE ELLIPTICAL ANNULI
-        # semi_major = np.logspace(0., 1.84, num=12)  # [pix] make these params (0, 1.84, num=12) class inputs?
-        semi_major = np.linspace(0., 78, num=85)
-        # semi_major_axes from 0.02 to 1.4 arcsec = 1 to ~70 pix (~10^1.84 pix) [res = 0.02 arcsec/pix]
-        co_surf, co_errs = annuli_sb(collapsed_fluxes_vel, semi_major, self.theta_ell, self.q_ell, self.xell, self.yell)
-        co_ell_sb = np.asarray(co_surf)  # convert the output list of mean CO surface brightnesses into an array
-        semi_majors_pc = semi_major[1:] * self.resolution  # convert semi-major axes from pix to arcsec!
-        # THEN, convert co_ell_rad to be the mean annulus radius, not sma value!
-        co_ell_rad = (2. * semi_majors_pc + self.q_ell * semi_majors_pc) / 3.  # mean_ellipse_radius = (2a + b)/3
-
-        # Set up integration bounds, numerical integration step size, & vectors "avals" & "rvals" for each integration.
-        # maxr >> than the maximum CO radius s.t. the relative grav. potential contributions are small compared to near
-        # the disk edge.
-        del_r = 0.1  # integration step size [pc]
-        #min_r = 0.  # integration lower bound [pix or pc]
-        #max_r = 65. * self.pc_per_pix  # 450.  # integration upper bound [pc; semi-major axis on flux map is ~30pix]
-        #avals = range(min_r,max_r,(max_r-min_r)/del_r)  # [pc]
-        #rvals = range(min_r,max_r,(max_r-min_r)/del_r)  # [pc]
-        # BUCKET: REPLACE rvals, avals with self.R (which is in pc)
-
-        # set up conversion factor: transfer from Jy km/s beam^-1 to Msol / pc^2
-        # See eqn (1) in Boizelle+17 (from Carilli & Walter 13, S2.4: https://arxiv.org/pdf/1301.0371.pdf)
-        jykms_to_msol = 3.25e7 * self.alpha_co10 * self.f_he * self.dist**2 /\
-                        ((1 + self.zred) * self.r21 * (self.f_0 / 1e9)**2)
-        # L_line [K km/s pc^2] = 3.25e7 [?] * (measured flux in Jy km/s) * (DL [Mpc])**2 / ((1+z)**3 * (f_0 [Hz?])**2)
-        # [?] [Jy km/s] [Mpc^2] [Hz^-2] = K km/s pc^-2 -> [?] = K Jy^-1 1e12 pc^2/Mpc^2 Hz^2
-        # K Jy^-1 1e12 [pc^2/Mpc^2] Hz^2 * [Msol pc^-2 km/s K^-1] * [Mpc^2] [GHz^-2]
-        # = Jy^-1 1e12 pc^2 Hz^2 * Msol km/s [Hz^2/GHz^2] = Msol pc^2 km/s Jy^-1 BAD?!
-        # =
-
-        # Fit the CO distribution w/ an exp profile (w/ scale radius & norm), then construct Sigma(R) for R=rvals
-        radius_pc = self.gas_radius * self.pc_per_pix  # convert free parameter from [pix] to [pc]
-        gas_norm_pc = self.gas_norm / self.pc_per_pix ** 2  # convert free parameter from [Msol/pix^2] to [Msol/pc^2]
-        # sigr2 = gas_norm_pc * np.cos(self.inc) * jykms_to_msol * np.exp(-rvals / radius_pc)
-        sigr2 = gas_norm_pc * np.cos(self.inc) * jykms_to_msol * np.exp(-self.R / radius_pc)
-
-        # Interpolate CO surface brightness vs elliptical mean radii, to construct \Sigma(R) for R=rvals
-        # create a function that returns the CO surface brightness (in Jy km/s beam^-1) for a set of radii (in pc)
-        sigr3_func_r = interpolate.interp1d(co_ell_rad, co_ell_sb, kind='spline', fill_value='extrapolate')
-        # sigr3 = sigr3_func_r(rvals) * np.cos(self.inc) * jykms_to_msol  # calculate Msol/pc^2 profile for rvals!
-        sigr3 = sigr3_func_r(self.R) * np.cos(self.inc) * jykms_to_msol  # calculate Msol/pc^2 profile for rvals!
-
-        # Calculate the 1st (inner) integral, then compute its differential (d/da) (for cases (2) and (3))
-        # See eqn 2.157 from Binney & Tremaine
-        int1_a2 = np.zeros(shape=self.R.shape)  # int1_a2=make_array(n_elements(rvals),value=0d); shape=len(rvals)
-        int1_a3 = np.zeros(shape=self.R.shape)
-        for i in range(1, len(self.R)):  # len(rvals) # for i=1.,n_elements(rvals)-1 (BC IDL INDEXING INCLUSIVE!)
-            for j in range(1, len(self.R[0])):
-                # BUCKET: make int1_a2, int1_a3, self.R and sigr2 and sigr3 indexed as 2D arrays instead of as 1D arrays?!
-                #int1_a2[i] = np.sum(rvals[i:] * sigr2[i:] * del_r / np.sqrt(rvals[i:]**2 - avals[i-1]**2))
-                int1_a2[i,j] = np.sum(self.R[i:,j:] * sigr2[i:,j:] * del_r /
-                                      np.sqrt(self.R[i:,j:]**2 - self.R[i-1,j-1]**2))
-                #int1_a3[i] = np.sum(rvals[i:] * sigr3[i:] * del_r / np.sqrt(rvals[i:]**2 - avals[i-1]**2))
-                int1_a3[i,j] = np.sum(self.R[i:,j:] * sigr3[i:,j:] * del_r /
-                                      np.sqrt(self.R[i:,j:]**2 - self.R[i-1,j-1]**2))
-
-        # Compute crude numerical differential wrt radius (d/da) for 2nd (outer) integral (eqn 2.157 Binney & Tremaine)
-        int1_dda2 = np.zeros(shape=self.R.shape)  # len(rvals)
-        int1_dda3 = np.zeros(shape=self.R.shape)
-        # Offset indices in int1_a* by 1 so that the difference is like a derivative
-        # BUCKET: make int1_dda2 and int1_dda3 and int1_a2 and int1_a3 indexed as 2D arrays instead of as 1D arrays?!
-        int1_dda2[1:, 1:] = (int1_a2[1:, 1:] - int1_a2[0:-1, 0:-1]) / del_r
-        int1_dda3[1:, 1:] = (int1_a3[1:, 1:] - int1_a3[0:-1, 0:-1]) / del_r
-
-        # Calculate the second (outer) integral (eqn 2.157 Binney & Tremaine)
-        int2_r2 = np.zeros(shape=self.R.shape)  # int2_r2=make_array(n_elements(avals),value=0d); len(avals)
-        int2_r3 = np.zeros(shape=self.R.shape)
-        for i in range(1, len(self.R) - 1):  # only go to len(avals)-1 (in IDL: -2) bc index rvals[i+1]
-            for j in range(1, len(self.R[0]) - 1):
-                # BUCKET: make int2_r2, int2_r3, self.R, int1_dda2, int1_dda3 indexed as 2D arrays instead of as 1D arrays?!
-                #int2_r2[i] = np.sum(avals[0:i] * int1_dda2[0:i] / np.sqrt(rvals[i+1]**2 - avals[0:i]**2) * del_r)
-                int2_r2[i,j] = np.sum(self.R[0:i,0:j] * int1_dda2[0:i,0:j] /
-                                      np.sqrt(self.R[i+1,j+1]**2 - self.R[0:i,0:j]**2) * del_r)
-                #int2_r3[i] = np.sum(avals[0:i] * int1_dda3[0:i] / np.sqrt(rvals[i+1]**2 - avals[0:i]**2) * del_r)
-                int2_r3[i,j] = np.sum(self.R[0:i,0:j] * int1_dda3[0:i,0:j] /
-                                      np.sqrt(self.R[i+1,j+1]**2 - self.R[0:i,0:j]**2) * del_r)
-
-        # Numerical v_cg solution assuming an exponential mass distribution (vc2) & one following the CO sb (vc3)
-        vc2 = np.sqrt(np.abs(-4*self.G_pc*int2_r2))
-        vc3 = np.sqrt(np.abs(-4*self.G_pc*int2_r3))
-
-        # Note that since potentials are additive, sum up the velocity contributions in quadrature:
-        v_cg = vc3
-        print(time.time() - t_gas, ' seconds spent in gas calculation')
-
-        return v_cg
 
 
     def convolution(self):
@@ -1404,7 +1217,8 @@ if __name__ == "__main__":
                          data_mask=params['mask'], grid_size=params['gsize'], res=params['resolution'],
                          x_std=params['x_fwhm'], y_std=params['y_fwhm'], pa=params['PAbeam'],
                          xyerr=[params['xerr0'], params['xerr1'], params['yerr0'], params['yerr1']],
-                         zrange=[params['zi'], params['zf']])
+                         zrange=[params['zi'], params['zf']], q_ell=params['q_ell'],
+                         theta_ell=np.deg2rad(params['theta_ell']), xell=params['xell'], yell=params['yell'])
 
     lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise, co_ell_sb, co_ell_rad = mod_ins
 
