@@ -16,41 +16,68 @@ import sys
 import mge_vcirc_mine as mvm  # import mge_vcirc code
 
 
+def integral22(rad, dda):
+
+    int22 = integrate.quad(integrand22, 0, rad, args=(rad, dda))[0]
+
+    return int22
+
+
+def integrand22(a, rad, dda):
+
+    if rad == a:
+        integ22 = 0
+    else:
+        integ22 = a * dda / np.sqrt(rad**2 - a**2)
+
+    return integ22
+
+
 def integral2(rad, sigma_func, inclination, conversion_factor):
 
-    print('pre int2')
-    print(len(rad))
-    int2 = integrate.quad(integrand2, 0, rad[-1], args=(rad, sigma_func, inclination, conversion_factor))[0]
-    print('int2 done!')
+    int2 = integrate.quad(integrand2, 0, rad, args=(rad, sigma_func, inclination, conversion_factor))[0]
+    print(int2, 'int2 done')
 
     return int2
 
 
 def integrand2(a, rad, sigma_func, inclination, conversion_factor):
 
-    print('integrand 2 get ready')
-    da = 0.1
-    integ2 = misc.derivative(integral1, a, dx=da, args=(sigma_func, inclination, conversion_factor)) * a\
-             / np.sqrt(rad**2 - a**2)
-    print('integrand 2 built')
+    # print('integrand 2 get ready')
+    # da = 0.1
+    #integ2 = misc.derivative(integral1, a, dx=da, args=(sigma_func, inclination, conversion_factor)) * a\
+    #         / np.sqrt(rad[-1]**2 - a**2)
+    integ2 = deriv(a, sigma_func, inclination, conversion_factor, h=1e-5) * a / np.sqrt(rad**2 - a**2)
+    # integ2 = 186.82929873466492 * a / np.sqrt(rad[-1]**2 - a**2)
+    # print('integrand 2 built', integ2)
 
     return integ2
 
 
+def deriv(a, sigma_func, inclination, conversion_factor, h=1e-5):
+    # h is included for easy manual derivation
+
+    deriv = (integral1(a+h, sigma_func, inclination, conversion_factor) -
+             integral1(a, sigma_func, inclination, conversion_factor)) / h
+
+    return deriv
+
+
 def integral1(a, sigma_func, inclination, conversion_factor):
 
-    print('pre inner integral')
+    #print('pre inner integral')
     int1 = integrate.quad(integrand1, a, np.inf, args=(sigma_func, a, inclination, conversion_factor))[0]
     print('inner int calculated')
+    # print(int1)
 
     return int1
 
 
 def integrand1(r, sigma_func, a, inclination, conversion_factor):
 
-    print('integrand inner get ready')
+    #print('integrand inner get ready')
     integ1 = r * sigma_func(r) * np.cos(inclination) * conversion_factor / np.sqrt(r ** 2 - a ** 2)
-    print('integrand inner built')
+    #print('integrand inner built')
 
     return integ1
 
@@ -389,7 +416,7 @@ class ModelGrid:
                  out_name=None, beam=None, rfit=1., q_ell=1., theta_ell=0., xell=360., yell=350., bl=False,
                  enclosed_mass=None, menc_type=0, ml_ratio=1., sig_type='flat', sig_params=None, f_w=1., noise=None,
                  ds=None, zrange=None, xyrange=None, reduced=False, freq_ax=None, f_0=0., fstep=0., opt=True,
-                 quiet=False, n_params=8, data_mask=None, f_he=1.37, r21=0.7, alpha_co10=3.1, incl_gas=False,
+                 quiet=False, n_params=8, data_mask=None, f_he=1.36, r21=0.7, alpha_co10=3.1, incl_gas=False,
                  co_rad=None, co_sb=None, gas_norm=1e5, gas_radius=5):
         # Astronomical Constants:
         self.c = 2.99792458 * 10 ** 8  # [m / s]
@@ -577,7 +604,7 @@ class ModelGrid:
             # those near the disk edge.
             min_r = 0.  # integration lower bound [pix or pc]
             max_r = 1500.  # upper bound [pc]; disk peak <~100pc, extend <~700pc; maxr >2x max CO radius
-            nr = 500  # number of steps used in integration process
+            nr = 500  # 500  # number of steps used in integration process
             del_r = (max_r - min_r) / nr  # integration step size [pc]
             avals = np.linspace(min_r,max_r,nr)  # [pc]  # range(min_r,max_r,(max_r-min_r)/del_r)
             rvals = np.linspace(min_r,max_r,nr)  # [pc]  # range(min_r,max_r,(max_r-min_r)/del_r)
@@ -586,12 +613,7 @@ class ModelGrid:
             msol_per_jykms = 3.25e7 * self.alpha_co10 * self.f_he * self.dist ** 2 / \
                              ((1 + self.zred) * self.r21 * (self.f_0/1e9) ** 2)  # f_0 in GHz, not Hz?!
             # equation for (1+z)^3 is for observed freq, but using rest freq -> nu0^2 = (nu*(1+z))^2
-            # L_line [K km/s pc^2] = 3.25e7 [?] * (flux [Jy km/s]) * (DL [Mpc])**2 / ((1+z)**3 * (f_0 [Hz])**2)
-            # [?] [Jy km/s] [Mpc^2] [Hz^-2] = K km/s pc^2 -> [?] = K Jy^-1 pc^2/Mpc^2 Hz^2
-            # -> [K Jy^-1 Hz^2 pc^2/Mpc^2] * [Msol pc^-2 K^-1 (km/s)^-1] * [na] * [Mpc^2] * ([na] * [na] * [Hz^2])^-1
-            # = [K Jy^-1 Hz^2 pc^2/Mpc^2] * [Msol pc^-2 K^-1 (km/s)^-1] * [Mpc^2] * [Hz^-2]
-            # = Msol (Jy^-1 km/s)^-1
-            # [K km/s pc^2 Jy^-1 (km/s)^-1] * Msol pc^-2 K^-1 (km/s)^-1 = Jy^-1 Msol (km/s^-1) = [Msol (Jy km/s)^-1]
+            # units on 3.25e7 are [K Jy^-1 pc^2/Mpc^2 GHz^2] --> total units [Msol (Jy km/s)^-1]
 
             # Fit the CO distribution w/ an exp profile (w/ scale radius & norm), then construct Sigma(R) for R=rvals
             # CASE (2)
@@ -602,9 +624,14 @@ class ModelGrid:
             # CASE (3)
             # Interpolate CO surface brightness vs elliptical mean radii, to construct Sigma(rvals).
             # Units [Jy km/s/beam] * [Msol/(Jy km/s)] / [pc^2/beam] = [Msol/pc^2]
-            sigr3_func_r = interpolate.interp1d(co_annuli_radii, co_annuli_sb, kind='zero', fill_value='extrapolate')
+
+            # Test setting inner-most annulus to 0 (no discernible change in final v_c,gas)
+            #co_annuli_sb = np.insert(co_annuli_sb, 0, 0)
+            #co_annuli_radii = np.insert(co_annuli_radii, 0, 0)
+
+            sigr3_func_r = interpolate.interp1d(co_annuli_radii, co_annuli_sb, kind='quadratic', fill_value='extrapolate')
             sigr3 = sigr3_func_r(rvals) * np.cos(self.inc) * msol_per_jykms / pc2_per_beam  # Msol pc^-2
-            #plt.plot(co_ell_rad, co_ell_sb * np.cos(self.inc) * msol_per_jykms / pc2_per_beam, 'ro',
+            #plt.plot(co_annuli_radii, co_annuli_sb * np.cos(self.inc) * msol_per_jykms / pc2_per_beam, 'ro',
             #         label='CO flux map')
             #plt.plot(rvals, sigr3, 'b+', label='Interpolation')
             #plt.ylabel(r'Surface density [M$_{\odot} / $pc$^2$]')
@@ -620,15 +647,57 @@ class ModelGrid:
             # END ESTIMATE GAS MASS
 
             # BUCKET TESTING PYTHON INTEGRATION
-            #print('testing python integration')
+            # '''  #
+            print('testing python integration')
+            #int2 = integrate.quad(deriv, 0, rvals[-1], args=(rvals, sigr3_func_r, self.inc, msol_per_jykms))
+            #print(int2)
+            #print(oop)
+            # int2 = integrate.quad(integrand2, 0, rvals[-1], args=(rvals, sigr3_func_r, self.inc, msol_per_jykms))
+            # grand = integrand2(rvals[-1], rvals, sigr3_func_r, self.inc, msol_per_jykms)
+            #print(int2, 'grand')
+            #td = time.time()
+            #dda = misc.derivative(integral1, rvals[-1], dx=0.001, args=(sigr3_func_r, self.inc, msol_per_jykms))
+            dda = deriv(rvals[-1], sigr3_func_r, self.inc, msol_per_jykms, 1e-5)  # if use h too small, deriv explodes
+            print(dda)
+            #print(time.time() - td)
+            #td2 = time.time()
+            #dda0 = deriv(rvals[0], sigr3_func_r, self.inc, msol_per_jykms, 1e-5)
+            #print(time.time() - td2)
+            #print(dda, dda0)
+            #print(oop)
+            int2 = np.zeros(shape=len(rvals))
+            for rv in range(len(rvals[1:])):
+                #trv = time.time()
+                #dda = deriv(rvals[rv], sigr3_func_r, self.inc, msol_per_jykms, 1e-5)
+                int2[rv] = integral22(rvals[rv], dda)
+                #print(rvals[rv], time.time() - trv)
+                # deriv(rv, sigr3_func_r, self.inc, msol_per_jykms, 1e-5) * rv / np.sqrt(rvals[-1]**2 - rv**2)
+            #    int2[rv] = integral2(rv, sigr3_func_r, self.inc, msol_per_jykms)
+            print(int2, 'int2')
+            #dda = integral1(rvals[-1], sigr3_func_r, self.inc, msol_per_jykms)
+            print(dda, 'deriv')
+            #int2 = int22(integrand22, 0, rvals[-1], args=(rvals, dda, sigr3_func_r, self.inc, msol_per_jykms))
+            #int1 = integral1(rvals[-1], sigr3_func_r, self.inc, msol_per_jykms)
+            #print(int1, 'look')  # could maybe go to a higher rvals value than 1500, but it relatively levels off here
+            # print(oop)
             #integral_2 = integral2(rvals, sigr3_func_r, self.inc, msol_per_jykms)
             #print(integral_2)
-            #vcg = np.sqrt(-4 * self.G_pc * integral_2)
-            #vcg_func = interpolate.interp1d(rvals, vcg, kind='zero', fill_value='extrapolate')
-            #plt.imshow(vcg_func(R), origin='lower')
-            #plt.colorbar()
-            #plt.show()
-            #print(oop)
+            # int2 = 186.82929873466492 * np.asarray(rvals)
+            vcg = np.sqrt(4 * self.G_pc * int2)
+            print(vcg)
+            vcg_func = interpolate.interp1d(rvals, vcg, kind='zero', fill_value='extrapolate')
+            vcgr = vcg_func(R)
+            alpha = abs(np.arctan(y_disk / (np.cos(self.inc) * x_disk)))  # measure alpha from +x (minor ax) to +y (maj ax)
+            sign = x_disk / abs(x_disk)  # (+x now back to redshifted side, so don't need extra minus sign back in front!)
+            #vcgr = sign * abs(vcgr * np.cos(alpha) * np.sin(self.inc))  # v_los > 0 -> redshift; v_los < 0 -> blueshift
+            plt.imshow(vcgr, origin='lower', extent=[x_obs[0], x_obs[-1], y_obs[0], y_obs[-1]])
+            cbar = plt.colorbar()
+            cbar.set_label(r'km/s')
+            plt.xlabel(r'x\_obs [pc]')
+            plt.ylabel(r'y\_obs [pc]')
+            plt.show()
+            print(oop)
+            # '''  #
             # BUCKET END TESTING PYTHON INTEGRATION
 
             # Calculate the (inner) integral (see eqn 2.157 from Binney & Tremaine)
@@ -658,17 +727,21 @@ class ModelGrid:
 
             # INTERPOLATE/EXTRAPOLATE FROM velocity(rvals) TO velcoity(R)
             # vc2_r = interpolate.interp1d(rvals, vc2, kind='zero', fill_value='extrapolate')
-            vc3_r = interpolate.interp1d(rvals, vc3, kind='zero', fill_value='extrapolate')
+            vc3_r = interpolate.interp1d(rvals, vc3, kind='quadratic', fill_value='extrapolate')
 
             # Note that since potentials are additive, sum up the velocity contributions in quadrature:
             # vg = vc2_r(R)
             vg = vc3_r(R)
+            #alpha = abs(np.arctan(y_disk / (np.cos(self.inc) * x_disk)))  # measure alpha from +x (minor ax) to +y (maj ax)
+            #sign = x_disk / abs(x_disk)  # (+x now back to redshifted side, so don't need extra minus sign back in front!)
+            #vlg = sign * abs(vg * np.cos(alpha) * np.sin(self.inc))  # v_los > 0 -> redshift; v_los < 0 -> blueshift
             #plt.imshow(vg, origin='lower', extent=[x_obs[0], x_obs[-1], y_obs[0], y_obs[-1]])
             #cbar = plt.colorbar()
             #cbar.set_label(r'km/s')
             #plt.xlabel(r'x\_obs [pc]')
             #plt.ylabel(r'y\_obs [pc]')
             #plt.show()
+            #print(oop)
             if not self.quiet:
                 print(time.time() - t_gas, ' seconds spent in gas calculation')
 
@@ -1226,7 +1299,7 @@ if __name__ == "__main__":
     l_in = hduin[0].data
     hduin.close()
 
-    ig = params['incl_gas'] == 'True'
+    # ig = params['incl_gas'] == 'True'
 
     # CREATE MODEL CUBE!
     out = params['outname']
@@ -1241,8 +1314,9 @@ if __name__ == "__main__":
                    theta_ell=np.deg2rad(params['theta_ell']), xell=params['xell'], yell=params['yell'], fstep=fstep,
                    f_0=f_0, bl=params['bl'], xyrange=[params['xi'], params['xf'], params['yi'], params['yf']],
                    n_params=n_free, data_mask=params['mask'], incl_gas=params['incl_gas']=='True', vrad=params['vrad'],
-                   kappa=params['kappa'], omega=params['omega'], co_rad=co_ell_rad, co_sb=co_ell_sb,
-                   gas_norm=params['gas_norm'], gas_radius=params['gas_radius'])
+                   kappa=params['kappa'], omega=params['omega'], co_rad=co_ell_rad, co_sb=co_ell_sb)
+    # gas_norm=params['gas_norm'], gas_radius=params['gas_radius']
+
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()
