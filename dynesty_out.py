@@ -5,6 +5,10 @@
 import dynesty
 import pickle
 #import _pickle as pickle
+from dynesty import utils as dyfunc
+import dynamical_model as dm
+
+from pathlib import Path
 
 # basic numeric setup
 import numpy as np
@@ -30,11 +34,10 @@ rcParams.update({'ytick.minor.width': '1.0'})
 rcParams.update({'font.size': 15})
 
 
-def my_own_xy(results, par_labels, ax_labels, quantiles, ax_lims=None, compare_err=False, comp2=False, err=1):
+def my_own_xy(results, par_labels, ax_labels, quantiles, ax_lims=None, compare_err=False, comp2=False, err=1, fs=12):
     # results should be dyn_res['samples']
     roundto = 3  # 2  # 4
     fig, axes = plt.subplots(1, 2, figsize=(12, 8))  # 3 rows, 3 cols of subplots; because there are 9 free params
-    fs = 12
     labels = np.array(['xloc', 'yloc'])
     print(results.shape, 'look!')
     for i in range(2):
@@ -93,27 +96,114 @@ def my_own_xy(results, par_labels, ax_labels, quantiles, ax_lims=None, compare_e
     plt.show()
 
 
-def my_own_thing(results, par_labels, ax_labels, quantiles, ax_lims=None, compare_err=False, comp2=False, err=1):
+def table_it(things, parfiles, models, parlabels):
+
+    hdr = '| model | '
+    hdrl = '| --- |'
+    for la in range(len(parlabels)):
+        hdrl += ' --- |'
+        hdr += parlabels[la] + ' | '
+
+    texlines = '| '
+    lines = '| '
+    for t in range(len(things)):
+        print(t, len(things), len(parfiles), len(models))
+        params, priors, nfree, qobs = dm.par_dicts(parfiles[t], q=True)  # get params and file names from output parfile
+        mod_ins = dm.model_prep(data=params['data'], ds=params['ds'], lucy_out=params['lucy'], lucy_b=params['lucy_b'],
+                                lucy_mask=params['lucy_mask'], lucy_in=params['lucy_in'], lucy_it=params['lucy_it'],
+                                data_mask=params['mask'], grid_size=params['gsize'], res=params['resolution'],
+                                x_std=params['x_fwhm'], y_std=params['y_fwhm'], zrange=[params['zi'], params['zf']],
+                                xyerr=[params['xerr0'], params['xerr1'], params['yerr0'], params['yerr1']],
+                                pa=params['PAbeam'])
+        lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise, co_rad, co_sb = mod_ins
+        vrad = None
+        kappa = None
+        omega = None
+        if 'vrad' in parlabels:
+            vrad = params['vrad']
+        elif 'omega' in parlabels:
+            kappa = params['kappa']
+            omega = params['omega']
+        elif 'kappa' in parlabels:
+            kappa = params['kappa']
+
+        mg = dm.ModelGrid(x_loc=params['xloc'], y_loc=params['yloc'], mbh=params['mbh'], ml_ratio=params['ml_ratio'],
+            inc=np.deg2rad(params['inc']), vsys=params['vsys'], theta=np.deg2rad(params['PAdisk']), vrad=vrad,
+            kappa=kappa, omega=omega, f_w=params['f'], os=params['os'], enclosed_mass=params['mass'],
+            sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], resolution=params['resolution'],
+            lucy_out=lucy_out, out_name=None, beam=beam, rfit=params['rfit'], zrange=[params['zi'], params['zf']],
+            dist=params['dist'], input_data=input_data, sig_type=params['s_type'], menc_type=params['mtype'],
+            theta_ell=np.deg2rad(params['theta_ell']), xell=params['xell'],yell=params['yell'], q_ell=params['q_ell'],
+            ds=params['ds'], reduced=True, f_0=f_0, freq_ax=freq_ax, noise=noise, bl=params['bl'], fstep=fstep,
+            xyrange=[params['xi'], params['xf'], params['yi'], params['yf']], n_params=nfree)
+
+        mg.grids()
+        mg.convolution()
+        chi2 = mg.chi2()
+        print(chi2)
+        print(models[t])
+
+        fmt = "{{0:{0}}}".format('.2f').format
+        chititle = r"${{0}}$".format(fmt(chi2))
+        altchititle = r"{0}".format(fmt(chi2))
+        texlines += models[t] + ' | ' + chititle + ' | '
+        lines += models[t] + ' | ' + altchititle + ' | '
+
+        with open(things[t], 'rb') as pk:
+            u = pickle._Unpickler(pk)
+            u.encoding = 'latin1'
+            dyn_res = u.load()  #
+            # dyn_res = pickle.load(pk)  #
+
+        weights = np.exp(dyn_res['logwt'] - dyn_res['logz'][-1])  # normalized weights
+
+        for i in range(dyn_res['samples'].shape[1]):  # for each parameter
+            q = dyfunc.quantile(dyn_res['samples'][:, i], [0.0015, 0.5, 0.9985], weights=weights)
+            if i == 0:
+                q = np.log10(q)
+            title = r"${{{0}}}_{{-{1}}}^{{+{2}}}$"
+            texlines += title.format(fmt(q[1]), fmt(q[1] - q[0]), fmt(q[2] - q[1])) + ' | '
+            alttitle = r"{0} -{1}/+{2}"
+            lines += alttitle.format(fmt(q[1]), fmt(q[1] - q[0]), fmt(q[2] - q[1])) + ' | '
+            #lines += str(q[1].format('.2f').format) + ' +' + str((q[2]-q[1]).format('.2f').format) + ' -' +\
+            #         str((q[1] - q[0]).format('.2f').format) + ' | '
+        lines += '\n| '
+        texlines += '\n| '
+
+    return hdr, hdrl, lines, texlines
+
+
+def my_own_thing(results, par_labels, ax_labels, quantiles, ax_lims=None, compare_err=False, comp2=False, err=1, fs=12,
+                 savefig=None, vrad=False):
     # results should be dyn_res['samples']
     roundto = 3  # 2  # 4
-    fig, axes = plt.subplots(3, 3, figsize=(16, 12))  # 3 rows, 3 cols of subplots; because there are 9 free params
-    fs = 12
-    labels = np.array(['mbh', 'xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])
-    axes_order = [[0, 0], [2, 0], [2, 1], [2, 2], [1, 0], [1, 1], [1, 2], [0, 1], [0, 2]]
+    npar = len(par_labels)
+    if npar == 10:
+        fig, axes = plt.subplots(2, 5, figsize=(20, 12))  # 2 rows, 5 cols of subplots; because there are 0 free params
+        # labels = np.array(['mbh', 'xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f',]) vrad, kappa, etc
+        axes_order = [[0, 0], [1, 0], [1, 1], [1, 2], [0, 3], [0, 4], [1, 3], [0, 1], [0, 2], [1, 4]]
+    elif npar == 11:
+        fig, axes = plt.subplots(3, 4, figsize=(20, 12))  # 3 rows, 3 cols of subplots; because there are 9 free params
+        # labels =   ['mbh', 'xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f', kappa, omega], etc
+        axes_order = [[0, 0], [1, 1], [1, 2], [1, 3], [0, 3], [1, 0], [2, 0], [0, 1], [0, 2], [2, 1], [2, 2]]
+    elif npar == 9:
+        fig, axes = plt.subplots(3, 3, figsize=(20, 12))  # 3 rows, 3 cols of subplots; because there are 9 free params
+        labels = np.array(['mbh', 'xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])
+        axes_order = [[0, 0], [2, 0], [2, 1], [2, 2], [1, 0], [1, 1], [1, 2], [0, 1], [0, 2]]
     for i in range(len(results[0])):
         row, col = axes_order[i]
         if compare_err or comp2:
-            print('yes', labels[i])
-            if labels[i] == 'yloc' or labels[i] == 'xloc':
+            print('yes', par_labels[i])
+            if par_labels[i] == 'yloc' or par_labels[i] == 'xloc':
                 bins = 3200
-            elif labels[i] == 'sig0':
+            elif par_labels[i] == 'sig0':
                 bins = 200  # 1000
-            elif labels[i] == 'f' or labels[i] == 'PAdisk' or labels[i] == 'vsys' or labels[i] == 'mbh':
+            elif par_labels[i] == 'f' or par_labels[i] == 'PAdisk' or par_labels[i] == 'vsys' or par_labels[i] == 'mbh':
                 bins = 1500
             else:
                 bins = 800
         else:
-            if labels[i] == 'mbh' or labels[i] == 'PAdisk':
+            if par_labels[i] == 'mbh':  # or par_labels[i] == 'PAdisk':
                 bins = 400 #1000
             else:
                 bins = 100
@@ -136,11 +226,11 @@ def my_own_thing(results, par_labels, ax_labels, quantiles, ax_lims=None, compar
             with open('/Users/jonathancohn/Documents/dyn_mod/param_files/Ben_A1_errors.txt') as a1:
                 for line in a1:
                     cols = line.split()
-                    if cols[0] == labels[i]:
+                    if cols[0] == par_labels[i]:
                         vax = float(cols[1])
                         vax_width = float(cols[2])
-            print(vax, 'vax', labels[i])
-            if labels[i] == 'mbh':
+            print(vax, 'vax', par_labels[i])
+            if par_labels[i] == 'mbh':
                 axes[row, col].axvline(np.log10(vax), ls='-', color='k')
                 print('here', np.log10(vax), np.log10(vax - vax_width), np.log10(vax + vax_width))
                 axes[row, col].axvspan(np.log10(vax - vax_width), np.log10(vax + vax_width), hatch='/', color='k',
@@ -152,7 +242,7 @@ def my_own_thing(results, par_labels, ax_labels, quantiles, ax_lims=None, compar
             with open('/Users/jonathancohn/Documents/dyn_mod/param_files/Ben_A1_sampling.txt') as a1:
                 for line in a1:
                     cols = line.split()
-                    if cols[0] == labels[i]:
+                    if cols[0] == par_labels[i]:
                         vax = float(cols[1])
                         vax_width1 = float(cols[2])
                         vax_width3 = float(cols[3])
@@ -160,7 +250,7 @@ def my_own_thing(results, par_labels, ax_labels, quantiles, ax_lims=None, compar
                 vax_width = vax_width1
             elif err == 3:
                 vax_width = vax_width3
-            if labels[i] == 'mbh':
+            if par_labels[i] == 'mbh':
                 axes[row, col].axvline(np.log10(vax), ls='-', color='k')
                 print('here', np.log10(vax), np.log10(vax - vax_width), np.log10(vax + vax_width))
                 axes[row, col].axvspan(np.log10(vax - vax_width), np.log10(vax + vax_width), hatch='/', color='k',
@@ -171,9 +261,13 @@ def my_own_thing(results, par_labels, ax_labels, quantiles, ax_lims=None, compar
         if ax_lims is not None:
             axes[row, col].set_xlim(ax_lims[i][0], ax_lims[i][1])
     plt.tight_layout()
+    if savefig is not None:
+        plt.savefig(savefig)
     plt.show()
 
 direc = '/Users/jonathancohn/Documents/dyn_mod/nest_out/'
+grp = '/Users/jonathancohn/Documents/dyn_mod/groupmtg/'
+inpf = None
 # OLDER
 #out_name = direc + 'dyndyncluster_test_n8_1568739677.2582278_tempsave.pkl'  # 'dynesty_demo_output.pkl'
 #out_name = direc + 'dyndyncluster_test_n8_1568739677.1305604_tempsave.pkl'
@@ -208,15 +302,181 @@ direc = '/Users/jonathancohn/Documents/dyn_mod/nest_out/'
 # thing = 'dyndyn_newpri_3_maxc10mil_n8_0.02_1572037132.3993847_tempsave.pkl'  # 2698 newpri3 GOOD PA CORRECTED!
 # thing = 'dyndyn3258_newpri_5_max10mil_test_n8_dlogz0.15_1572883759.2018988_tempsave.pkl'  # 3258 newpri5 PA GOOD!
 # thing = 'dyndyn3258_newpri_5_max10mil_n8_dlogz0.15_1573010828.1336136_end.pkl'  # 3258 newpri5 PA GOOD end! (same good)
-thing = 'dyndyn3258_xy_max10mil_n8_dlogz0.15_1574217317.0507047_end.pkl'  # 3258 xy free, else fixed
+# thing = 'dyndyn3258_xy_max10mil_n8_dlogz0.15_1574217317.0507047_end.pkl'  # 3258 xy free, else fixed
+# NEW MASKS BELOW
+# RHE 2
+# thing = 'dyndyn_newpri_3_maxc10mil_n8_mask2rhe_1586505950.4425063_end.pkl'  # 2698 mask2 rhe (sig0 prior now too low)
+# thing = 'dyndyn_newpri_3_maxc10mil_n8_mask2rhe_1586825623.941504_end.pkl'  # 2698 mask2 rhe sig0 extended!
+# name = 'ugc_2698_newmasks/u2698_nest_mask2rhe_sig0extend_3sig.png'
+# cornername = 'ugc_2698_newmasks/u2698_nest_mask2rhe_sig0extend_corner_3sig.png'
+# inpf = 'ugc_2698/ugc_2698_newmask2_rhe_n8.txt'
+# mod = 'rhe baseline'
+# RHE LAX
+# thing = 'dyndyn_newpri_3_maxc10mil_n8_masklaxrhe_1586572307.33264_end.pkl'  # 2698 masklax rhe (bad priors)
+# thing = 'dyndyn_newpri_3_maxc10mil_n8_masklaxrhe_1586800510.8196273_end.pkl'  # 2698 masklax rhe prior extended!
+# name = 'ugc_2698_newmasks/u2698_nest_masklaxrhe_priextend_3sig.png'
+# cornername = 'ugc_2698_newmasks/u2698_nest_masklaxrhe_priextend_corner_3sig.png'
+# inpf = 'ugc_2698/ugc_2698_newmasklax_rhe_n8.txt'
+# mod = 'rhe lax'
+# RHE STRICT
+# thing = 'dyndyn_newpri_3_maxc10mil_n8_maskstrictrhe_1586573455.940675_end.pkl'  # 2698 maskstrict rhe (bad priors)
+# thing = 'dyndyn_newpri_3_maxc10mil_n8_maskstrictrhe_1586801056.355033_end.pkl'  # 2698 maskstrict rhe prior extended!
+# name = 'ugc_2698_newmasks/u2698_u2698_nest_maskstrictrhe_priextend_3sig.png'
+# cornername = 'ugc_2698_newmasks/u2698_nest_maskstrictrhe_priextend_corner_3sig.png'
+# inpf = 'ugc_2698/ugc_2698_newmaskstrict_rhe_n8.txt'
+# mod = 'rhe strict'
+# AKIN 2
+# thing = 'dyndyn_newpri_3_maxc10mil_n8_mask2akin_1586613935.0107005_end.pkl'  # 2698 mask2 akin's mge (bad priors)
+# thing = 'dyndyn_newpri_3_maxc10mil_n8_mask2akin_1586820818.1132705_end.pkl'  # 2698 mask2 akin's mge prior extended!
+# name = 'ugc_2698_newmasks/u2698_nest_mask2akin_priextend_3sig.png'
+# cornername = 'ugc_2698_newmasks/u2698_nest_mask2akin_priextend_corner_3sig.png'
+# inpf = 'ugc_2698/ugc_2698_newmask2_akin_n8.txt'
+# mod = 'akin baseline'
+# AKIN 2
+dictakin2 = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_mask2akin_1586820818.1132705_end.pkl', # 2698 mask2 akin (good priors)
+             'name': 'ugc_2698_newmasks/u2698_nest_mask2akin_priextend_3sig.png',
+             'cornername': 'ugc_2698_newmasks/u2698_nest_mask2akin_priectend_corner_3sig.png',
+             'inpf': 'ugc_2698/ugc_2698_newmask2_akin_n8.txt', 'outpf': 'ugc_2698/ugc_2698_newmask2_akin_n8_out.txt',
+             'mod': 'akin baseline', 'extra_params': None}
+# RRE 2
+dictrre2 = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_mask2rre_1586801196.254912_end.pkl', # 2698 mask2 rre (good priors)
+            'name': 'ugc_2698_newmasks/u2698_nest_mask2rre_3sig.png',
+            'cornername': 'ugc_2698_newmasks/u2698_nest_mask2rre_corner_3sig.png',
+            'inpf': 'ugc_2698/ugc_2698_newmask2_rre_n8.txt', 'outpf': 'ugc_2698/ugc_2698_newmask2_rre_n8_out.txt',
+            'mod': 'rre baseline', 'extra_params': None}
+# RRE LAX
+dictrrelax = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_masklaxrre_1586982579.9110975_end.pkl', # 2698 masklax rre (good priors)
+              'name': 'ugc_2698_newmasks/u2698_nest_masklaxrre_3sig.png',
+              'cornername': 'ugc_2698_newmasks/u2698_nest_masklaxrre_corner_3sig.png',
+              'inpf': 'ugc_2698/ugc_2698_newmasklax_rre_n8.txt', 'outpf': 'ugc_2698/ugc_2698_newmasklax_rre_n8_out.txt',
+              'mod': 'rre lax', 'extra_params': None}
+# RRE STRICT
+dictrrestrict = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_maskstrictrre_1586987192.3806183_end.pkl', # 2698 maskstrict rre (good priors)
+                 'name': 'ugc_2698_newmasks/u2698_nest_maskstrictrre_3sig.png',
+                 'cornername': 'ugc_2698_newmasks/u2698_nest_maskstrictrre_corner_3sig.png',
+                 'inpf': 'ugc_2698/ugc_2698_newmaskstrict_rre_n8.txt',
+                 'outpf': 'ugc_2698/ugc_2698_newmaskstrict_rre_n8_out.txt', 'mod': 'rre strict', 'extra_params': None}
+# AHE 2
+dictahe2 = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_mask2ahe_1586560467.2338874_end.pkl', # 2698 mask2 ahe (good priors)
+            'name': 'ugc_2698_newmasks/u2698_nest_mask2ahe_sig0extend_3sig.png',
+            'cornername': 'ugc_2698_newmasks/u2698_nest_mask2ahe_sig0extend_corner_3sig.png',
+            'inpf': 'ugc_2698/ugc_2698_newmask2_ahe_n8.txt', 'outpf': 'ugc_2698/ugc_2698_newmask2_ahe_n8_out.txt',
+            'mod': 'ahe baseline', 'extra_params': None}
+# AHE LAX
+dictahelax = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_masklaxahe_1586985474.5780168_end.pkl', # 2698 masklax ahe (good priors)
+              'name': 'ugc_2698_newmasks/u2698_nest_masklaxahe_3sig.png',
+              'cornername': 'ugc_2698_newmasks/u2698_nest_masklaxahe_corner_3sig.png',
+              'inpf': 'ugc_2698/ugc_2698_newmasklax_ahe_n8.txt', 'outpf': 'ugc_2698/ugc_2698_newmasklax_ahe_n8_out.txt',
+              'mod': 'ahe lax', 'extra_params': None}
+# AHE STRICT
+dictahestrict = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_maskstrictahe_1586987362.5191674_end.pkl', # 2698 maskstrict ahe (good priors)
+                 'name': 'ugc_2698_newmasks/u2698_nest_maskstrictahe_3sig.png',
+                 'cornername': 'ugc_2698_newmasks/u2698_nest_maskstrictahe_corner_3sig.png',
+                 'inpf': 'ugc_2698/ugc_2698_newmaskstrict_ahe_n8.txt',
+                 'outpf': 'ugc_2698/ugc_2698_newmaskstrict_ahe_n8_out.txt', 'mod': 'ahe strict', 'extra_params': None}
+# RHE 2
+dictrhe2 = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_mask2rhe_1586825623.941504_end.pkl', # 2698 mask2 rhe (good priors)
+            'name': 'ugc_2698_newmasks/u2698_nest_mask2rhe_sig0extend_3sig.png',
+            'cornername': 'ugc_2698_newmasks/u2698_nest_mask2rhe_sig0extend_corner_3sig.png',
+            'inpf': 'ugc_2698/ugc_2698_newmask2_rhe_n8.txt', 'outpf': 'ugc_2698/ugc_2698_newmask2_rhe_n8_out.txt',
+            'mod': 'rhe baseline', 'extra_params': None}
+# RHE LAX
+dictrhelax = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_masklaxrhe_1586800510.8196273_end.pkl', # 2698 masklax rhe (good priors)
+              'name': 'ugc_2698_newmasks/u2698_nest_masklaxrhe_priextend_3sig.png',
+              'cornername': 'ugc_2698_newmasks/u2698_nest_masklaxrhe_priextend_corner_3sig.png',
+              'inpf': 'ugc_2698/ugc_2698_newmasklax_rhe_n8.txt', 'outpf': 'ugc_2698/ugc_2698_newmasklax_rhe_n8_out.txt',
+              'mod': 'rhe lax', 'extra_params': None}
+# RHE STRICT
+dictrhestrict = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_maskstrictrhe_1586801056.355033_end.pkl', # 2698 maskstrict rhe (good priors)
+                 'name': 'ugc_2698_newmasks/u2698_nest_maskstrictrhe_priextend_3sig.png',
+                 'cornername': 'ugc_2698_newmasks/u2698_nest_maskstrictrhe_priextend_corner_3sig.png',
+                 'inpf': 'ugc_2698/ugc_2698_newmaskstrict_rhe_n8.txt',
+                 'outpf': 'ugc_2698/ugc_2698_newmaskstrict_rhe_n8_out.txt', 'mod': 'rhe strict', 'extra_params': None}
 
-out_name = direc + thing
+# RHE 2 VRAD
+dictrhe2vrad = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_mask2rhevrad_1587724128.296138_end.pkl',  # 2698 mask2 rhe, vrad
+                'name': 'ugc_2698_newmasks/u2698_nest_mask2rhevrad_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_mask2rhevrad_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_newmask2_rhe_n8_vrad.txt',
+                'outpf': 'ugc_2698/ugc_2698_newmask2_rhe_n8_vrad_out.txt',
+                'mod': 'rhe baseline',
+                'extra_params': [['vrad', 'km/s']]}
+
+# RHE 2 KAPPA
+dictrhe2kappa = {'pkl': 'u2698_mask2_rhe_kappa_10000000_8_0.01_1588375516.5221143_end.pkl',  # 2698 mask2 rhe, kappa
+                 'name': 'ugc_2698_newmasks/u2698_nest_mask2rhekappa_3sig.png',
+                 'cornername': 'ugc_2698_newmasks/u2698_nest_mask2rhekappa_corner_3sig.png',
+                 'inpf': 'ugc_2698/ugc_2698_newmask2_rhe_n8_kappa.txt',
+                 'outpf': 'ugc_2698/ugc_2698_newmask2_rhe_n8_kappa_out.txt',
+                 'mod': 'rhe baseline',
+                 'extra_params': [['kappa', 'unitless']]}
+
+# RHE 2 OMEGA
+dictrhe2omega = {'pkl': 'u2698_mask2_rhe_omega_10000000_8_0.01_1588463109.9259367_end.pkl',  # 2698 mask2 rhe, omega
+                 'name': 'ugc_2698_newmasks/u2698_nest_mask2rheomega_3sig.png',
+                 'cornername': 'ugc_2698_newmasks/u2698_nest_mask2rheomega_corner_3sig.png',
+                 'inpf': 'ugc_2698/ugc_2698_newmask2_rhe_n8_omega.txt',
+                 'outpf': 'ugc_2698/ugc_2698_newmask2_rhe_n8_omega_out.txt',
+                 'mod': 'rhe baseline',
+                 'extra_params': [['kappa', 'unitless'], ['omega', 'unitless']]}
+
+# RHE BASELINE GAS
+# .pkl
+dictrhe2gas = {'pkl': 'u2698_baseline_rhe_orig_gas_10000000_8_0.02_1588986032.6169796_end.pkl', # 2698 mask2 rhe gas
+               'name': 'ugc_2698_newmasks/u2698_nest_baseline_rhe_orig_gas_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_baseline_rhe_orig_gas_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_baseline_rhe_orig_gas.txt',
+               'outpf': 'ugc_2698/ugc_2698_baseline_rhe_orig_gas_out.txt',
+               'mod': 'rhe baseline gas', 'extra_params': None}
+
+# CHOOSE DICTIONARY, DEFINE LABELS
+dict = dictrhe2gas
+labels = np.array(['mbh', 'xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])
+ax_lab = np.array([r'$\log_{10}$(M$_{\odot}$)', 'pixels', 'pixels', 'km/s', 'deg', 'deg', 'km/s',
+                   r'M$_{\odot}$/L$_{\odot}$', 'unitless'])
+tablabs = np.array(['reduced chi^2', 'log10(mbh) [Msol]', 'xloc [pix]', 'yloc [pix]', 'sig0 [km/s]', 'inc [deg]',
+                    'PAdisk [deg]', 'vsys [km/s]', 'ml_ratio [Msol/Lsol]', 'f [unitless]'])
+if dict['extra_params'] is not None:
+    for par in dict['extra_params']:
+        labels = np.append(labels, par[0])
+        ax_lab = np.append(ax_lab, par[1])
+        tablabs = np.append(tablabs, par[0] + ' [' + par[1] + ']')
+
+# ONLY table_it *AFTER* OUT FILE CREATED
+hd, hl, li, tx = table_it([direc + dict['pkl']], [dict['outpf']], [dict['mod']], tablabs)
+print(hd)
+print(hl)
+print(li)
+print(tx)
+#print(oop)
+'''  #
+# TABLE
+thinglist = [direc + 'dyndyn_newpri_3_maxc10mil_n8_0.02_1572037132.3993847_tempsave.pkl', direc + dictakin2['pkl'],
+             direc + dictrre2['pkl'], direc + dictrrelax['pkl'], direc + dictrrestrict['pkl'], direc + dictahe2['pkl'],
+             direc + dictahelax['pkl'], direc + dictahestrict['pkl'], direc + dictrhe2['pkl'],
+             direc + dictrhelax['pkl'], direc + dictrhestrict['pkl']]
+paramfiles = ['ugc_2698/ugc_2698_newpriout_n8.txt', dictakin2['outpf'], dictrre2['outpf'], dictrrelax['outpf'],
+              dictrrestrict['outpf'], dictahe2['outpf'], dictahelax['outpf'], dictahestrict['outpf'], dictrhe2['outpf'],
+              dictrhelax['outpf'], dictrhestrict['outpf']]
+modlist = ['old cube', 'akin baseline', 'rre baseline', 'rre lax', 'rre strict', 'ahe baseline', 'ahe lax', 'ahe strict',
+           'rhe baseline', 'rhe lax', 'rhe strict']
+hd, hl, li, tx = table_it(thinglist, paramfiles, modlist, tablabs)
+print(hd)
+print(hl)
+print(li)
+print(tx)
+print(oop)
+# '''  #
+
+out_name = direc + dict['pkl']
 
 
+# https://stackoverflow.com/questions/2121874/python-pickling-after-changing-a-modules-directory
 with open(out_name, 'rb') as pk:
     u = pickle._Unpickler(pk)
     u.encoding = 'latin1'
-    dyn_res = u.load()  # pickle.load(pk)  #
+    dyn_res = u.load()  #
+    # dyn_res = pickle.load(pk)  #
 print(dyn_res['samples'].shape)
 
 # 3-D plots of position and likelihood, colored by weight
@@ -224,19 +484,33 @@ print(dyn_res['samples'].shape)
 # ax = fig.add_subplot(121, projection='3d')
 
 # How to do quantiles!
-labels = np.array(['mbh', 'xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])
-ax_lab = np.array([r'$\log_{10}$(M$_{\odot}$)', 'pixels', 'pixels', 'km/s', 'deg', 'deg', 'km/s',
-                   r'M$_{\odot}$/L$_{\odot}$', 'unitless'])
-from dynesty import utils as dyfunc
 weights = np.exp(dyn_res['logwt'] - dyn_res['logz'][-1])  # normalized weights
 three_sigs = []
 one_sigs = []
+if dict['inpf'] is not None:
+    with open(dict['inpf'], 'r') as inpff:
+        outpf = dict['inpf'][:-4] + '_out.txt'
+        print(dict['inpf'], outpf)
+        if not Path(outpf).exists():
+            with open(outpf, 'w+') as outpff:
+                idx = 0
+                for line in inpff:
+                    if line.startswith('free'):
+                        insert = str(dyfunc.quantile(dyn_res['samples'][:, idx], [0.0015, 0.5, 0.9985],
+                                                     weights=weights)[1])
+                        idx += 1
+                        cols = line.split()
+                        cols[2] = insert
+                        line = ' '.join(cols) + '\n'
+                    outpff.write(line)
+
+
 for i in range(dyn_res['samples'].shape[1]):  # for each parameter
     quantiles_3 = dyfunc.quantile(dyn_res['samples'][:, i], [0.0015, 0.5, 0.9985], weights=weights)
     quantiles_2 = dyfunc.quantile(dyn_res['samples'][:, i], [0.025, 0.5, 0.975], weights=weights)
     quantiles_1 = dyfunc.quantile(dyn_res['samples'][:, i], [0.16, 0.5, 0.84], weights=weights)
     print(labels[i])
-    if 'xy' in thing:
+    if 'xy' in dict['pkl']:
         print(quantiles_3)
         print(quantiles_2)
         print(quantiles_1)
@@ -290,12 +564,12 @@ print(vax[labels=='sig0'])
 print(vwidth[labels=='sig0'])
 
 logm = True
-if logm and 'xy' not in thing:
+if logm and 'xy' not in dict['pkl']:
     dyn_res['samples'][:, 0] = np.log10(dyn_res['samples'][:, 0])
     labels[0] = 'log mbh'  # r'log$_{10}$mbh'
 
 ax_lims = None
-if 'xy' in thing:
+if 'xy' in dict['pkl']:
     labels = np.array(['xloc', 'yloc'])
     ax_lab = ['pixels', 'pixels']
     ax_lims = [[361.97, 362.08], [354.84, 354.975]]
@@ -322,19 +596,44 @@ elif '3258' in out_name:
     #            [3.1, 3.22], [1.015, 1.03]]  # USE THESE IF NOT COMPARING TO BEN'S A1 SAMPLING ERRORS
     ax_lims = [[9.364, 9.391], [361.97, 362.08], [354.84, 354.975], [8.5, 10.75], [45.5, 46.5], [166.4, 167.1],
                [2760.5, 2761], [3.08, 3.23], [1.015, 1.03]]
-else:
-    ax_lims = [[9.3, 9.6], [126.2, 127.8], [150.2, 151.8], [7.5, 14.], [66., 70.], [15., 23.], [6447., 6462.],
+elif 'maskstrict' in out_name and 'rhe' in out_name:
+    ax_lims = [[9.3, 9.6], [126.2, 127.8], [150.2, 151.8], [7.8, 21.4], [66., 72.], [15., 23.], [6447., 6462.],
                [1.52, 1.8], [0.93, 1.2]]  # [19.13, 19.23]
+elif 'mask' in out_name and 'rre' in out_name:
+    ax_lims = [[9.0, 9.3], [126.2, 127.8], [150.2, 151.8], [7.8, 21.4], [66., 70.], [15., 23.], [6447., 6462.],
+               [1.7, 2.2], [0.93, 1.2]]  # [19.13, 19.23]
+elif 'mask' in out_name and 'akin' in out_name:
+    ax_lims = [[9.3, 9.6], [126.2, 127.8], [150.2, 151.8], [7.8, 21.4], [66., 70.], [15., 23.], [6447., 6462.],
+               [1.1, 1.7], [0.93, 1.2]]  # [19.13, 19.23]
+elif 'vrad' in out_name and 'rhe' in out_name:
+    ax_lims = [[9.3, 9.6], [126.2, 127.8], [150.2, 151.8], [7.8, 21.4], [66., 72.], [15., 23.], [6447., 6462.],
+               [1.52, 1.8], [0.93, 1.2], [-25., 35.]]
+elif 'kappa' in out_name and 'rhe' in out_name:
+    ax_lims = [[9.2, 9.5], [126.2, 127.8], [150.2, 151.8], [12.5, 21.4], [66., 71.], [17., 21.], [6447., 6462.],
+               [1.61, 1.95], [0.93, 1.2], [-0.05, 0.05]]
+elif 'omega' in out_name and 'rhe' in out_name:
+    ax_lims = [[9.1, 9.8], [126.2, 127.8], [150.2, 151.8], [12.5, 23.], [66., 71.], [16.5, 21.], [6447., 6462.],
+               [1.52, 2.2], [0.93, 1.2], [-0.1, 0.1], [0.7, 1.]]
+elif 'mask' in out_name:
+    ax_lims = [[9.3, 9.6], [126.2, 127.8], [150.2, 151.8], [7.8, 21.4], [66., 70.], [15., 23.], [6447., 6462.],
+               [1.52, 1.8], [0.93, 1.2]]  # [19.13, 19.23]
+else:
+    ax_lims = [[9.3, 9.47], [126.2, 127.8], [150.2, 151.8], [13., 21.4], [66., 69.5], [17., 20.8], [6450.5, 6459.5],
+               [1.63, 1.81], [1.01, 1.2]]  # [19.13, 19.23]
     # ax_lims=None
 
 # USE FOR INCLUDING BEN'S A1 ERRORS
 #my_own_thing(dyn_res['samples'], labels, ax_lab, one_sigs, ax_lims=ax_lims, compare_err=True)  # three_sigs
 #print(oop)
 # my_own_thing(dyn_res['samples'], labels, ax_lab, one_sigs, ax_lims=ax_lims, comp2=True, err=1)  # one_sigma
-my_own_thing(dyn_res['samples'], labels, ax_lab, three_sigs, ax_lims=ax_lims, comp2=True, err=3)  # three_sigma
+# my_own_thing(dyn_res['samples'], labels, ax_lab, three_sigs, ax_lims=ax_lims, comp2=True, err=3)  # three_sigma
 
 # ELSE USE THIS
-# my_own_thing(dyn_res['samples'], labels, ax_lab, three_sigs, ax_lims=ax_lims)
+vrad = False
+if 'vrad' in dict['name']:
+    vrad = True
+my_own_thing(dyn_res['samples'], labels, ax_lab, three_sigs, ax_lims=ax_lims, savefig=grp + dict['name'], vrad=vrad)
+             # fs=8)
 
 # plot initial run (res1; left)
 
@@ -346,8 +645,18 @@ my_own_thing(dyn_res['samples'], labels, ax_lab, three_sigs, ax_lims=ax_lims, co
 # plt.show()
 
 # OTHERWISE USE THIS:
-# fg, ax = dyplot.cornerplot(dyn_res, color='blue', show_titles=True, max_n_ticks=3, quantiles=sig3, labels=labels)
-# plt.show()
+ndim = len(labels)
+factor = 2.0  # size of side of one panel
+lbdim = 0.5 * factor  # size of left/bottom margin
+trdim = 0.2 * factor  # size of top/right margin
+whspace = 0.05  # size of width/height margin
+plotdim = factor * ndim + factor * (ndim - 1.) * whspace  # plot size
+dim = lbdim + plotdim + trdim  # total size
+fig, axes = plt.subplots(ndim, ndim, figsize=(1.7*dim, dim))
+fg, ax = dyplot.cornerplot(dyn_res, color='blue', show_titles=True, max_n_ticks=3, quantiles=sig3, labels=labels,
+                           fig=(fig, axes))
+plt.savefig(grp + dict['cornername'])
+#plt.show()
 
 print(oop)
 
