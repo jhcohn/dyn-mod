@@ -16,11 +16,30 @@ import sys
 import mge_vcirc_mine as mvm  # import mge_vcirc code
 
 
+def innerint(rvals, avals, sigr3, del_r, h=0):
+
+    int1_a3 = np.zeros(shape=len(rvals))
+    for i in range(1, len(rvals)):  # for i=1.,n_elements(rvals)-1 (BC IDL INDEXING INCLUSIVE!)
+        int1_a3[i] = np.sum(rvals[i:] * sigr3[i:] * del_r / np.sqrt(rvals[i:] ** 2 - (avals[i - 1] - h) ** 2))
+
+    return int1_a3
+
+
 def integral22(rad, dda):
 
     int22 = integrate.quad(integrand22, 0, rad, args=(rad, dda))[0]
 
     return int22
+
+
+def doubl_grand(R, sig_func, incl, f_convert, h=1e-5):
+
+
+    f_dg = lambda a, r: 1 / np.sqrt(R**2 - a**2)
+
+    int_result = integrate.dblquad(f_dg, a, np.inf, lambda r: 0, lambda r: R)
+
+    return int_result
 
 
 def integrand22(a, rad, dda):
@@ -33,41 +52,41 @@ def integrand22(a, rad, dda):
     return integ22
 
 
-def integral2(rad, sigma_func, inclination, conversion_factor):
+def integral2(rad, rmax, sigma_func, inclination, conversion_factor):
 
-    int2 = integrate.quad(integrand2, 0, rad, args=(rad, sigma_func, inclination, conversion_factor))[0]
+    int2 = integrate.quad(integrand2, 0, rad, args=(rad, rmax, sigma_func, inclination, conversion_factor))[0]
     print(int2, 'int2 done')
 
     return int2
 
-
-def integrand2(a, rad, sigma_func, inclination, conversion_factor):
+def integrand2(a, rad, rmax, sigma_func, inclination, conversion_factor):
 
     # print('integrand 2 get ready')
     # da = 0.1
     #integ2 = misc.derivative(integral1, a, dx=da, args=(sigma_func, inclination, conversion_factor)) * a\
     #         / np.sqrt(rad[-1]**2 - a**2)
-    integ2 = deriv(a, sigma_func, inclination, conversion_factor, h=1e-5) * a / np.sqrt(rad**2 - a**2)
+    integ2 = deriv(a, rmax, sigma_func, inclination, conversion_factor, h=1e-5) * a / np.sqrt(rad**2 - a**2)
     # integ2 = 186.82929873466492 * a / np.sqrt(rad[-1]**2 - a**2)
     # print('integrand 2 built', integ2)
 
     return integ2
 
 
-def deriv(a, sigma_func, inclination, conversion_factor, h=1e-5):
+def deriv(a, rmax, sigma_func, inclination, conversion_factor, h=1e-5):
     # h is included for easy manual derivation
 
-    deriv = (integral1(a+h, sigma_func, inclination, conversion_factor) -
-             integral1(a, sigma_func, inclination, conversion_factor)) / h
+    deriv = (integral1(a+h, rmax, sigma_func, inclination, conversion_factor) -
+             integral1(a, rmax, sigma_func, inclination, conversion_factor)) / h
 
     return deriv
 
 
-def integral1(a, sigma_func, inclination, conversion_factor):
+def integral1(a, rmax, sigma_func, inclination, conversion_factor):
 
     #print('pre inner integral')
-    int1 = integrate.quad(integrand1, a, np.inf, args=(sigma_func, a, inclination, conversion_factor))[0]
-    print('inner int calculated')
+    # replacing np.inf with rmax
+    int1 = integrate.quad(integrand1, a, rmax, args=(sigma_func, a, inclination, conversion_factor))[0]
+    # print('inner int calculated')
     # print(int1)
 
     return int1
@@ -204,8 +223,8 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
     noise_4 = rebin(input_data, ds)  # rebin the noise to the pixel scale on which chi^2 will be calculated
     noise = []  # For large N, Variance ~= std^2
     for z in range(zrange[0], zrange[1]):  # for each relevant freq slice
-        noise.append(np.std(noise_4[z, xyerr[2]:xyerr[3], xyerr[0]:xyerr[1]]))  # ~variance
-        #         noise.append(np.std(noise_4[z, int(xyerr[2]/ds):int(xyerr[3]/ds), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
+        # noise.append(np.std(noise_4[z, xyerr[2]:xyerr[3], xyerr[0]:xyerr[1]]))  # ~variance
+        noise.append(np.std(noise_4[z, int(xyerr[2]/ds):int(xyerr[3]/ds), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
 
     # CALCULATE FLUX MAP FOR GAS MASS ESTIMATE
     # CALCULATE VELOCITY WIDTH  # vsys = 6454.9 estimated based on various test runs; see Week of 2020-05-04 on wiki
@@ -409,6 +428,54 @@ def ellipse_fitting(cube, rfit, x0_sub, y0_sub, res, pa_disk, q):
     return ellipse_mask
 
 
+def annuli_sb(flux_map, semi_major_axes, position_angle, axis_ratio, x_center, y_center, incl_gas=False):
+    """
+    Create an array of elliptical annuli, in which to calculate the mean CO surface brightness
+
+    :param flux_map: CO surface brightness flux map, collapsed with the velocity width [Jy km/s beam^-1]
+    :param semi_major_axes: the semi-major axes of the elliptical annuli to put on the flux map [pix]
+    :param position_angle: position angle of the disk [radians]
+    :param axis_ratio: axis ratio of the ellipse = cos(disk_inc) [unit-less]
+    :param x_center: x-pixel location of BH, in coordinates of the flux_map [pix]
+    :param y_center: y-pixel location of BH, in coordinates of the flux_map [pix]
+
+    :return: array of mean CO flux calculated in each elliptical annulus on the flux map
+    """
+    ellipses = []
+
+    for sma in semi_major_axes:
+        # create elliptical region
+        # print(sma, x_center, y_center, sma * axis_ratio, position_angle, len(flux_map), len(flux_map[0]))
+        ell = Ellipse2D(amplitude=1., x_0=x_center, y_0=y_center, a=sma, b=sma * axis_ratio, theta=position_angle)
+        y_e, x_e = np.mgrid[0:len(flux_map), 0:len(flux_map[0])]  # this grid is the size of the flux_map!
+
+        # Select the regions of the ellipse we want to fit
+        ellipses.append(ell(x_e, y_e))
+        #plt.imshow(ell(x_e, y_e), origin='lower')
+        #plt.colorbar()
+        #plt.show()
+    annuli = []
+    average_co = []
+    errs_co = np.zeros(shape=(2, len(ellipses) - 1))
+    for e in range(len(ellipses) - 1):  # because indexed to e+1
+        annuli.append(ellipses[e+1] - ellipses[e])
+        npix = np.sum(annuli[e])
+        annulus_flux = annuli[e] * flux_map
+        #plt.imshow(ellipses[e] + ellipses[e+1], origin='lower')
+        #plt.colorbar()
+        #plt.show()
+        annulus_flux[annulus_flux == 0] = np.nan
+        average_co.append(np.nanmean(annulus_flux))
+        # average_co.append(np.sum(annulus_flux) / npix)  # not just np.mean(annulus_flux) bc includes 0s!
+        errs_co[:, e] = np.nanpercentile(annulus_flux, [16., 84.]) / npix  # 68% confidence interval
+        # print(errs_co[:, e])
+        #plt.imshow(annulus_flux, origin='lower')
+        #plt.colorbar()
+        #plt.show()
+
+    return average_co, errs_co
+
+
 class ModelGrid:
 
     def __init__(self, resolution=0.05, os=4, x_loc=0., y_loc=0., mbh=4e8, inc=np.deg2rad(60.), vsys=None, vrad=0.,
@@ -417,7 +484,7 @@ class ModelGrid:
                  enclosed_mass=None, menc_type=0, ml_ratio=1., sig_type='flat', sig_params=None, f_w=1., noise=None,
                  ds=None, zrange=None, xyrange=None, reduced=False, freq_ax=None, f_0=0., fstep=0., opt=True,
                  quiet=False, n_params=8, data_mask=None, f_he=1.36, r21=0.7, alpha_co10=3.1, incl_gas=False,
-                 co_rad=None, co_sb=None, gas_norm=1e5, gas_radius=5):
+                 co_rad=None, co_sb=None, gas_norm=1e5, gas_radius=5, z_fixed=0.02152):
         # Astronomical Constants:
         self.c = 2.99792458 * 10 ** 8  # [m / s]
         self.pc = 3.086 * 10 ** 16  # [m / pc]
@@ -429,6 +496,7 @@ class ModelGrid:
         self.G_pc = self.G * self.M_sol * (1. / self.pc) / self.m_per_km ** 2  # G [Msol^-1 * pc * km^2 * s^-2] (gross)
         self.c_kms = self.c / self.m_per_km  # [km / s]
         # Input Parameters
+        self.z_fixed = z_fixed  # fixed redshift, used to transform the luminosity dist to the angular diameter dist
         self.resolution = resolution  # resolution of observations [arcsec/pixel]
         self.os = os  # oversampling factor
         self.x_loc = x_loc  # the location of the BH, as measured along the x axis of the data cube [pixels]
@@ -440,7 +508,7 @@ class ModelGrid:
         self.kappa = kappa  # optional radial inflow term; tie inflow to the overall line-of-sight velocity [unitless]
         self.omega = omega  # optional velocity coefficient, used with kappa for radial inflow [unitless]
         self.vtype = vtype  # 'vrad', 'kappa', 'omega', any other value for original (no radial velocity component)
-        self.dist = dist  # distance to the galaxy [Mpc]
+        self.dist = dist / (1 + self.z_fixed) ** 2  # distance to the galaxy [Mpc]
         self.pc_per_ac = self.dist * 1e6 / self.arcsec_per_rad  # small angle formula (convert dist to pc, from Mpc)
         self.pc_per_pix = self.dist * 1e6 / self.arcsec_per_rad * self.resolution  # small angle formula, as above
         self.pc_per_sp = self.pc_per_pix / self.os  # pc per subpixel (over-sampling pc pixel scale)
@@ -603,7 +671,7 @@ class ModelGrid:
             # maxr >> than maximum CO radius, s.t. relative gravitational potential contributions are small compared to
             # those near the disk edge.
             min_r = 0.  # integration lower bound [pix or pc]
-            max_r = 1500.  # upper bound [pc]; disk peak <~100pc, extend <~700pc; maxr >2x max CO radius
+            max_r = 1300  #1500.  # upper bound [pc]; disk peak <~100pc, extend <~700pc; maxr >2x max CO radius
             nr = 500  # 500  # number of steps used in integration process
             del_r = (max_r - min_r) / nr  # integration step size [pc]
             avals = np.linspace(min_r,max_r,nr)  # [pc]  # range(min_r,max_r,(max_r-min_r)/del_r)
@@ -631,13 +699,13 @@ class ModelGrid:
 
             sigr3_func_r = interpolate.interp1d(co_annuli_radii, co_annuli_sb, kind='quadratic', fill_value='extrapolate')
             sigr3 = sigr3_func_r(rvals) * np.cos(self.inc) * msol_per_jykms / pc2_per_beam  # Msol pc^-2
-            #plt.plot(co_annuli_radii, co_annuli_sb * np.cos(self.inc) * msol_per_jykms / pc2_per_beam, 'ro',
-            #         label='CO flux map')
-            #plt.plot(rvals, sigr3, 'b+', label='Interpolation')
-            #plt.ylabel(r'Surface density [M$_{\odot} / $pc$^2$]')
-            #plt.xlabel(r'Mean elliptical radius [pc]')
-            #plt.legend()
-            #plt.show()
+            plt.plot(co_annuli_radii, co_annuli_sb * np.cos(self.inc) * msol_per_jykms / pc2_per_beam, 'ro',
+                     label='CO flux map')
+            plt.plot(rvals, sigr3, 'b+', label='Interpolation')
+            plt.ylabel(r'Surface density [M$_{\odot} / $pc$^2$]')
+            plt.xlabel(r'Mean elliptical radius [pc]')
+            plt.legend()
+            plt.show()
 
             # ESTIMATE GAS MASS
             #i1 = integrate.quad(sigr3_func_r, 0, rvals[-1])[0]
@@ -657,8 +725,42 @@ class ModelGrid:
             #print(int2, 'grand')
             #td = time.time()
             #dda = misc.derivative(integral1, rvals[-1], dx=0.001, args=(sigr3_func_r, self.inc, msol_per_jykms))
-            dda = deriv(rvals[-1], sigr3_func_r, self.inc, msol_per_jykms, 1e-5)  # if use h too small, deriv explodes
+            int1 = np.zeros(shape=len(avals))
+            int1h = np.zeros(shape=len(avals))
+            hh = 1e-5
+            for av in range(len(avals)):
+                int1[av] = integral1(avals[av], np.inf, sigr3_func_r, self.inc, msol_per_jykms / pc2_per_beam)
+                int1h[av] = integral1(avals[av] - hh, np.inf, sigr3_func_r, self.inc, msol_per_jykms / pc2_per_beam)
+                # dda.append(deriv(rv, np.inf, sigr3_func_r, self.inc, msol_per_jykms, 1e-5))
+            dda = (int1 - int1h) / hh
             print(dda)
+            zerocut = 580  # 530
+            dda[rvals > zerocut] = 0
+            # dda[dda > 0] = 0.
+            # dda[np.abs(dda) > 1e6] = 0.
+
+            from scipy.interpolate import UnivariateSpline as unsp
+            int1[rvals > zerocut] = 0.
+            interp_int1 = unsp(rvals, int1)
+            interp_int1.set_smoothing_factor(1e8)
+            intintr = interp_int1(rvals)
+            # intintr[rvals > 530] = 0.
+            plt.plot(rvals, int1, 'k+')
+            plt.plot(rvals, intintr, 'r-')
+            plt.show()
+            dda_sp = interp_int1.derivative()
+            dda_sp_r = dda_sp(rvals)
+            # dda_sp_r[rvals > 530] = 0
+            plt.plot(dda, 'ko')
+            plt.plot(dda_sp_r, 'r+')
+            plt.show()
+
+            # print(oop)
+            #dda = deriv(rvals[-1], sigr3_func_r, self.inc, msol_per_jykms, 1e-5)  # if use h too small, deriv explodes
+            #print(dda, 'hi')
+            #dda = deriv(rvals[0], sigr3_func_r, self.inc, msol_per_jykms, 1e-5)  # if use h too small, deriv explodes
+            #print(dda, 'hey')
+            # print(oop)
             #print(time.time() - td)
             #td2 = time.time()
             #dda0 = deriv(rvals[0], sigr3_func_r, self.inc, msol_per_jykms, 1e-5)
@@ -666,16 +768,22 @@ class ModelGrid:
             #print(dda, dda0)
             #print(oop)
             int2 = np.zeros(shape=len(rvals))
+            int2_before = np.zeros(shape=len(rvals))
             for rv in range(len(rvals[1:])):
                 #trv = time.time()
                 #dda = deriv(rvals[rv], sigr3_func_r, self.inc, msol_per_jykms, 1e-5)
-                int2[rv] = integral22(rvals[rv], dda)
+                int2[rv] = integral22(rvals[rv], dda_sp_r[rv])
+                int2_before[rv] = integral22(rvals[rv], dda[rv])
                 #print(rvals[rv], time.time() - trv)
                 # deriv(rv, sigr3_func_r, self.inc, msol_per_jykms, 1e-5) * rv / np.sqrt(rvals[-1]**2 - rv**2)
             #    int2[rv] = integral2(rv, sigr3_func_r, self.inc, msol_per_jykms)
             print(int2, 'int2')
+            plt.plot(int2_before, 'ko')
+            plt.plot(int2, 'r+')
+            plt.show()
+            #print(oop)
             #dda = integral1(rvals[-1], sigr3_func_r, self.inc, msol_per_jykms)
-            print(dda, 'deriv')
+            # print(dda, 'deriv')
             #int2 = int22(integrand22, 0, rvals[-1], args=(rvals, dda, sigr3_func_r, self.inc, msol_per_jykms))
             #int1 = integral1(rvals[-1], sigr3_func_r, self.inc, msol_per_jykms)
             #print(int1, 'look')  # could maybe go to a higher rvals value than 1500, but it relatively levels off here
@@ -683,20 +791,21 @@ class ModelGrid:
             #integral_2 = integral2(rvals, sigr3_func_r, self.inc, msol_per_jykms)
             #print(integral_2)
             # int2 = 186.82929873466492 * np.asarray(rvals)
-            vcg = np.sqrt(4 * self.G_pc * int2)
+            vcg = np.sqrt(-4 * self.G_pc * int2)
+            vcg = np.nan_to_num(vcg)
             print(vcg)
-            vcg_func = interpolate.interp1d(rvals, vcg, kind='zero', fill_value='extrapolate')
+            vcg_func = interpolate.interp1d(rvals, vcg, kind='quadratic', fill_value='extrapolate')
             vcgr = vcg_func(R)
             alpha = abs(np.arctan(y_disk / (np.cos(self.inc) * x_disk)))  # measure alpha from +x (minor ax) to +y (maj ax)
             sign = x_disk / abs(x_disk)  # (+x now back to redshifted side, so don't need extra minus sign back in front!)
-            #vcgr = sign * abs(vcgr * np.cos(alpha) * np.sin(self.inc))  # v_los > 0 -> redshift; v_los < 0 -> blueshift
+            vcgr = sign * abs(vcgr * np.cos(alpha) * np.sin(self.inc))  # v_los > 0 -> redshift; v_los < 0 -> blueshift
             plt.imshow(vcgr, origin='lower', extent=[x_obs[0], x_obs[-1], y_obs[0], y_obs[-1]])
             cbar = plt.colorbar()
             cbar.set_label(r'km/s')
             plt.xlabel(r'x\_obs [pc]')
             plt.ylabel(r'y\_obs [pc]')
             plt.show()
-            print(oop)
+            #print(oop)
             # '''  #
             # BUCKET END TESTING PYTHON INTEGRATION
 
@@ -707,6 +816,38 @@ class ModelGrid:
                 # int1_a2[i] = np.sum(rvals[i:] * sigr2[i:] * del_r / np.sqrt(rvals[i:]**2 - avals[i-1]**2))
                 int1_a3[i] = np.sum(rvals[i:] * sigr3[i:] * del_r / np.sqrt(rvals[i:]**2 - avals[i-1]**2))
 
+            plt.plot(rvals, int1_a3, 'bo', markerfacecolor='none', label="Ben's integration")
+            plt.plot(rvals, int1, 'k+', label="My integration")
+            plt.plot(rvals, intintr, 'r-', label="Smoothed spline interpolation of my integration")
+            plt.legend()
+            plt.show()
+            #hh = 1e-5
+            #int1[rvals > 550] = 0.
+            #plt.plot(rvals, int1, 'k+', label='My integral')
+            #plt.plot(rvals, int1_a3, 'bo', label="Ben's integration", markerfacecolor='none')
+            #plt.legend()
+            #plt.show()
+            #fx_minus_h = innerint(rvals, avals, sigr3, del_r, h=hh)
+            #fx = innerint(rvals, avals, sigr3, del_r, h=0)
+            #dda3 = (fx - fx_minus_h) / hh
+            #plt.plot(dda, 'k+')
+            #plt.plot(dda3, 'bo')
+            #plt.show()
+            # print(oop)
+
+            #dda3 = np.zeros(shape=len(rvals))
+            #hh = 1e-9  # robust for at LEAST 1e-9 <= h <= 1e-3
+            #for i in range(1, len(rvals)):  # for i=1.,n_elements(rvals)-1 (BC IDL INDEXING INCLUSIVE!)
+            #    # int1_a2[i] = np.sum(rvals[i:] * sigr2[i:] * del_r / np.sqrt(rvals[i:]**2 - avals[i-1]**2))
+            #    dhi = np.sum(rvals[i:] * sigr3[i:] * del_r / np.sqrt(rvals[i:]**2 - (avals[i-1]+hh)**2))
+            #    dlo = np.sum(rvals[i:] * sigr3[i:] * del_r / np.sqrt(rvals[i:]**2 - avals[i-1]**2))
+            #    dda3[i] = (dhi - dlo) / hh
+
+            #int1r = interpolate.interp1d(rvals, fx, kind='quadratic', fill_value='extrapolate')
+            #plt.imshow(int1r(R), origin='lower')
+            #plt.colorbar()
+            #plt.show()
+
             # Crude numerical differential wrt radius (d/da) for 2nd (outer) integral (see eqn 2.157 Binney & Tremaine)
             # int1_dda2 = np.zeros(shape=len(rvals))
             int1_dda3 = np.zeros(shape=len(rvals))
@@ -714,6 +855,28 @@ class ModelGrid:
             # int1_dda2[1:] = (int1_a2[1:] - int1_a2[0:-1]) / del_r
             int1_dda3[1:] = (int1_a3[1:] - int1_a3[0:-1]) / del_r  # Offset indices in int1_a* by 1 so diff -> deriv
 
+
+            plt.plot(rvals, int1_dda3, 'bo', markerfacecolor='none', label="Ben's derivative")
+            plt.plot(rvals, dda, 'k+', label="My old derivative")
+            plt.plot(rvals, dda_sp_r, 'r-', label="Derivative at each point from the spline function")
+            plt.legend()
+            plt.show()
+
+            #plt.plot(int1_dda3, 'ko')
+            #plt.show()
+
+            #plt.plot(dda3 - int1_dda3, 'ko')
+            #plt.ylabel("My derivative - Ben's derivative")
+            #plt.xlabel("Radius")
+            #plt.show()
+
+            print(int1_dda3, 'hi')
+            #ddar = interpolate.interp1d(rvals, dda3, kind='quadratic', fill_value='extrapolate')
+            #ddarr = ddar(R)
+            #ddarr[np.abs(ddarr) >= 5e3] = 0.
+            #plt.imshow(ddarr, origin='lower')
+            #plt.colorbar()
+            #plt.show()
             # Calculate the second (outer) integral (eqn 2.157 Binney & Tremaine)
             # int2_r2 = np.zeros(shape=len(avals))
             int2_r3 = np.zeros(shape=len(avals))
@@ -721,9 +884,40 @@ class ModelGrid:
                 # int2_r2[i] = np.sum(avals[0:i] * int1_dda2[0:i] / np.sqrt(rvals[i+1]**2 - avals[0:i]**2) * del_r)
                 int2_r3[i] = np.sum(avals[0:i] * int1_dda3[0:i] / np.sqrt(rvals[i+1]**2 - avals[0:i]**2) * del_r)
 
+            print(int2_r3, 'int2')
+            # print(oop)
+
+            int22 = interpolate.interp1d(rvals, int2_r3, kind='quadratic', fill_value='extrapolate')
+            int22r = int22(R)
+            #plt.imshow(int22r, origin='lower')
+            #plt.colorbar()
+            #plt.show()
+            plt.plot(rvals, np.sqrt(-4 * self.G_pc * int2_r3), 'bo', markerfacecolor='none', label="Ben's vcirc,gas")
+            plt.plot(rvals, np.sqrt(-4 * self.G_pc * int2_before), 'k+', label="My old vcirc,gas")
+            plt.plot(rvals, np.sqrt(-4 * self.G_pc * int2), 'r-', label="vcirc,gas based on the spline function")
+            plt.legend()
+            plt.show()
+
+            plt.plot(rvals, int2_r3, 'bo', markerfacecolor='none', label="Ben's outer integral")
+            plt.plot(rvals, int2_before, 'k+', label="My old outer integral")
+            plt.plot(rvals, int2, 'r-', label="My outer integral based on the spline function")
+            plt.legend()
+            plt.show()
+
+            plt.plot(rvals, np.sqrt(-4 * self.G_pc * int2_r3), 'bo', markerfacecolor='none', label="Ben's vcirc,gas")
+            plt.plot(rvals, np.sqrt(-4 * self.G_pc * int2_before), 'k+', label="My old vcirc,gas")
+            plt.plot(rvals, np.sqrt(-4 * self.G_pc * int2), 'r-', label="vcirc,gas based on the spline function")
+            plt.legend()
+            plt.show()
+
             # Numerical v_cg solution assuming an exponential mass distribution (vc2) & one following the CO sb (vc3)
             # vc2 = np.sqrt(np.abs(-4 * self.G_pc * int2_r2))
-            vc3 = np.sqrt(np.abs(-4 * self.G_pc * int2_r3))
+            #vc3 = np.sqrt(np.abs(-4 * self.G_pc * int2_r3))
+            print(np.amax(int2_r3), np.amin(int2_r3))
+            vc3 = np.sqrt(-4 * self.G_pc * int2_r3)
+            print(np.amax(vc3), np.amin(vc3))
+            #print(oop)
+            #vc3 = np.nan_to_num(vc3)
 
             # INTERPOLATE/EXTRAPOLATE FROM velocity(rvals) TO velcoity(R)
             # vc2_r = interpolate.interp1d(rvals, vc2, kind='zero', fill_value='extrapolate')
@@ -732,16 +926,16 @@ class ModelGrid:
             # Note that since potentials are additive, sum up the velocity contributions in quadrature:
             # vg = vc2_r(R)
             vg = vc3_r(R)
-            #alpha = abs(np.arctan(y_disk / (np.cos(self.inc) * x_disk)))  # measure alpha from +x (minor ax) to +y (maj ax)
-            #sign = x_disk / abs(x_disk)  # (+x now back to redshifted side, so don't need extra minus sign back in front!)
-            #vlg = sign * abs(vg * np.cos(alpha) * np.sin(self.inc))  # v_los > 0 -> redshift; v_los < 0 -> blueshift
-            #plt.imshow(vg, origin='lower', extent=[x_obs[0], x_obs[-1], y_obs[0], y_obs[-1]])
-            #cbar = plt.colorbar()
-            #cbar.set_label(r'km/s')
-            #plt.xlabel(r'x\_obs [pc]')
-            #plt.ylabel(r'y\_obs [pc]')
-            #plt.show()
-            #print(oop)
+            alpha = abs(np.arctan(y_disk / (np.cos(self.inc) * x_disk)))  # measure alpha from +x (minor ax) to +y (maj ax)
+            sign = x_disk / abs(x_disk)  # (+x now back to redshifted side, so don't need extra minus sign back in front!)
+            vlg = sign * abs(vg * np.cos(alpha) * np.sin(self.inc))  # v_los > 0 -> redshift; v_los < 0 -> blueshift
+            plt.imshow(vlg, origin='lower', extent=[x_obs[0], x_obs[-1], y_obs[0], y_obs[-1]])
+            cbar = plt.colorbar()
+            cbar.set_label(r'km/s')
+            plt.xlabel(r'x\_obs [pc]')
+            plt.ylabel(r'y\_obs [pc]')
+            plt.show()
+            print(oop)
             if not self.quiet:
                 print(time.time() - t_gas, ' seconds spent in gas calculation')
 
@@ -875,10 +1069,22 @@ class ModelGrid:
         #                          self.xyrange[0]:self.xyrange[1]] * ell_mask  # mask the input data cube
 
         # REBIN THE ELLIPSE MASK BY THE DOWN-SAMPLING FACTOR
+        #fig = plt.figure(figsize=(12,8))
+        #plt.imshow(ell_mask, origin='lower')
+        #plt.colorbar()
+        #plt.show()
         self.ell_ds = rebin(ell_mask, self.ds)[0]  # rebin the mask by the down-sampling factor
+        #fig = plt.figure(figsize=(12,8))
+        #plt.imshow(self.ell_ds, origin='lower')
+        #plt.colorbar()
+        #plt.show()
         self.ell_ds[self.ell_ds < self.ds**2 / 2.] = 0.  # set all pix < 50% "inside" the ellipse to be outside -> mask
         self.ell_ds = np.nan_to_num(self.ell_ds / np.abs(self.ell_ds))  # set all points in ellipse = 1, convert nan->0
-
+        #fig = plt.figure(figsize=(12,8))
+        #plt.imshow(self.ell_ds, origin='lower')
+        #plt.colorbar()
+        #plt.show()
+        #print(oop)
         # REBIN THE DATA AND MODEL BY THE DOWN-SAMPLING FACTOR: compare data and model in binned groups of dsxds pix
         data_ds = rebin(self.clipped_data, self.ds)
         ap_ds = rebin(self.convolved_cube, self.ds)
@@ -1198,10 +1404,8 @@ class ModelGrid:
             plt.show()
 
 
-
 def test_qell2(input_data, params, l_in, q_ell, rfit, pa, figname):
-    figname += '_' + str(q_ell) + '_' + str(pa) + '_' + str(rfit) + '.png'
-    ell_mask = ellipse_fitting(input_data, rfit, params['xell'], params['yell'], params['resolution'], pa, q_ell)
+    #ell_mask = ellipse_fitting(input_data, rfit, params['xell'], params['yell'], params['resolution'], pa, q_ell)
 
     fig = plt.figure()
     ax = plt.gca()
@@ -1212,55 +1416,12 @@ def test_qell2(input_data, params, l_in, q_ell, rfit, pa, figname):
                          2 * rfit / params['resolution'] * q_ell, angle=pa, linewidth=2, edgecolor='w', fill=False)
     ax.add_patch(e1)
     plt.title(r'q = ' + str(q_ell) + r', PA = ' + str(pa) + ' deg, rfit = ' + str(rfit) + ' arcsec')
-    plt.savefig(figname, dpi=300)
-
-
-def annuli_sb(flux_map, semi_major_axes, position_angle, axis_ratio, x_center, y_center):
-    """
-    Create an array of elliptical annuli, in which to calculate the mean CO surface brightness
-
-    :param flux_map: CO surface brightness flux map, collapsed with the velocity width [Jy km/s beam^-1]
-    :param semi_major_axes: the semi-major axes of the elliptical annuli to put on the flux map [pix]
-    :param position_angle: position angle of the disk [radians]
-    :param axis_ratio: axis ratio of the ellipse = cos(disk_inc) [unit-less]
-    :param x_center: x-pixel location of BH, in coordinates of the flux_map [pix]
-    :param y_center: y-pixel location of BH, in coordinates of the flux_map [pix]
-
-    :return: array of mean CO flux calculated in each elliptical annulus on the flux map
-    """
-    ellipses = []
-
-    for sma in semi_major_axes:
-        # create elliptical region
-        # print(sma, x_center, y_center, sma * axis_ratio, position_angle, len(flux_map), len(flux_map[0]))
-        ell = Ellipse2D(amplitude=1., x_0=x_center, y_0=y_center, a=sma, b=sma * axis_ratio, theta=position_angle)
-        y_e, x_e = np.mgrid[0:len(flux_map), 0:len(flux_map[0])]  # this grid is the size of the flux_map!
-
-        # Select the regions of the ellipse we want to fit
-        ellipses.append(ell(x_e, y_e))
-        #plt.imshow(ell(x_e, y_e), origin='lower')
-        #plt.colorbar()
-        #plt.show()
-    annuli = []
-    average_co = []
-    errs_co = np.zeros(shape=(2, len(ellipses) - 1))
-    for e in range(len(ellipses) - 1):  # because indexed to e+1
-        annuli.append(ellipses[e+1] - ellipses[e])
-        npix = np.sum(annuli[e])
-        annulus_flux = annuli[e] * flux_map
-        #plt.imshow(ellipses[e] + ellipses[e+1], origin='lower')
-        #plt.colorbar()
-        #plt.show()
-        annulus_flux[annulus_flux == 0] = np.nan
-        average_co.append(np.nanmean(annulus_flux))
-        # average_co.append(np.sum(annulus_flux) / npix)  # not just np.mean(annulus_flux) bc includes 0s!
-        errs_co[:, e] = np.nanpercentile(annulus_flux, [16., 84.]) / npix  # 68% confidence interval
-        # print(errs_co[:, e])
-        #plt.imshow(annulus_flux, origin='lower')
-        #plt.colorbar()
-        #plt.show()
-
-    return average_co, errs_co
+    if figname is None:
+        plt.show()
+    else:
+        figname += '_' + str(q_ell) + '_' + str(pa) + '_' + str(rfit) + '.png'
+        plt.savefig(figname, dpi=300)
+    plt.clf()
 
 
 if __name__ == "__main__":
@@ -1299,6 +1460,12 @@ if __name__ == "__main__":
     l_in = hduin[0].data
     hduin.close()
 
+    #dir = '/Users/jonathancohn/Documents/dyn_mod/groupmtg/ugc_2698_newmasks/'
+    #for theta in [19]:
+    #    for q in [0.38, 0.4, 0.5]:
+    #        for rfit in [0.65, 0.7, 0.75]:
+    #            test_qell2(input_data, params, l_in, q, rfit, theta, dir)
+    #print(oop)
     # ig = params['incl_gas'] == 'True'
 
     # CREATE MODEL CUBE!
