@@ -144,8 +144,9 @@ def table_it(things, parfiles, models, parlabels):
         print(models[t])
 
         fmt = "{{0:{0}}}".format('.2f').format
-        chititle = r"${{0}}$".format(fmt(chi2))
-        altchititle = r"{0}".format(fmt(chi2))
+        fmt3 = "{{0:{0}}}".format('.3f').format
+        chititle = r"${{0}}$".format(fmt3(chi2))
+        altchititle = r"{0}".format(fmt3(chi2))
         texlines += models[t] + ' | ' + chititle + ' | '
         lines += models[t] + ' | ' + altchititle + ' | '
 
@@ -421,7 +422,6 @@ dictrhe2omega = {'pkl': 'u2698_mask2_rhe_omega_10000000_8_0.01_1588463109.925936
                  'extra_params': [['kappa', 'unitless'], ['omega', 'unitless']]}
 
 # RHE BASELINE GAS
-# .pkl
 dictrhe2gas = {'pkl': 'u2698_baseline_rhe_orig_gas_10000000_8_0.02_1588986032.6169796_end.pkl', # 2698 mask2 rhe gas
                'name': 'ugc_2698_newmasks/u2698_nest_baseline_rhe_orig_gas_3sig.png',
                'cornername': 'ugc_2698_newmasks/u2698_nest_baseline_rhe_orig_gas_corner_3sig.png',
@@ -429,8 +429,80 @@ dictrhe2gas = {'pkl': 'u2698_baseline_rhe_orig_gas_10000000_8_0.02_1588986032.61
                'outpf': 'ugc_2698/ugc_2698_baseline_rhe_orig_gas_out.txt',
                'mod': 'rhe baseline gas', 'extra_params': None}
 
+# RHE BASELINE DIST85
+dictrhe2d85 = {'pkl': 'u2698_d85_baseline_rhe_orig_nog_10000000_8_0.02_1589829467.780973_end.pkl', # 2698 mask2 rhe d85
+               'name': 'ugc_2698_newmasks/u2698_nest_d85_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_d85_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_d85_baseline_rhe_orig_nog.txt',  # ugc_2698_d85_baseline_rhe_orig_nog.txt
+               'outpf': 'ugc_2698/ugc_2698_d85_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline nog d85', 'extra_params': None}  # Runtime: 4.56889167 hours (131584.08 sec)
+
+# RHE BASELINE DIST85, ORIG FITTING ELLIPSE
+dictrhe2d85o = {'pkl': 'u2698_d85oell_baseline_rhe_orig_nog_10000000_8_0.02_1589945564.533565_end.pkl', # 2698 mask2 rhe d85oell
+                'name': 'ugc_2698_newmasks/u2698_nest_d85oell_baseline_rhe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_d85oell_baseline_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_d85oell_baseline_rhe_orig_nog.txt',  # ugc_2698_d85_baseline_rhe_orig_nog.txt
+                'outpf': 'ugc_2698/ugc_2698_d85oell_baseline_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline nog d85oell', 'extra_params': None}  # Runtime: 4.28580069 hours (123431.06 sec)
+
+# RHE BASELINE Beam51, DIST85
+dictrhe2b51 = {'pkl': 'u2698_b51_d85_baseline_rhe_orig_nog_10000000_8_0.02_1589860625.1720965_end.pkl', # 2698 mask2 rhe b51 d85
+               'name': 'ugc_2698_newmasks/u2698_nest_b51_d85_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_b51_d85_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_b51_d85_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_b51_d85_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline nog b51 d85', 'extra_params': None}  # Runtime: 6.7734625 hours (195075.72 sec)
+
+# RHE BASELINE n250
+dictrhe2n25 = {'pkl': 'u2698_n250_baseline_rhe_orig_nog_10000000_8_0.02_1589930146.9680398_end.pkl', # 2698 mask2 rhe n250
+               'name': 'ugc_2698_newmasks/u2698_nest_n250_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_n250_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_n250_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_n250_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline n250', 'extra_params': None}  # Runtime: 3.37993923611 hours (97342.25 sec)
+
+# RHE BASELINE n1000
+dictrhe2n1k = {'pkl': 'u2698_n1000_baseline_rhe_orig_nog_10000000_8_0.02_1589932643.558555_end.pkl', # 2698 mask2 rhe n1000
+               'name': 'ugc_2698_newmasks/u2698_nest_n1000_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_n1000_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_n1000_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_n1000_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline n1000', 'extra_params': None}  # Runtime: 7.47817535 hours (215371.45 sec)
+
+# RHE BASELINE dlz01
+dictrhe2dlz01 = {'pkl': 'u2698_dlz01_baseline_rhe_orig_nog_10000000_8_0.1_1589923485.539471_end.pkl', # 2698 mask2 rhe dlz01
+                 'name': 'ugc_2698_newmasks/u2698_nest_dlz01_baseline_rhe_orig_nog_3sig.png',
+                 'cornername': 'ugc_2698_newmasks/u2698_nest_dlz01_baseline_rhe_orig_nog_corner_3sig.png',
+                 'inpf': 'ugc_2698/ugc_2698_dlz01_baseline_rhe_orig_nog.txt',
+                 'outpf': 'ugc_2698/ugc_2698_dlz01_baseline_rhe_orig_nog_out.txt',
+                 'mod': 'rhe baseline dlz01', 'extra_params': None}  # Runtime: 5.05 hours (145415.41 sec)
+
+# RHE BASELINE dlz0001
+dictrhe2dlz0001 = {'pkl': 'u2698_dlz0001_baseline_rhe_orig_nog_10000000_8_0.001_1589921482.0451794_end.pkl', # 2698 mask2 rhe dlz0001
+                   'name': 'ugc_2698_newmasks/u2698_nest_dlz0001_baseline_rhe_orig_nog_3sig.png',
+                   'cornername': 'ugc_2698_newmasks/u2698_nest_dlz0001_baseline_rhe_orig_nog_corner_3sig.png',
+                   'inpf': 'ugc_2698/ugc_2698_dlz0001_baseline_rhe_orig_nog.txt',
+                   'outpf': 'ugc_2698/ugc_2698_dlz0001_baseline_rhe_orig_nog_out.txt',
+                   'mod': 'rhe baseline dlz0001', 'extra_params': None}  # Runtime: 4.45 hours (128087.74 sec)
+
+# RHE BASELINE Beam15, DIST85
+dictrhe2gs15 = {'pkl': 'u2698_gs15_d85_baseline_rhe_orig_nog_10000000_8_0.02_1590439381.911974_end.pkl', # 2698 mask2 rhe gs15 d85
+                'name': 'ugc_2698_newmasks/u2698_nest_gs15_d85_baseline_rhe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_gs15_d85_baseline_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_gs15_d85_baseline_rhe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_gs15_d85_baseline_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline nog gs15 d85', 'extra_params': None}  # Runtime: 3.52119931 hours (101410.54 sec)
+
+# RHE BASELINE Beam71, DIST85
+dictrhe2gs71 = {'pkl': 'u2698_gs71_d85_baseline_rhe_orig_nog_10000000_8_0.02_1590463525.87706_end.pkl', # 2698 mask2 rhe gs71 d85
+                'name': 'ugc_2698_newmasks/u2698_nest_gs71_d85_baseline_rhe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_gs71_d85_baseline_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_gs71_d85_baseline_rhe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_gs71_d85_baseline_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline nog gs71 d85', 'extra_params': None}  # Runtime: 9.84351667 hours (283493.28 sec)
+
 # CHOOSE DICTIONARY, DEFINE LABELS
-dict = dictrhe2gas
+dict = dictrhe2gs71
 labels = np.array(['mbh', 'xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])
 ax_lab = np.array([r'$\log_{10}$(M$_{\odot}$)', 'pixels', 'pixels', 'km/s', 'deg', 'deg', 'km/s',
                    r'M$_{\odot}$/L$_{\odot}$', 'unitless'])
@@ -442,13 +514,16 @@ if dict['extra_params'] is not None:
         ax_lab = np.append(ax_lab, par[1])
         tablabs = np.append(tablabs, par[0] + ' [' + par[1] + ']')
 
+'''  #
 # ONLY table_it *AFTER* OUT FILE CREATED
 hd, hl, li, tx = table_it([direc + dict['pkl']], [dict['outpf']], [dict['mod']], tablabs)
 print(hd)
 print(hl)
 print(li)
 print(tx)
-#print(oop)
+print(oop)
+# '''  #
+
 '''  #
 # TABLE
 thinglist = [direc + 'dyndyn_newpri_3_maxc10mil_n8_0.02_1572037132.3993847_tempsave.pkl', direc + dictakin2['pkl'],
@@ -617,6 +692,9 @@ elif 'omega' in out_name and 'rhe' in out_name:
 elif 'mask' in out_name:
     ax_lims = [[9.3, 9.6], [126.2, 127.8], [150.2, 151.8], [7.8, 21.4], [66., 70.], [15., 23.], [6447., 6462.],
                [1.52, 1.8], [0.93, 1.2]]  # [19.13, 19.23]
+elif 'd85' in out_name or 'rhe' in out_name:
+    ax_lims = [[9.3, 9.47], [126.2, 127.8], [150.2, 151.8], [13., 21.4], [66., 69.5], [17., 20.8], [6450.5, 6459.5],
+               [1.69, 1.91], [1.01, 1.2]]  # [19.13, 19.23]
 else:
     ax_lims = [[9.3, 9.47], [126.2, 127.8], [150.2, 151.8], [13., 21.4], [66., 69.5], [17., 20.8], [6450.5, 6459.5],
                [1.63, 1.81], [1.01, 1.2]]  # [19.13, 19.23]
@@ -657,7 +735,14 @@ fg, ax = dyplot.cornerplot(dyn_res, color='blue', show_titles=True, max_n_ticks=
                            fig=(fig, axes))
 plt.savefig(grp + dict['cornername'])
 #plt.show()
-
+# '''  #
+# ONLY table_it *AFTER* OUT FILE CREATED
+hd, hl, li, tx = table_it([direc + dict['pkl']], [dict['outpf']], [dict['mod']], tablabs)
+print(hd)
+print(hl)
+print(li)
+print(tx)
+# '''  #
 print(oop)
 
 

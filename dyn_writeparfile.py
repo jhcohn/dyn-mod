@@ -5,7 +5,9 @@ import numpy as np
 pri = 'narrow'  # 'wide', 'mid', 'narrow'
 masktype = 'baseline'  # 'strict'  # 'lax'  # 'baseline'
 mgetype = 'rhe'  # 'ahe'  # 'rhe'  # 'rre'  # 'akin'
-gas = True  # incl_gas
+os = 4  # 2 3 4 6 8 10 12 14 16
+gs = 71  # beam grid size
+gas = False  # incl_gas
 vrad = False  # include radial velocity
 kappa = False  # include radial velocity with kappa
 omega = False  # include radial velocity with sub-Keplerian motion
@@ -13,7 +15,9 @@ vtype = 'orig'  # orig, vrad, omega, kappa
 gas_label = 'nog'
 if gas:
     gas_label = 'gas'
-run_type  = masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
+run_type  = 'gs' + str(gs) + '_d85' + '_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
+# run_type  = 'os' + str(os) + '_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
+    # 'b' + str(gs) + '_d85_' +  masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
 
 
 def write_newpar(parname, copyf, priors, fixed, files):
@@ -64,12 +68,19 @@ clusterloc = dc + '/ugc_2698/'
 masks = {'baseline': 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmask2.fits',
          'strict': 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmaskstrict.fits',
          'lax': 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmasklax.fits'}
+
 lucys = {'baseline': 'ugc_2698_20.3_strict2_lucyout_n10.fits',
          'strict': 'ugc_2698_20.3_strictstrict_lucyout_n10.fits',
          'lax': 'ugc_2698_20.3_strictlax_lucyout_n10.fits'}
+if gs != 31:
+    lucys = {'baseline': 'ugc_2698_20.3_strict2_lucyout_g' + str(gs) + '_n10.fits',
+             'strict': 'ugc_2698_20.3_strictstrict_lucyout_g' + str(gs) + '_n10.fits',
+             'lax': 'ugc_2698_20.3_strictlax_lucyout_g' + str(gs) + 'n10.fits'}
+
 lucy_masks = {'baseline': 'ugc_2698_collapsemask_20.3kms_jonathan_casaimview_strictmask2.fits',
               'strict': 'ugc_2698_collapsemask_20.3kms_jonathan_casaimview_strictmaskstrict.fits',
               'lax': 'ugc_2698_collapsemask_20.3kms_jonathan_casaimview_strictmasklax.fits'}
+
 fluxmaps = {'baseline': 'ugc_2698_fluxmap_20.3kms_jonathan_casaimview_strictmask2.fits',
             'strict': 'ugc_2698_fluxmap_20.3kms_jonathan_casaimview_strictmask2strict.fits',
             'lax': 'ugc_2698_fluxmap_20.3kms_jonathan_casaimview_strictmasklax.fits'}
@@ -82,39 +93,41 @@ mges = {'ahe': 'ugc_2698_ahe_mge.txt', 'rhe': 'ugc_2698_rhe_mge.txt', 'rre': 'ug
 fixed = {'r0': 0.5,  # COULD BE FREE IN SOME MODELS
          'mu': 0.5,  # COULD BE FREE IN SOME MODELS
          'sig1': 5.,  # COULD BE FREE IN SOME MODELS
-         # 'vrad': 0.,  # COULD BE FREE IN SOME MODELS
-         # 'kappa': 0.,  # COULD BE FREE IN SOME MODELS
-         # 'omega': 1.,  # COULD BE FREE IN SOME MODELS
+         #'vrad': 0.,  # COULD BE FREE IN SOME MODELS
+         #'kappa': 0.,  # COULD BE FREE IN SOME MODELS
+         #'omega': 1.,  # COULD BE FREE IN SOME MODELS
          # ELLIPTICAL REGION PARS
          'xell': 126.85, 'yell': 150.9, 'theta_ell': 19., 'q_ell': 0.379, 'rfit': 0.7,
+         # yell between 150.8~few to 150.9; could do 150.85; or round so xell 127, yell 151, qell .36-.38, adjust rfit?
          # theta_ell 18.88 : 19.19 ;; q_ell cos(67.7 deg) ;; rfit arcsec
          # DYNESTY PARAMS
-         'nlive': 1500, 'nprocs': 8, 'maxc': 10000000, 'thresh': 0.02,
+         'nlive': 250, 'nprocs': 8, 'maxc': 10000000, 'thresh': 0.02,
          # OUTPUT RUN BASE NAME
          'outname': 'u2698_' + run_type,
-         # OTHER FIXED PARAMETERS
+         # ALWAYS FIXED PARAMETERS (THESE DON'T CHANGE!)
          'resolution': 0.02,  # arcsec/pix
-         'dist': 89.,  # Mpc'
          'x_fwhm': 0.197045,
          'y_fwhm': 0.103544,
          'PAbeam': 9.271,
-         'zi': 29,
+         # OTHER FIXED PARAMETERS
+         'dist': 85.29,  #89.,  # Mpc'
+         'zi': 29, # cube range: zi:zf,
          'zf': 78,
          'xi': 84,
          'xf': 168,
          'yi': 118,
          'yf': 182,
-         'xerr0': 36,
-         'xerr1': 42,
-         'yerr0': 24,
-         'yerr1': 30,
-         'os': 4,
+         'xerr0': 144,  # xerr & yerr must be divisible by ds
+         'xerr1': 168,
+         'yerr0': 96,
+         'yerr1': 120,
+         'os': os,
          'ds': 4,
-         'gsize': 31,
+         'gsize': gs,
          'mtype': 0,  # mge file
          'bl': 0,
          's_type': 'flat',
-         'vtype': str(vtype),  # orig, vrad, omega, kappa
+         'vtype': vtype,  # orig, vrad, omega, kappa
          'incl_gas': str(gas),
          'lucy_it': 10}
 
@@ -129,56 +142,57 @@ if vrad:
     priors['vrad'] = [-50, 50]
     midpriors['vrad'] = [-20, 35]
     narrowpri['vrad'] = [-5, 25]
-elif kappa:
+elif kappa or omega:
+    fixed['vrad'] = 0.
     priors['kappa'] = [-1, 1]
     midpriors['kappa'] = [-0.5, 0.5]
     narrowpri['kappa'] = [-0.1, 0.1]
-elif omega:
-    priors['kappa'] = [-1, 1]
-    midpriors['kappa'] = [-0.5, 0.5]
-    narrowpri['kappa'] = [-0.1, 0.1]
-    priors['omega'] = [0, 1]
-    midpriors['omega'] = [0.5, 1]
-    narrowpri['omega'] = [0.75, 1]
-if fixed['s_type'] == 'exp':
+    if omega:
+        priors['omega'] = [0, 1]
+        midpriors['omega'] = [0.5, 1]
+        narrowpri['omega'] = [0.75, 1]
+else:
+    fixed['vrad'] = 0.
+    fixed['kappa'] = 0.
+    fixed['omega'] = 0.
+if fixed['s_type'] == 'exp' or fixed['s_type'] == 'gauss':
     priors['r0'] = [0, 100]
     midpriors['r0'] = [0, 50]
     narrowpri['r0'] = [0, 20]
     priors['sig1'] = [0, 100]
     midpriors['sig1'] = [0, 50]
     narrowpri['sig1'] = [0, 20]
-if fixed['s_type'] == 'gauss':
-    priors['r0'] = [0, 100]
-    midpriors['r0'] = [0, 50]
-    narrowpri['r0'] = [0, 20]
-    priors['sig1'] = [0, 100]
-    midpriors['sig1'] = [0, 50]
-    narrowpri['sig1'] = [0, 20]
-    priors['mu'] = [-100, 100]
-    midpriors['mu'] = [-50, 50]
-    narrowpri['mu'] = [-10, 10]
+    if fixed['s_type'] == 'gauss':
+        priors['mu'] = [-100, 100]
+        midpriors['mu'] = [-50, 50]
+        narrowpri['mu'] = [-10, 10]
+else:
+    fixed['r0'] = 0.5
+    fixed['mu'] = 0.
+    fixed['sig1'] = 0.
 
 # LOCAL FILES
 localfiles = {'data': localpars + 'UGC2698_C4_CO21_bri_20.3kms.pbcor.fits',
               'mask': localpars + masks[masktype], 'lucy': localpars + lucys[masktype],
               'lucy_mask': localpars + lucy_masks[masktype], 'lucy_in': localpars + fluxmaps[masktype],
-              'lucy_b': localpars + 'ugc_2698_beam31.fits', 'lucy_o': localpars + lucys[masktype] + '[0]',
+              'lucy_b': localpars + 'ugc_2698_beam' + str(gs) + '.fits', 'lucy_o': localpars + lucys[masktype] + '[0]',
               'mass': localpars + mges[mgetype]}
 
 # CLUSTER FILES
 clusterfiles = {'data': clusterloc + 'UGC2698_C4_CO21_bri_20.3kms.pbcor.fits',
                 'mask': clusterloc + masks[masktype], 'lucy': clusterloc + lucys[masktype],
                 'lucy_mask': localpars + lucy_masks[masktype], 'lucy_in': clusterloc + fluxmaps[masktype],
-                'lucy_b': clusterloc + 'ugc_2698_beam31.fits', 'lucy_o': clusterloc + lucys[masktype] + '[0]',
-                'mass': clusterloc + mges[mgetype]}
+                'lucy_b': clusterloc + 'ugc_2698_beam' + str(gs) + '.fits',
+                'lucy_o': clusterloc + lucys[masktype] + '[0]', 'mass': clusterloc + mges[mgetype]}
 
 newpar = 'ugc_2698_' + run_type + '.txt'
 locnewpar = localpars + newpar
 clusternewpar = clusterpars + newpar
 
-copyf = localpars + 'ugc_2698_newmask2_ahe_n8.txt'
+copyf = localpars + 'ugc_2698_baseline_rhe_orig_gas.txt'
 
 # SET PRIOR CHOICE
+use_priors = priors
 if pri == 'wide':
     use_priors = priors
 elif pri == 'mid':
