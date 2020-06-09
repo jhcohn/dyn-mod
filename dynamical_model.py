@@ -2,6 +2,8 @@ import numpy as np
 import astropy.io.fits as fits
 import matplotlib.pyplot as plt
 from matplotlib import rc
+from matplotlib import patches
+from mpl_toolkits.axes_grid1 import AxesGrid
 from scipy import integrate, signal, interpolate, misc
 from scipy.ndimage import filters, interpolation
 import time
@@ -44,10 +46,10 @@ def doubl_grand(R, sig_func, incl, f_convert, h=1e-5):
 
 def integrand22(a, rad, dda):
 
-    if rad == a:
-        integ22 = 0
-    else:
-        integ22 = a * dda / np.sqrt(rad**2 - a**2)
+    #if rad == a:
+    #    integ22 = 0
+    #else:
+    integ22 = a * dda / np.sqrt(rad**2 - a**2)
 
     return integ22
 
@@ -58,6 +60,7 @@ def integral2(rad, rmax, sigma_func, inclination, conversion_factor):
     print(int2, 'int2 done')
 
     return int2
+
 
 def integrand2(a, rad, rmax, sigma_func, inclination, conversion_factor):
 
@@ -220,11 +223,29 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
     hdu.close()
 
     # ESTIMATE NOISE (RMS) IN ORIGINAL DATA CUBE [z, y, x]
+    #print(input_data.shape)
+    #fig, ax = plt.subplots(1)
+    #ax.imshow(fluxes, origin='lower')
+    #rect = patches.Rectangle((xyerr[0], xyerr[2]), xyerr[1] - xyerr[0], xyerr[3] - xyerr[2], linewidth=2, edgecolor='w',
+    #                         facecolor='none')
+    #ax.add_patch(rect)
+    #plt.show()
+    #print(oop)
     noise_4 = rebin(input_data, ds)  # rebin the noise to the pixel scale on which chi^2 will be calculated
     noise = []  # For large N, Variance ~= std^2
+    noise2 = []
     for z in range(zrange[0], zrange[1]):  # for each relevant freq slice
         # noise.append(np.std(noise_4[z, xyerr[2]:xyerr[3], xyerr[0]:xyerr[1]]))  # ~variance
         noise.append(np.std(noise_4[z, int(xyerr[2]/ds):int(xyerr[3]/ds), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
+        noise2.append(np.std(noise_4[z, int(xyerr[0]/ds):int(xyerr[1]/ds), int(xyerr[2]/ds):int(xyerr[3]/ds)]))
+
+    #plt.plot(freq_ax[zrange[0]:zrange[1]] / 1e9, noise, 'k+')#, label='How my code is currently set up')
+    #plt.plot(freq_ax[zrange[0]:zrange[1]] / 1e9, noise2, 'r*', label='If I were to flip my current noise region x and y')
+    #plt.xlabel('GHz')
+    #plt.ylabel('std [Jy/beam]')
+    #plt.legend()
+    #plt.show()
+    #print(oop)
 
     # CALCULATE FLUX MAP FOR GAS MASS ESTIMATE
     # CALCULATE VELOCITY WIDTH  # vsys = 6454.9 estimated based on various test runs; see Week of 2020-05-04 on wiki
@@ -484,7 +505,7 @@ class ModelGrid:
                  enclosed_mass=None, menc_type=0, ml_ratio=1., sig_type='flat', sig_params=None, f_w=1., noise=None,
                  ds=None, zrange=None, xyrange=None, reduced=False, freq_ax=None, f_0=0., fstep=0., opt=True,
                  quiet=False, n_params=8, data_mask=None, f_he=1.36, r21=0.7, alpha_co10=3.1, incl_gas=False,
-                 co_rad=None, co_sb=None, gas_norm=1e5, gas_radius=5, z_fixed=0.02152):
+                 co_rad=None, co_sb=None, gas_norm=1e5, gas_radius=5, z_fixed=0.02152, pvd_width=None):
         # Astronomical Constants:
         self.c = 2.99792458 * 10 ** 8  # [m / s]
         self.pc = 3.086 * 10 ** 16  # [m / pc]
@@ -550,6 +571,7 @@ class ModelGrid:
         self.incl_gas = incl_gas  # if True, include gas mass in calculations
         self.gas_norm = gas_norm  # best-fit exponential coefficient for gas mass calculation [Msol/pix^2]
         self.gas_radius = gas_radius  # best-fit scale radius for gas-mass calculation [pix]
+        self.pvd_width = pvd_width  # width (in pixels) for the PVD extraction
         # Parameters to be built in create_grid(), convolve_cube(), or chi2 functions inside the class
         self.z_ax = None  # velocity axis, constructed from freq_ax, f_0, and vsys, based on opt
         self.weight = None  # 2D weight map, constructed from lucy_output (the deconvolved fluxmap)
@@ -557,6 +579,7 @@ class ModelGrid:
         self.delta_freq_obs = None  # the 2D turbulent velocity map, converted to delta-frequency
         self.clipped_data = None  # the data sub-cube that we compare to the model, clipped by zrange and xyrange
         self.convolved_cube = None  # the model cube: create from convolving the intrinsic model cube with the ALMA beam
+        self.ell_mask = None  # mask defined by the elliptical fitting region, before downsampling
         self.ell_ds = None  # mask defined by the elliptical fitting region, created on ds x ds down-sampled pixels
     """
     Build grid for dynamical modeling!
@@ -742,18 +765,19 @@ class ModelGrid:
             from scipy.interpolate import UnivariateSpline as unsp
             int1[rvals > zerocut] = 0.
             interp_int1 = unsp(rvals, int1)
-            interp_int1.set_smoothing_factor(1e8)
+            # hint that smoothing factor needs to be big: https://stackoverflow.com/questions/8719754/scipy-interpolate-univariatespline-not-smoothing-regardless-of-parameters
+            interp_int1.set_smoothing_factor(5e8)  # 1e8  # 1e9 smoothed
             intintr = interp_int1(rvals)
             # intintr[rvals > 530] = 0.
-            plt.plot(rvals, int1, 'k+')
-            plt.plot(rvals, intintr, 'r-')
-            plt.show()
+            #plt.plot(rvals, int1, 'k+')
+            #plt.plot(rvals, intintr, 'r-')
+            #plt.show()
             dda_sp = interp_int1.derivative()
             dda_sp_r = dda_sp(rvals)
             # dda_sp_r[rvals > 530] = 0
-            plt.plot(dda, 'ko')
-            plt.plot(dda_sp_r, 'r+')
-            plt.show()
+            #plt.plot(dda, 'ko')
+            #plt.plot(dda_sp_r, 'r+')
+            #plt.show()
 
             # print(oop)
             #dda = deriv(rvals[-1], sigr3_func_r, self.inc, msol_per_jykms, 1e-5)  # if use h too small, deriv explodes
@@ -778,9 +802,9 @@ class ModelGrid:
                 # deriv(rv, sigr3_func_r, self.inc, msol_per_jykms, 1e-5) * rv / np.sqrt(rvals[-1]**2 - rv**2)
             #    int2[rv] = integral2(rv, sigr3_func_r, self.inc, msol_per_jykms)
             print(int2, 'int2')
-            plt.plot(int2_before, 'ko')
-            plt.plot(int2, 'r+')
-            plt.show()
+            #plt.plot(int2_before, 'ko')
+            #plt.plot(int2, 'r+')
+            #plt.show()
             #print(oop)
             #dda = integral1(rvals[-1], sigr3_func_r, self.inc, msol_per_jykms)
             # print(dda, 'deriv')
@@ -799,13 +823,17 @@ class ModelGrid:
             alpha = abs(np.arctan(y_disk / (np.cos(self.inc) * x_disk)))  # measure alpha from +x (minor ax) to +y (maj ax)
             sign = x_disk / abs(x_disk)  # (+x now back to redshifted side, so don't need extra minus sign back in front!)
             vcgr = sign * abs(vcgr * np.cos(alpha) * np.sin(self.inc))  # v_los > 0 -> redshift; v_los < 0 -> blueshift
-            plt.imshow(vcgr, origin='lower', extent=[x_obs[0], x_obs[-1], y_obs[0], y_obs[-1]])
+            plt.imshow(vcgr, origin='lower', extent=[x_obs[0], x_obs[-1], y_obs[0], y_obs[-1]], cmap='RdBu_r')
             cbar = plt.colorbar()
             cbar.set_label(r'km/s')
             plt.xlabel(r'x\_obs [pc]')
             plt.ylabel(r'y\_obs [pc]')
             plt.show()
-            #print(oop)
+
+            hdu = fits.PrimaryHDU(vcgr)
+            hdul = fits.HDUList([hdu])
+            hdul.writeto('/Users/jonathancohn/Documents/dyn_mod/groupmtg/ugc_2698_newmasks/vlosgas_smooth5e8.fits')
+            print(oop)
             # '''  #
             # BUCKET END TESTING PYTHON INTEGRATION
 
@@ -1045,7 +1073,7 @@ class ModelGrid:
         if self.os == 1:
             intrinsic_cube = cube_model
         else:
-            intrinsic_cube = rebin(cube_model, self.os)  # intrinsic_cube = block_reduce(cube_model, s, np.mean)
+            intrinsic_cube = rebin(cube_model, self.os)  # intrinsic_cube = block_reduce(cube_model, self.os, np.mean)
 
         tc = time.time()
         # CONVERT INTRINSIC TO OBSERVED (convolve each slice of intrinsic_cube with ALMA beam --> observed data cube)
@@ -1057,8 +1085,8 @@ class ModelGrid:
 
     def chi2(self):
         # ONLY WANT TO FIT WITHIN ELLIPTICAL REGION! CREATE ELLIPSE MASK
-        ell_mask = ellipse_fitting(self.convolved_cube, self.rfit, self.xell, self.yell, self.resolution,
-                                   self.theta_ell, self.q_ell)  # create ellipse mask
+        self.ell_mask = ellipse_fitting(self.convolved_cube, self.rfit, self.xell, self.yell, self.resolution,
+                                        self.theta_ell, self.q_ell)  # create ellipse mask
 
         # CREATE A CLIPPED DATA CUBE SO THAT WE'RE LOOKING AT THE SAME EXACT x,y,z REGION AS IN THE MODEL CUBE
         self.clipped_data = self.input_data[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
@@ -1070,14 +1098,15 @@ class ModelGrid:
 
         # REBIN THE ELLIPSE MASK BY THE DOWN-SAMPLING FACTOR
         #fig = plt.figure(figsize=(12,8))
-        #plt.imshow(ell_mask, origin='lower')
+        #plt.imshow(self.ell_mask, origin='lower')
         #plt.colorbar()
         #plt.show()
-        self.ell_ds = rebin(ell_mask, self.ds)[0]  # rebin the mask by the down-sampling factor
+        self.ell_ds = rebin(self.ell_mask, self.ds)[0]  # rebin the mask by the down-sampling factor
         #fig = plt.figure(figsize=(12,8))
         #plt.imshow(self.ell_ds, origin='lower')
         #plt.colorbar()
         #plt.show()
+        #self.ell_ds[self.ell_ds < 0.5] = 0.  # if averaging instead of summing
         self.ell_ds[self.ell_ds < self.ds**2 / 2.] = 0.  # set all pix < 50% "inside" the ellipse to be outside -> mask
         self.ell_ds = np.nan_to_num(self.ell_ds / np.abs(self.ell_ds))  # set all points in ellipse = 1, convert nan->0
         #fig = plt.figure(figsize=(12,8))
@@ -1122,12 +1151,82 @@ class ModelGrid:
         return chi_sq  # Reduced or Not depending on reduced = True or False
 
 
+    def pvd(self):
+        from pvextractor import pvextractor
+        from pvextractor.geometry import path
+        from pvextractor import extract_pv_slice
+        print(len(self.clipped_data[0]), len(self.clipped_data[0][0]), len(self.clipped_data))
+        # path1 = path.Path([(0, 0), (len(self.clipped_data[0]), len(self.clipped_data[0][0]))], width=self.pvd_width)
+        path1 = path.Path([(self.xyrange[0], self.xyrange[2]), (self.xyrange[1], self.xyrange[3])], width=self.pvd_width)
+        # [(x0,y0), (x1,y1)]
+        print(self.input_data.shape)
+        pvd_dat, slice = extract_pv_slice(self.input_data[self.zrange[0]:self.zrange[1]], path1)
+        print(self.convolved_cube.shape)
+        path2 = path.Path([(0, 0), (self.xyrange[1] - self.xyrange[0], self.xyrange[3] - self.xyrange[2])], width=self.pvd_width)
+        pvd_dat2, slice2 = extract_pv_slice(self.convolved_cube, path2)
+        print(slice)
+
+        vel_ax = []
+        for v in range(len(self.freq_ax)):
+            vel_ax.append(self.c_kms * (1. - (self.freq_ax[v] / self.f_0) * (1 + self.zred)))
+
+        fig, ax = plt.subplots(3, 1, sharex=True)
+        plt.subplots_adjust(hspace=0.02)
+        print(slice.shape)
+
+        x_rad = np.zeros(shape=len(slice[0]))
+        if len(slice[0]) % 2. == 0:  # if even
+            xr_c = (len(slice[0])) / 2.  # set the center of the axes (in pixel number)
+            for i in range(len(slice[0])):
+                x_rad[i] = self.resolution * (i - xr_c) # (arcsec/pix) * N_pix = arcsec
+        else:  # elif odd
+            xr_c = (len(slice[0]) + 1.) / 2.  # +1 bc python starts counting at 0
+            for i in range(len(slice[0])):
+                x_rad[i] = self.resolution * ((i + 1) - xr_c)
+
+        #from mpl_toolkits.axes_grid1 import make_axes_locatable
+        #divider1 = make_axes_locatable(ax[0])
+        print(x_rad, len(x_rad))
+        print(vel_ax)
+        # CONVERT FROM Jy/beam TO mJy/beam
+        slice *= 1e3
+        slice2 *= 1e3
+        vmin = np.amin([slice, slice2])
+        vmax = np.amax([slice, slice2])
+        p1 = ax[0].pcolormesh(x_rad, vel_ax, slice, vmin=vmin, vmax=vmax)  # x_rad[0], x_rad[-1]
+        fig.colorbar(p1, ax=ax[0], ticks=[-0.5, 0, 0.5, 1, 1.5], pad=0.02)
+        #ax[0].imshow(slice, origin='lower', extent=[x_rad[0], x_rad[-1], vel_ax[0], vel_ax[-1]])  # x_rad[0], x_rad[-1]
+        #cax1 = divider1.append_axes('right', size='5%', pad=0.05)
+        #fig.colorbar(im1, cax=cax1, orientation='vertical')
+
+        p2 = ax[1].pcolormesh(x_rad, vel_ax, slice2, vmin=vmin, vmax=vmax)  # x_rad[0], x_rad[-1]
+        cb2 = fig.colorbar(p2, ax=ax[1], ticks=[-0.5, 0, 0.5, 1, 1.5], pad=0.02)
+        cb2.set_label(r'mJy beam$^{-1}$', rotation=270, labelpad=20.)
+        #ax[1].imshow(slice2, origin='lower', extent=[x_rad[0], x_rad[-1], vel_ax[0], vel_ax[-1]])
+        #ax[1].colorbar()
+
+        # p3 = ax[2].pcolormesh(x_rad, vel_ax, slice - slice2, vmin=np.amin([vmin, slice - slice2]), vmax=vmax)
+        p3 = ax[2].pcolormesh(x_rad, vel_ax, slice - slice2, vmin=np.amin(slice - slice2), vmax=np.amax(slice - slice2))
+        fig.colorbar(p3, ax=ax[2], ticks=[-1., -0.5, 0, 0.5, 1], pad=0.02)
+        #ax[2].imshow(slice - slice2, origin='lower', extent=[x_rad[0], x_rad[-1], vel_ax[0], vel_ax[-1]])
+        #ax[2].colorbar()
+
+        #ax[2].set_xticks([2, 27, 52, 77, 102])
+        #ax[2].set_xticklabels([x_rad[2], x_rad[27], x_rad[52], x_rad[77], x_rad[102]])
+
+        ax[1].set_ylabel('Velocity [km/s]')
+        plt.xlabel('Distance [arcsec]')
+        #plt.colorbar()
+        plt.show()
+
+
     def output_cube(self):  # if outputting actual cube itself
         if not Path(self.out_name).exists():  # WRITE OUT RESULTS TO FITS FILE
             hdu = fits.PrimaryHDU(self.convolved_cube)
             hdul = fits.HDUList([hdu])
             hdul.writeto(self.out_name)
             print('written!')
+
 
     def test_ellipse(self):
         # USE BELOW FOR TESTING
@@ -1143,16 +1242,19 @@ class ModelGrid:
         plt.show()
 
 
-    def moment_0(self, abs_diff, incl_beam, norm):
+    def moment_0(self, abs_diff, incl_beam, norm, samescale=False):
         """
         Create 0th moment map
 
         :param abs_diff: True or False; if True, show absolute value of the residual
         :param incl_beam: True or False; if True, include beam inset in the data panel
         :param norm: True or False; if True, normalize residual by the data
+        :param samescale: True or False; if True, show the residual on the same scale as the data & model
         :return: moment map plot
         """
         # if using equation from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
+        hdu_m = fits.open(self.data_mask)
+        data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
         vel_ax = []
         velwidth = self.c_kms * (1 + self.zred) * self.fstep / self.f_0
         for v in range(len(self.freq_ax)):
@@ -1160,24 +1262,28 @@ class ModelGrid:
 
         # full cube strictmask, clipped to the appropriate zrange
         # (NOTE: would need to clip to xyrange, & rebin with ds, to compare data_ds & ap_ds. Seems wrong thing to do.)
-        clipped_mask = self.data_mask[self.zrange[0]:self.zrange[1]]
+        clipped_mask = data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
+                                 self.xyrange[0]:self.xyrange[1]]
 
         data_masked_m0 = np.zeros(shape=self.ell_mask.shape)
         for z in range(len(vel_ax)):
             data_masked_m0 += abs(velwidth) * self.clipped_data[z] * clipped_mask[z]
 
         model_masked_m0 = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
-        for zi in range(len(convolved_cube)):
+        for zi in range(len(self.convolved_cube)):
             model_masked_m0 += self.convolved_cube[zi] * abs(velwidth) * clipped_mask[zi]
 
+        '''
         fig = plt.figure()
         grid = AxesGrid(fig, 111,
-                        nrows_ncols=(1, 3),
+                        nrows_ncols=(3, 1),
                         axes_pad=0.01,
                         cbar_mode='single',
                         cbar_location='right',
                         cbar_pad=0.1)
-        i = 0
+        '''
+        fig, ax = plt.subplots(3, 1)
+        plt.subplots_adjust(hspace=0.02)
 
         # CONVERT TO mJy
         data_masked_m0 *= 1e3
@@ -1186,62 +1292,71 @@ class ModelGrid:
         subtr = 0.
         if incl_beam:
             beam_overlay = np.zeros(shape=self.ell_mask.shape)
-            beam_overlay[:self.beam.shape[0], (beam_overlay.shape[1] - self.beam.shape[1]):] = self.beam
+            print(self.beam.shape, beam_overlay.shape)
+            # beam_overlay[:self.beam.shape[0], (beam_overlay.shape[1] - self.beam.shape[1]):] = self.beam
+            beam_overlay[:self.beam.shape[0] - 6, (beam_overlay.shape[1] - self.beam.shape[1]) + 6:] = self.beam[6:, :-6]
             print(beam_overlay.shape, self.beam.shape)
             beam_overlay *= np.amax(data_masked_m0) / np.amax(beam_overlay)
             data_masked_m0 += beam_overlay
             subtr = beam_overlay
-        for ax in grid:
-            vmin = np.amin([np.nanmin(model_masked_m0), np.nanmin(data_masked_m0)])
-            vmax = np.amax([np.nanmax(model_masked_m0), np.nanmax(data_masked_m0)])
-            cbartitle0 = r'mJy/beam'
-            if i == 0:
-                im = ax.imshow(data_masked_m0, vmin=vmin, vmax=vmax, origin='lower')
-                ax.set_title(r'Moment 0 (data)')
-            elif i == 1:
-                im = ax.imshow(model_masked_m0, vmin=vmin, vmax=vmax, origin='lower')
-                ax.set_title(r'Moment 0 (model)')
-            elif i == 2:
-                title0 = 'Moment 0 residual (model-data)'
-                titleabs = 'Moment 0 residual abs(model-data)'
-                diff = model_masked_m0 - (data_masked_m0 - subtr)
-                if norm:
-                    diff /= data_masked_m0
-                    print(np.nanquantile(diff, [0.16, 0.5, 0.84]), 'typical differences; 0.16, 0.5, 0.84!')
-                    title0 += ' / data'
-                    titleabs += ' / data'
-                    cbartitle0 = 'Ratio [Residual / Data]'
-                if samescale:
-                    if abs_diff:
-                        diff = np.abs(diff)
-                        ax.set_title(titleabs)
-                    else:
-                        ax.set_title(title0)
-                    im = ax.imshow(diff, vmin=vmin, vmax=vmax, origin='lower')
-                else:  # then residual scale
-                    im = ax.imshow(diff, origin='lower', vmin=np.nanmin([diff, -diff]), vmax=np.nanmax([diff, -diff]))
-                    ax.set_title(title0)
-            i += 1
+        vmin = np.amin([np.nanmin(model_masked_m0), np.nanmin(data_masked_m0)])
+        vmax = np.amax([np.nanmax(model_masked_m0), np.nanmax(data_masked_m0)])
+        cbartitle0 = r'mJy/beam'
 
-            ax.set_xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
-            ax.set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+        im0 = ax[0].imshow(data_masked_m0, vmin=vmin, vmax=vmax, origin='lower')
+        ax[0].set_title(r'Moment 0 (top - bottom: data, model, residual)')
+        cbar = fig.colorbar(im0, ax=ax[0], pad=0.02)
+        cbar.set_label(cbartitle0, rotation=270, labelpad=20.)
 
-        cbar = grid.cbar_axes[0].colorbar(im)
-        cax = grid.cbar_axes[0]
-        axis = cax.axis[cax.orientation]
-        axis.label.set_text(cbartitle0)
+        im1 = ax[1].imshow(model_masked_m0, vmin=vmin, vmax=vmax, origin='lower')
+        cbar1 = fig.colorbar(im1, ax=ax[1], pad=0.02)
+        cbar1.set_label(cbartitle0, rotation=270, labelpad=20.)
+
+        title0 = 'Moment 0 residual (model-data)'
+        titleabs = 'Moment 0 residual abs(model-data)'
+        diff = model_masked_m0 - (data_masked_m0 - subtr)
+        if norm:
+            diff /= data_masked_m0
+            diff = np.nan_to_num(diff)
+            print(np.nanquantile(diff, [0.16, 0.5, 0.84]), 'typical differences; 0.16, 0.5, 0.84!')
+            title0 += ' / data'
+            titleabs += ' / data'
+            cbartitle0 = 'Ratio [Residual / Data]'
+        if samescale:
+            if abs_diff:
+                diff = np.abs(diff)
+            im2 = ax[2].imshow(diff, vmin=vmin, vmax=vmax, origin='lower')
+        else:  # then residual scale
+            # im2 = ax[2].imshow(diff, origin='lower', vmin=np.nanmin([diff, -diff]), vmax=np.nanmax([diff, -diff]))
+            im2 = ax[2].imshow(diff, origin='lower', vmin=np.nanmin(diff), vmax=np.nanmax(diff))
+        cbar2 = fig.colorbar(im2, ax=ax[2], pad=0.02)
+        cbar2.set_label(cbartitle0, rotation=270, labelpad=20.)
+
+        ax[0].set_xticklabels([])
+        ax[1].set_xticklabels([])
+        ax[2].set_xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
+        ax[0].set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+        ax[1].set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+        ax[2].set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+
         plt.show()
 
 
-    def moment_12(self, abs_diff, incl_beam, norm, mom):
+    def moment_12(self, abs_diff, incl_beam, norm, mom, samescale=False):
         """
         Create 1st or 2nd moment map
         :param abs_diff: True or False; if True, show absolute value of the residual
         :param incl_beam: True or False; if True, include beam inset in the data panel
         :param norm: True or False; if True, normalize residual by the data
         :param mom: moment, 1 or 2
+        :param samescale: True or False; if True, show the residual on the same scale as the data & model
+
         :return: moment map plot
         """
+
+        hdu_m = fits.open(self.data_mask)
+        data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
+
         vel_ax = []
         velwidth = self.c_kms * (1 + self.zred) * self.fstep / self.f_0
         for v in range(len(self.freq_ax)):
@@ -1249,7 +1364,8 @@ class ModelGrid:
 
         # full cube strictmask, clipped to the appropriate zrange
         # (NOTE: would need to clip to xyrange, & rebin with ds, to compare data_ds & ap_ds. Seems wrong thing to do.)
-        clipped_mask = self.data_mask[self.zrange[0]:self.zrange[1]]
+        clipped_mask = data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
+                                 self.xyrange[0]:self.xyrange[1]]
 
         model_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
         model_denominator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
@@ -1268,7 +1384,7 @@ class ModelGrid:
         if mom == 2:
             m2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
             m2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
-            for zi in range(len(convolved_cube)):
+            for zi in range(len(self.convolved_cube)):
                 m2_num += (vel_ax[zi] - model_mom)**2 * self.convolved_cube[zi] * clipped_mask[zi]
                 m2_den += self.convolved_cube[zi] * clipped_mask[zi]
             m2 = np.sqrt(m2_num / m2_den) # * d1  # BUCKET: no need for MASKING using d1?
@@ -1276,9 +1392,9 @@ class ModelGrid:
             d2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
             d2_n2 = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
             d2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
-            for zi in range(len(convolved_cube)):
-                d2_n2 += self.clipped_data[zi] * (vel_ax[zi] - dmap)**2 * clipped_mask[zi] # * mask2d
-                d2_num += (vel_ax[zi] - dmap)**2 * self.clipped_data[zi] * clipped_mask[zi] # * mask2d
+            for zi in range(len(self.convolved_cube)):
+                d2_n2 += self.clipped_data[zi] * (vel_ax[zi] - data_mom)**2 * clipped_mask[zi] # * mask2d
+                d2_num += (vel_ax[zi] - data_mom)**2 * self.clipped_data[zi] * clipped_mask[zi] # * mask2d
                 d2_den += self.clipped_data[zi] * clipped_mask[zi] # * mask2d
             dfig = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0]))) + 1.  # create mask
             dfig2 = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0]))) + 1.  # create mask
@@ -1286,14 +1402,18 @@ class ModelGrid:
             dfig2[d2_den < 0.] = 0.
             d2 = np.sqrt(d2_num / d2_den) # * d1  # BUCKET: no need for MASKING using d1?
 
+            '''
             fig = plt.figure()
             grid = AxesGrid(fig, 111,
-                            nrows_ncols=(1, 3),
+                            nrows_ncols=(3, 1),
                             axes_pad=0.01,
                             cbar_mode='single',
                             cbar_location='right',
                             cbar_pad=0.1)
             i = 0
+            '''
+            fig, ax = plt.subplots(3, 1)
+            plt.subplots_adjust(hspace=0.02)
 
             subtr = 0.
             if incl_beam:
@@ -1305,50 +1425,55 @@ class ModelGrid:
                 d2 += beam_overlay
                 subtr = beam_overlay
 
-            for ax in grid:
-                vmin2 = np.amin([np.nanmin(d2), np.nanmin(m2)])
-                vmax2 = np.amax([np.nanmax(d2), np.nanmax(m2)])
-                cbartitle2 = r'km/s'
-                if i == 0:
-                    im = ax.imshow(d2, origin='lower', vmin=vmin2, vmax=vmax2)  # , cmap='RdBu_r'
-                    ax.set_title(r'Moment 2 (data)')
-                elif i == 1:
-                    im = ax.imshow(m2, origin='lower', vmin=vmin2, vmax=vmax2)  # , cmap='RdBu_r'
-                    ax.set_title(r'Moment 2 (model)')
-                elif i == 2:
-                    diff = m2 - (d2 - subtr)
-                    title2 = 'Moment 2 residual (model-data)'
-                    titleabs2 = 'Moment 2 residual abs(model-data)'
-                    if norm:
-                        diff /= d2
-                        print(np.nanquantile(diff, [0.16, 0.5, 0.84]), 'look median!')
-                        title2 += ' / data'
-                        titleabs2 += ' / data'
-                        cbartitle2 = 'Ratio [Residual / Data]'
-                    if abs_diff:
-                        diff = np.abs(diff)
-                        ax.set_title(titleabs2)
-                    else:
-                        ax.set_title(title2)
-                    if samescale:
-                        im = ax.imshow(diff, origin='lower', vmin=vmin2, vmax=vmax2)  # , cmap='RdBu'
-                    else:  # residscale
-                        im = ax.imshow(diff, origin='lower', vmin=np.nanmin([diff, -diff]),
-                                       vmax=np.nanmax([diff, -diff]))
-                        ax.set_title(title2)
-                i += 1
+            #for ax in grid:
+            vmin2 = np.amin([np.nanmin(d2), np.nanmin(m2)])
+            vmax2 = np.amax([np.nanmax(d2), np.nanmax(m2)])
+            cbartitle2 = r'km/s'
+            im0 = ax[0].imshow(d2, origin='lower', vmin=vmin2, vmax=vmax2)  # , cmap='RdBu_r'
+            ax[0].set_title(r'Moment 2 (top - bottom: data, model, residual)')
+            cbar = fig.colorbar(im0, ax=ax[0], pad=0.02)
+            cbar.set_label(cbartitle2, rotation=270, labelpad=20.)
 
-                ax.set_xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
-                ax.set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+            im1 = ax[1].imshow(m2, origin='lower', vmin=vmin2, vmax=vmax2)  # , cmap='RdBu_r'
+            cbar2 = fig.colorbar(im1, ax=ax[1], pad=0.02)
+            cbar2.set_label(cbartitle2, rotation=270, labelpad=20.)
 
-            cbar = ax.cax.colorbar(im)
-            cbar = grid.cbar_axes[0].colorbar(im)
-            cax = grid.cbar_axes[0]
-            axis = cax.axis[cax.orientation]
-            axis.label.set_text(cbartitle2)
+            diff = m2 - (d2 - subtr)
+            title2 = 'Moment 2 residual (model-data)'
+            titleabs2 = 'Moment 2 residual abs(model-data)'
+            if norm:
+                diff /= d2
+                print(np.nanquantile(diff, [0.16, 0.5, 0.84]), 'look median!')
+                title2 += ' / data'
+                titleabs2 += ' / data'
+                cbartitle2 = 'Ratio [Residual / Data]'
+            if abs_diff:
+                diff = np.abs(diff)
+                #ax.set_title(titleabs2)
+            #else:
+                #ax.set_title(title2)
+            if samescale:
+                im2 = ax[2].imshow(diff, origin='lower', vmin=vmin2, vmax=vmax2)  # , cmap='RdBu'
+            else:  # residscale
+                #im2 = ax.imshow(diff, origin='lower', vmin=np.nanmin([diff, -diff]),
+                #                vmax=np.nanmax([diff, -diff]))
+                print(np.nanmin(diff), np.nanmax(diff))
+                im2 = ax[2].imshow(diff, origin='lower', vmin=np.nanmin(diff), vmax=np.nanmax(diff))  # np.nanmin(diff)
+                #ax.set_title(title2)
+            cbar2 = fig.colorbar(im2, ax=ax[2], pad=0.02)
+            cbar2.set_label(cbartitle2, rotation=270, labelpad=20.)
+
+            ax[0].set_xticklabels([])
+            ax[1].set_xticklabels([])
+            ax[2].set_xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
+            ax[0].set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+            ax[1].set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+            ax[2].set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+
             plt.show()
 
         elif mom == 1:
+            '''
             fig = plt.figure()
             grid = AxesGrid(fig, 111,
                             nrows_ncols=(1, 3),
@@ -1357,6 +1482,9 @@ class ModelGrid:
                             cbar_location='right',
                             cbar_pad=0.1)
             i = 0
+            '''
+            fig, ax = plt.subplots(3, 1)
+            plt.subplots_adjust(hspace=0.02)
 
             subtr = 0.
             if incl_beam:
@@ -1367,51 +1495,54 @@ class ModelGrid:
                 data_mom += beam_overlay
                 subtr = beam_overlay
 
-            for ax in grid:
-                cbartitle1 = r'km/s'
-                vmin1 = np.amin([np.nanmin(data_mom), np.nanmin(model_mom)])
-                vmax1 = np.amax([np.nanmax(data_mom), np.nanmax(model_mom)])
-                if i == 0:
-                    im = ax.imshow(data_mom, origin='lower', vmin=vmin1, vmax=vmax1, cmap='RdBu_r')
-                    ax.set_title(r'Moment 1 (data)')
-                elif i == 1:
-                    im = ax.imshow(model_mom, origin='lower', vmin=vmin1, vmax=vmax1, cmap='RdBu_r')
-                    ax.set_title(r'Moment 1 (model)')
-                elif i == 2:
-                    title1 = 'Moment 1 residual (model - data)'
-                    diff = model_mom - (data_mom - subtr)
-                    if norm:
-                        diff /= data_mom
-                        print(np.nanquantile(diff, [0.16, 0.5, 0.84]), 'look median!')
-                        title1 += ' / data'
-                        cbartitle1 = 'Ratio [Residual / Data]'
-                    if samescale:
-                        im = ax.imshow(diff, origin='lower', vmin=vmin1, vmax=vmax1, cmap='RdBu')  # , cmap='RdBu'
-                    else:  # resid scale
-                        im = ax.imshow(diff, origin='lower', vmin=np.nanmin([diff, -diff]),
-                                       vmax=np.nanmax([diff, -diff]))  # cmap='RdBu'
-                    ax.set_title(title1)
-                i += 1
+            cbartitle1 = r'km/s'
+            data_mom[np.abs(data_mom) > 1e3] = 0
+            print(np.nanmax(data_mom), np.nanmin(data_mom), np.nanmax(model_mom), np.nanmin(model_mom))
+            vmin1 = np.amin([np.nanmin(data_mom), np.nanmin(model_mom)])
+            vmax1 = np.amax([np.nanmax(data_mom), np.nanmax(model_mom)])
+            im0 = ax[0].imshow(data_mom, origin='lower', vmin=vmin1, vmax=vmax1, cmap='RdBu_r')
+            ax[0].set_title(r'Moment 1 (top - bottom: data, model, residual)')
+            cbar0 = fig.colorbar(im0, ax=ax[0], ticks=[-500, -250, 0., 250.], pad=0.02)
+            cbar0.set_label(cbartitle1, rotation=270, labelpad=20.)
 
-                ax.set_xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
-                ax.set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+            im1 = ax[1].imshow(model_mom, origin='lower', vmin=vmin1, vmax=vmax1, cmap='RdBu_r')
+            #ax[1].set_title(r'Moment 1 (model)')
+            cbar1 = fig.colorbar(im1, ax=ax[1], ticks=[-500, -250, 0., 250.], pad=0.02)
+            cbar1.set_label(cbartitle1, rotation=270, labelpad=20.)
+            title1 = 'Moment 1 residual (model - data)'
+            diff = model_mom - (data_mom - subtr)
+            if norm:
+                diff /= data_mom
+                print(np.nanquantile(diff, [0.16, 0.5, 0.84]), 'look median!')
+                title1 += ' / data'
+                cbartitle1 = 'Ratio [Residual / Data]'
+            if samescale:
+                im2 = ax[2].imshow(diff, origin='lower', vmin=vmin1, vmax=vmax1, cmap='RdBu')  # , cmap='RdBu'
+            else:  # resid scale
+                im2 = ax[2].imshow(diff, origin='lower', vmin=np.nanmin(diff), vmax=np.nanmax(diff))
+                #im2 = ax[2].imshow(diff, origin='lower', vmin=np.nanmin([diff, -diff]),
+                #                   vmax=np.nanmax([diff, -diff]))  # cmap='RdBu'
+            # ax.set_title(title1)
+            cbar2 = fig.colorbar(im2, ax=ax[2], pad=0.02)
+            cbar2.set_label(cbartitle1, rotation=270, labelpad=20.)
 
-            cbar = ax.cax.colorbar(im)
-            cbar = grid.cbar_axes[0].colorbar(im)
-            cax = grid.cbar_axes[0]
-            axis = cax.axis[cax.orientation]
-            axis.label.set_text(cbartitle1)
+            ax[0].set_xticklabels([])
+            ax[1].set_xticklabels([])
+            ax[2].set_xlabel(r'x [pixels]', fontsize=20)  # x [arcsec]
+            ax[0].set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+            ax[1].set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+            ax[2].set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
+
             plt.show()
 
 
-def test_qell2(input_data, params, l_in, q_ell, rfit, pa, figname):
+def test_qell2(params, l_in, q_ell, rfit, pa, figname):
     #ell_mask = ellipse_fitting(input_data, rfit, params['xell'], params['yell'], params['resolution'], pa, q_ell)
 
     fig = plt.figure()
     ax = plt.gca()
     plt.imshow(l_in, origin='lower')
     plt.colorbar()
-    from matplotlib import patches
     e1 = patches.Ellipse((params['xell'], params['yell']), 2 * rfit / params['resolution'],
                          2 * rfit / params['resolution'] * q_ell, angle=pa, linewidth=2, edgecolor='w', fill=False)
     ax.add_patch(e1)
@@ -1461,10 +1592,12 @@ if __name__ == "__main__":
     hduin.close()
 
     #dir = '/Users/jonathancohn/Documents/dyn_mod/groupmtg/ugc_2698_newmasks/'
+    #for rfit in [0.2, 0.3, 0.4, 0.5, 0.7, 0.8, 0.9, 1.]:
+    #    test_qell2(params, l_in, 0.38, rfit, 19, dir)
     #for theta in [19]:
     #    for q in [0.38, 0.4, 0.5]:
     #        for rfit in [0.65, 0.7, 0.75]:
-    #            test_qell2(input_data, params, l_in, q, rfit, theta, dir)
+    #            test_qell2(params, l_in, q, rfit, theta, dir)
     #print(oop)
     # ig = params['incl_gas'] == 'True'
 
@@ -1481,11 +1614,16 @@ if __name__ == "__main__":
                    theta_ell=np.deg2rad(params['theta_ell']), xell=params['xell'], yell=params['yell'], fstep=fstep,
                    f_0=f_0, bl=params['bl'], xyrange=[params['xi'], params['xf'], params['yi'], params['yf']],
                    n_params=n_free, data_mask=params['mask'], incl_gas=params['incl_gas']=='True', vrad=params['vrad'],
-                   kappa=params['kappa'], omega=params['omega'], co_rad=co_ell_rad, co_sb=co_ell_sb)
+                   kappa=params['kappa'], omega=params['omega'], co_rad=co_ell_rad, co_sb=co_ell_sb,
+                   pvd_width=(params['x_fwhm']+params['y_fwhm'])/params['resolution']/2.)
     # gas_norm=params['gas_norm'], gas_radius=params['gas_radius']
 
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()
+    # mg.pvd()
+    # mg.moment_0(abs_diff=False, incl_beam=True, norm=False)
+    # mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1)
+    mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=2)
     print(time.time() - t0m, ' seconds')
     print('True Total time: ' + str(time.time() - t0_true) + ' seconds')  # ~1 second for a cube of 84x64x49
