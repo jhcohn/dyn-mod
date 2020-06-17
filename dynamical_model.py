@@ -233,14 +233,13 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
     #print(oop)
     noise_4 = rebin(input_data, ds)  # rebin the noise to the pixel scale on which chi^2 will be calculated
     noise = []  # For large N, Variance ~= std^2
-    noise2 = []
     for z in range(zrange[0], zrange[1]):  # for each relevant freq slice
         # noise.append(np.std(noise_4[z, xyerr[2]:xyerr[3], xyerr[0]:xyerr[1]]))  # ~variance
         noise.append(np.std(noise_4[z, int(xyerr[2]/ds):int(xyerr[3]/ds), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
-        noise2.append(np.std(noise_4[z, int(xyerr[0]/ds):int(xyerr[1]/ds), int(xyerr[2]/ds):int(xyerr[3]/ds)]))
 
+    #print(noise)
+    #print(oop)
     #plt.plot(freq_ax[zrange[0]:zrange[1]] / 1e9, noise, 'k+')#, label='How my code is currently set up')
-    #plt.plot(freq_ax[zrange[0]:zrange[1]] / 1e9, noise2, 'r*', label='If I were to flip my current noise region x and y')
     #plt.xlabel('GHz')
     #plt.ylabel('std [Jy/beam]')
     #plt.legend()
@@ -694,7 +693,7 @@ class ModelGrid:
             # maxr >> than maximum CO radius, s.t. relative gravitational potential contributions are small compared to
             # those near the disk edge.
             min_r = 0.  # integration lower bound [pix or pc]
-            max_r = 1300  #1500.  # upper bound [pc]; disk peak <~100pc, extend <~700pc; maxr >2x max CO radius
+            max_r = 1300.  # upper bound [pc]; disk peak <~100pc, extend <~700pc; maxr >2x max CO radius  # 510 for edge
             nr = 500  # 500  # number of steps used in integration process
             del_r = (max_r - min_r) / nr  # integration step size [pc]
             avals = np.linspace(min_r,max_r,nr)  # [pc]  # range(min_r,max_r,(max_r-min_r)/del_r)
@@ -766,7 +765,7 @@ class ModelGrid:
             int1[rvals > zerocut] = 0.
             interp_int1 = unsp(rvals, int1)
             # hint that smoothing factor needs to be big: https://stackoverflow.com/questions/8719754/scipy-interpolate-univariatespline-not-smoothing-regardless-of-parameters
-            interp_int1.set_smoothing_factor(5e8)  # 1e8  # 1e9 smoothed
+            interp_int1.set_smoothing_factor(9e8)  # 1e8  # 1e9 smoothed
             intintr = interp_int1(rvals)
             # intintr[rvals > 530] = 0.
             #plt.plot(rvals, int1, 'k+')
@@ -822,18 +821,18 @@ class ModelGrid:
             vcgr = vcg_func(R)
             alpha = abs(np.arctan(y_disk / (np.cos(self.inc) * x_disk)))  # measure alpha from +x (minor ax) to +y (maj ax)
             sign = x_disk / abs(x_disk)  # (+x now back to redshifted side, so don't need extra minus sign back in front!)
-            vcgr = sign * abs(vcgr * np.cos(alpha) * np.sin(self.inc))  # v_los > 0 -> redshift; v_los < 0 -> blueshift
-            plt.imshow(vcgr, origin='lower', extent=[x_obs[0], x_obs[-1], y_obs[0], y_obs[-1]], cmap='RdBu_r')
+            #vcgr = sign * abs(vcgr * np.cos(alpha) * np.sin(self.inc))  # v_los > 0 -> redshift; v_los < 0 -> blueshift
+            plt.imshow(vcgr, origin='lower', extent=[x_obs[0], x_obs[-1], y_obs[0], y_obs[-1]])  # , cmap='RdBu_r')  #, vmin=-50, vmax=50)  #
             cbar = plt.colorbar()
             cbar.set_label(r'km/s')
             plt.xlabel(r'x\_obs [pc]')
             plt.ylabel(r'y\_obs [pc]')
             plt.show()
 
-            hdu = fits.PrimaryHDU(vcgr)
-            hdul = fits.HDUList([hdu])
-            hdul.writeto('/Users/jonathancohn/Documents/dyn_mod/groupmtg/ugc_2698_newmasks/vlosgas_smooth5e8.fits')
-            print(oop)
+            #hdu = fits.PrimaryHDU(vcgr)
+            #hdul = fits.HDUList([hdu])
+            #hdul.writeto('/Users/jonathancohn/Documents/dyn_mod/groupmtg/ugc_2698_newmasks/vlosgas_smooth5e8.fits')
+            #print(oop)
             # '''  #
             # BUCKET END TESTING PYTHON INTEGRATION
 
@@ -953,11 +952,11 @@ class ModelGrid:
 
             # Note that since potentials are additive, sum up the velocity contributions in quadrature:
             # vg = vc2_r(R)
-            vg = vc3_r(R)
+            # vg = vc3_r(R)
             alpha = abs(np.arctan(y_disk / (np.cos(self.inc) * x_disk)))  # measure alpha from +x (minor ax) to +y (maj ax)
             sign = x_disk / abs(x_disk)  # (+x now back to redshifted side, so don't need extra minus sign back in front!)
-            vlg = sign * abs(vg * np.cos(alpha) * np.sin(self.inc))  # v_los > 0 -> redshift; v_los < 0 -> blueshift
-            plt.imshow(vlg, origin='lower', extent=[x_obs[0], x_obs[-1], y_obs[0], y_obs[-1]])
+            vg = sign * abs(vcgr * np.cos(alpha) * np.sin(self.inc))  # v_los > 0 -> redshift; v_los < 0 -> blueshift
+            plt.imshow(vg, origin='lower', extent=[x_obs[0], x_obs[-1], y_obs[0], y_obs[-1]], cmap='RdBu_r')
             cbar = plt.colorbar()
             cbar.set_label(r'km/s')
             plt.xlabel(r'x\_obs [pc]')
@@ -1130,6 +1129,7 @@ class ModelGrid:
         for z in range(self.zrange[0], self.zrange[1]):  # for each relevant freq slice (ignore slices with only noise)
             chi_sq += np.sum((ap_ds[z_ind] - data_ds[z_ind])**2 / self.noise[z_ind]**2)  # calculate chisq!
             cs.append(np.sum((ap_ds[z_ind] - data_ds[z_ind])**2 / self.noise[z_ind]**2))  # chisq per slice
+            # np.std(x) = sqrt(mean(abs(x - x.mean())**2))
 
             z_ind += 1  # the actual index for the model-data comparison cubes
 
@@ -1149,6 +1149,55 @@ class ModelGrid:
             chi_sq = np.inf
 
         return chi_sq  # Reduced or Not depending on reduced = True or False
+
+
+    def line_profiles(self, ix, iy, show_freq=False):  # compare line profiles at the given indices ix, iy
+        f_sys = self.f_0 / (1 + self.zred)
+        print(ix, iy)
+        data_ds = rebin(self.clipped_data, self.ds)
+        ap_ds = rebin(self.convolved_cube, self.ds)
+
+        hdu_m = fits.open(self.data_mask)
+        data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
+        v_width = 2.99792458e5 * (1 + (6454.9 / 2.99792458e5)) * self.fstep / self.f_0  # velocity width [km/s] = c*(1+v/c)*fstep/f0
+        mask_ds = rebin(data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]], self.ds)
+
+        collapse_flux_v = np.zeros(shape=(len(data_ds[0]), len(data_ds[0][0])))
+        for zi in range(len(data_ds)):
+            collapse_flux_v += data_ds[zi] * mask_ds[zi] * v_width
+            # self.clipped_data[zi] * data_mask[zi, self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]]* v_width
+        # fluxes_ds = rebin(collapse_flux_v, self.ds)[0]
+        #plt.imshow(collapse_flux_v, origin='lower')
+        #cbar = plt.colorbar()
+        #cbar.set_label(r'Jy km s$^{-1}$ beam$^{-1}$', rotation=270, labelpad=20.)
+        #plt.plot(ix, iy, 'w*')
+        #plt.show()
+        #plt.imshow(ap_ds[20], origin='lower')
+        #plt.show()
+        #print(oop)
+        if show_freq:
+            plt.plot(self.freq_ax / 1e9, ap_ds[:, iy, ix], 'r*', label=r'Model')
+            plt.plot(self.freq_ax / 1e9, data_ds[:, iy, ix], 'k+', label=r'Data')
+            plt.plot(self.freq_ax / 1e9, self.noise, 'k--', label=r'Noise (std)')
+            plt.axvline(x=f_sys / 1e9, color='k', label=r'$f_{sys}$')
+            plt.xlabel(r'Frequency [GHz]')
+        else:
+            vel_ax = []
+            for v in range(len(self.freq_ax)):
+                vel_ax.append(self.c_kms * (1. - (self.freq_ax[v] / self.f_0) * (1 + self.zred)))
+            # ['#377eb8', '#ff7f00', '#4daf4a', '#f781bf', '#a65628', '#984ea3', '#999999', '#e41a1c', '#dede00']
+            # [pale blue, orange red,  green,   pale pink, red brown,  lavender, pale gray,    red, yellow green]
+            plt.errorbar(vel_ax, data_ds[:, iy, ix], yerr=self.noise, color='k', marker='+', label=r'Data')
+            plt.bar(vel_ax, data_ds[:, iy, ix], width=vel_ax[1] - vel_ax[0], color='k', alpha=0.4)
+            plt.plot(vel_ax, ap_ds[:, iy, ix], color='r', marker='+', ls='none', label=r'Model')  # 'r+'
+            plt.bar(vel_ax, ap_ds[:, iy, ix], width=vel_ax[1] - vel_ax[0], color='r', alpha=0.5)
+            #plt.plot(vel_ax, self.noise, 'k--', label=r'Noise (std)')
+            #plt.bar(vel_ax, self.noise, 'k--', label=r'Noise (std)')
+            plt.axvline(x=0., color='k', ls='--', label=r'v$_{\text{sys}}$')
+            plt.xlabel(r'Line-of-sight velocity [km/s]')
+        plt.legend()
+        plt.ylabel(r'Flux Density [Jy/beam]')
+        plt.show()
 
 
     def pvd(self):
@@ -1301,7 +1350,7 @@ class ModelGrid:
             subtr = beam_overlay
         vmin = np.amin([np.nanmin(model_masked_m0), np.nanmin(data_masked_m0)])
         vmax = np.amax([np.nanmax(model_masked_m0), np.nanmax(data_masked_m0)])
-        cbartitle0 = r'mJy/beam'
+        cbartitle0 = r'mJy Km s$^{-1}$ beam$^{-1}$'
 
         im0 = ax[0].imshow(data_masked_m0, vmin=vmin, vmax=vmax, origin='lower')
         ax[0].set_title(r'Moment 0 (top - bottom: data, model, residual)')
@@ -1400,6 +1449,8 @@ class ModelGrid:
             dfig2 = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0]))) + 1.  # create mask
             dfig[d2_n2 < 0.] = 0.  # d2_n2 matches d2_den on the sign aspect
             dfig2[d2_den < 0.] = 0.
+
+            d2_num[d2_num < 0] = 0.  # BUCKET ADDING TO GET RID OF NANs
             d2 = np.sqrt(d2_num / d2_den) # * d1  # BUCKET: no need for MASKING using d1?
 
             '''
@@ -1519,7 +1570,10 @@ class ModelGrid:
             if samescale:
                 im2 = ax[2].imshow(diff, origin='lower', vmin=vmin1, vmax=vmax1, cmap='RdBu')  # , cmap='RdBu'
             else:  # resid scale
-                im2 = ax[2].imshow(diff, origin='lower', vmin=np.nanmin(diff), vmax=np.nanmax(diff))
+                vn = np.amax([-150, np.nanmin(diff)])
+                vx = np.amin([150, np.nanmax(diff)])
+                #im2 = ax[2].imshow(diff, origin='lower', vmin=np.nanmin(diff), vmax=np.nanmax(diff))
+                im2 = ax[2].imshow(diff, origin='lower', vmin=vn, vmax=vx)
                 #im2 = ax[2].imshow(diff, origin='lower', vmin=np.nanmin([diff, -diff]),
                 #                   vmax=np.nanmax([diff, -diff]))  # cmap='RdBu'
             # ax.set_title(title1)
@@ -1534,6 +1588,23 @@ class ModelGrid:
             ax[2].set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
 
             plt.show()
+
+
+    def kin_pa(self):
+
+        from pafit import fit_kinematic_pa as fkpa
+
+        xbin, ybin = np.random.uniform(low=[-30, -20], high=[30, 20], size=(100, 2)).T
+        print(xbin)
+        inc = 60.  # assumed galaxy inclination
+        r = np.sqrt(xbin ** 2 + (ybin / np.cos(np.radians(inc))) ** 2)  # Radius in the plane of the disk
+        a = 40  # Scale length in arcsec
+        vr = 2000 * np.sqrt(r) / (r + a)  # Assumed velocity profile
+        vel = vr * np.sin(np.radians(inc)) * xbin / r  # Projected velocity field
+
+        plt.clf()
+        ang, ang_err, v_syst = fkpa.fit_kinematic_pa(xbin, ybin, vel, debug=True, nsteps=30)
+        plt.show()
 
 
 def test_qell2(params, l_in, q_ell, rfit, pa, figname):
@@ -1621,9 +1692,54 @@ if __name__ == "__main__":
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()
-    # mg.pvd()
-    # mg.moment_0(abs_diff=False, incl_beam=True, norm=False)
-    # mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1)
+    mg.pvd()
+    mg.moment_0(abs_diff=False, incl_beam=True, norm=False)
+    mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1)
     mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=2)
+    mg.line_profiles(7, 5)  # decent blue
+    mg.line_profiles(4, 6)  # blue orig (not great)
+    mg.line_profiles(6, 6)  # blue okay? (meh)
+    mg.line_profiles(10, 9)  # near ctr orig (meh)
+    mg.line_profiles(14, 8)  # decent red
+    mg.line_profiles(14, 9)  # good red
+    mg.line_profiles(14, 10)  # decent red
+    mg.line_profiles(15, 9)  # good red
+    mg.line_profiles(15, 10)  # decent red
+
+    '''  #
+    mg.line_profiles(8, 8)
+    mg.line_profiles(9, 8)
+    mg.line_profiles(9, 7)
+    mg.line_profiles(9, 6)
+    mg.line_profiles(10, 7)
+    mg.line_profiles(11, 10)
+    mg.line_profiles(12, 8)
+    mg.line_profiles(12, 9)
+    mg.line_profiles(14, 8)  # decent red
+    mg.line_profiles(14, 9)  # good red
+    mg.line_profiles(14, 10)  # decent red
+    mg.line_profiles(15, 9)  # good red
+    mg.line_profiles(15, 10)  # decent red
+    for ii in range(6, 10):
+        for jj in range(5, 9):
+            mg.line_profiles(ii, jj)
+    # not great blues: 6,5 // 6,8 // 7,8 / 8,5 / 9,7 / 9,8
+    # okayish blues 6,6 // 6,7 // 7,6 // 7,7 / 8,6 / 8,7 / 9,5 / 9,6
+    # maybe reasonable blues 7,5
+    #mg.line_profiles(9, 9)
+    #mg.line_profiles(9, 10)
+    #mg.line_profiles(10, 9)  # near ctr orig
+    #mg.line_profiles(10, 8)  # near ctr
+    #mg.line_profiles(11, 8)  # near ctr
+    #mg.line_profiles(10, 10)
+    #mg.line_profiles(4, 6)  # blue orig
+    #mg.line_profiles(6, 6)  # blue
+    # mg.line_profiles(3, 3)
+    # mg.line_profiles(6, 4)
+    # mg.line_profiles(4, 4)
+    #mg.line_profiles(14, 10)  # red
+    #mg.line_profiles(16, 12)
+    # '''  #
+
     print(time.time() - t0m, ' seconds')
     print('True Total time: ' + str(time.time() - t0_true) + ' seconds')  # ~1 second for a cube of 84x64x49

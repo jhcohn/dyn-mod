@@ -2,20 +2,25 @@
 import numpy as np
 
 # SETTINGS / CHOICES
-pri = 'narrow'  # 'wide', 'mid', 'narrow'
+pri = 'priset3'  # 'wide', 'mid', 'narrow', 'priset2', 'priset3'
 masktype = 'baseline'  # 'strict'  # 'lax'  # 'baseline'
 mgetype = 'rhe'  # 'ahe'  # 'rhe'  # 'rre'  # 'akin'
-os = 4  # 2 3 4 6 8 10 12 14 16
-gs = 71  # beam grid size
-gas = False  # incl_gas
+os = 4  # 1 2 3 4 6 8 10 12 14 16
+gs = 31  # beam grid size
+sigtype = 'flat'  # flat, exp, gauss
+rfit = 1.0
 vrad = False  # include radial velocity
 kappa = False  # include radial velocity with kappa
 omega = False  # include radial velocity with sub-Keplerian motion
 vtype = 'orig'  # orig, vrad, omega, kappa
+gas = False  # incl_gas
 gas_label = 'nog'
 if gas:
     gas_label = 'gas'
-run_type  = 'gs' + str(gs) + '_d85' + '_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
+# run_type = sigtype + 'sig_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
+run_type = 'rfit10_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
+# run_type = masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
+# run_type  = 'os' + str(os) + '_d91_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
 # run_type  = 'os' + str(os) + '_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
     # 'b' + str(gs) + '_d85_' +  masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
 
@@ -89,15 +94,16 @@ mges = {'ahe': 'ugc_2698_ahe_mge.txt', 'rhe': 'ugc_2698_rhe_mge.txt', 'rre': 'ug
         'ahepsf': 'ugc_2698_ahepsf_mge.txt', 'rhepsf': 'ugc_2698_rhepsf_mge.txt', 'rrepsf': 'ugc_2698_rrepsf_mge.txt',
         'akin': 'yildirim_table_2698.txt'}
 
+
 # FIXED PARAMS
-fixed = {'r0': 0.5,  # COULD BE FREE IN SOME MODELS
-         'mu': 0.5,  # COULD BE FREE IN SOME MODELS
-         'sig1': 5.,  # COULD BE FREE IN SOME MODELS
+fixed = {#'r0': 0.5,  # COULD BE FREE IN SOME MODELS
+         #'mu': 0.5,  # COULD BE FREE IN SOME MODELS
+         #'sig1': 5.,  # COULD BE FREE IN SOME MODELS
          #'vrad': 0.,  # COULD BE FREE IN SOME MODELS
          #'kappa': 0.,  # COULD BE FREE IN SOME MODELS
          #'omega': 1.,  # COULD BE FREE IN SOME MODELS
          # ELLIPTICAL REGION PARS
-         'xell': 126.85, 'yell': 150.9, 'theta_ell': 19., 'q_ell': 0.379, 'rfit': 0.7,
+         'xell': 126.85, 'yell': 150.9, 'theta_ell': 19., 'q_ell': 0.38, 'rfit': rfit,
          # yell between 150.8~few to 150.9; could do 150.85; or round so xell 127, yell 151, qell .36-.38, adjust rfit?
          # theta_ell 18.88 : 19.19 ;; q_ell cos(67.7 deg) ;; rfit arcsec
          # DYNESTY PARAMS
@@ -110,7 +116,7 @@ fixed = {'r0': 0.5,  # COULD BE FREE IN SOME MODELS
          'y_fwhm': 0.103544,
          'PAbeam': 9.271,
          # OTHER FIXED PARAMETERS
-         'dist': 85.29,  #89.,  # Mpc'
+         'dist': 91.,  # 85.29,  #89.,  # Mpc'
          'zi': 29, # cube range: zi:zf,
          'zf': 78,
          'xi': 84,
@@ -126,7 +132,7 @@ fixed = {'r0': 0.5,  # COULD BE FREE IN SOME MODELS
          'gsize': gs,
          'mtype': 0,  # mge file
          'bl': 0,
-         's_type': 'flat',
+         's_type': sigtype,
          'vtype': vtype,  # orig, vrad, omega, kappa
          'incl_gas': str(gas),
          'lucy_it': 10}
@@ -137,35 +143,55 @@ midpriors = {'mbh': [9., 9.8], 'xloc': [125.5, 129], 'yloc': [149, 153], 'sig0':
              'PAdisk': [16, 22], 'vsys': [6440, 6490], 'ml_ratio': [1, 2.5], 'f': [0.7, 1.4]}
 narrowpri = {'mbh': [9.1, 9.7], 'xloc': [125.5, 128], 'yloc': [150, 152], 'sig0': [12, 24], 'inc': [65, 71],
              'PAdisk': [15, 22], 'vsys': [6445, 6465], 'ml_ratio': [1.3, 2.4], 'f': [0.9, 1.2]}
+priset2 = {'mbh': [8.5, 9.7], 'xloc': [124, 128], 'yloc': [148, 152], 'sig0': [5, 25], 'inc': [0, 85],
+          'PAdisk': [10, 30], 'vsys': [6425, 6485], 'ml_ratio': [0.8, 2.4], 'f': [0.5, 1.5]}
+priset3 = {'mbh': [8, 10.], 'xloc': [124, 128], 'yloc': [148, 152], 'sig0': [0, 40], 'inc': [0, 89],
+          'PAdisk': [5, 35], 'vsys': [6405, 6505], 'ml_ratio': [0.3, 3.], 'f': [0.5, 1.5]}
+
 
 if vrad:
     priors['vrad'] = [-50, 50]
     midpriors['vrad'] = [-20, 35]
     narrowpri['vrad'] = [-5, 25]
+    priset2['vrad'] = [-5, 25]
+    priset3['vrad'] = [-50, 50]
 elif kappa or omega:
     fixed['vrad'] = 0.
     priors['kappa'] = [-1, 1]
     midpriors['kappa'] = [-0.5, 0.5]
     narrowpri['kappa'] = [-0.1, 0.1]
+    priset2['kappa'] = [-0.2, 0.2]
+    priset3['kappa'] = [-1, 1]
     if omega:
         priors['omega'] = [0, 1]
         midpriors['omega'] = [0.5, 1]
         narrowpri['omega'] = [0.75, 1]
+        priset2['omega'] = [0.7, 1]
+        priset3['omega'] = [0, 1]
 else:
     fixed['vrad'] = 0.
     fixed['kappa'] = 0.
     fixed['omega'] = 0.
-if fixed['s_type'] == 'exp' or fixed['s_type'] == 'gauss':
+
+# 'gauss': sig1 + sig0 * np.exp(-(r - r0) ** 2 / (2 * mu ** 2)) ;;; 'exp': sig1 + sig0 * np.exp(-r / r0)
+if sigtype == 'exp' or sigtype == 'gauss':
     priors['r0'] = [0, 100]
     midpriors['r0'] = [0, 50]
     narrowpri['r0'] = [0, 20]
+    priset2['r0'] = [0, 50]
+    priset3['r0'] = [0, 100]
     priors['sig1'] = [0, 100]
     midpriors['sig1'] = [0, 50]
     narrowpri['sig1'] = [0, 20]
-    if fixed['s_type'] == 'gauss':
-        priors['mu'] = [-100, 100]
-        midpriors['mu'] = [-50, 50]
-        narrowpri['mu'] = [-10, 10]
+    priset2['sig1'] = [0, 50]
+    priset3['sig1'] = [0, 100]
+    priset3['sig0'] = [0, 100]
+    if sigtype == 'gauss':
+        priors['mu'] = [0, 100]
+        midpriors['mu'] = [0, 50]
+        narrowpri['mu'] = [0, 10]
+        priset2['mu'] = [0, 50]
+        priset3['mu'] = [0, 100]
 else:
     fixed['r0'] = 0.5
     fixed['mu'] = 0.
@@ -199,6 +225,10 @@ elif pri == 'mid':
     use_priors = midpriors
 elif pri == 'narrow':
     use_priors = narrowpri
+elif pri == 'priset2':
+    use_priors = priset2
+elif pri == 'priset3':
+    use_priors = priset3
 
 # MAKE THE LOCAL VERSION
 newpl = write_newpar(locnewpar, copyf, use_priors, fixed, localfiles)

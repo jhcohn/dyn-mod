@@ -23,23 +23,44 @@ slicefoldstrict = ugc + 'maskslicesstrict/'
 # PLOT FLUX MAP / SAVE TO FITS FILE
 hdu = fits.open(ugc + 'UGC2698_C4_CO21_bri_20.3kms.pbcor_copy.fits')
 data = hdu[0].data
+hdu.close()
+
+oldmask = ugc + 'UGC2698_C4_CO21_bri_20kms.strictmask.fits'
+corroldmask = ugc + 'UGC2698_oldcube_strictmask_0s1s.fits'
+hduom = fits.open(oldmask)
+omdat = hduom[0].data
+omdat[omdat != 0] = 1.
+hduom.close()
+fits.writeto(corroldmask, omdat)
+print(oop)
+
+
 
 fmask = ugc + 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmask.fits'
 fmask2 = ugc + 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmask2.fits'
 fmasklax = ugc + 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmasklax.fits'
 fmaskstrict = ugc + 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmaskstrict.fits'
 
+masked = ugc + 'UGC2698_C4_CO21_bri_20.3kms_jonathan_datastrict.fits'
+masked2 = ugc + 'UGC2698_C4_CO21_bri_20.3kms_jonathan_datastrict2.fits'
+maskedlax = ugc + 'UGC2698_C4_CO21_bri_20.3kms_jonathan_datastrictlax.fits'
+maskedstrict = ugc + 'UGC2698_C4_CO21_bri_20.3kms_jonathan_datastrictstrict.fits'
+
 hdum = fits.open(fmask)
 maskdat = hdum[0].data
+hdum.close()
 
 hdum2 = fits.open(fmask2)
 maskdat2 = hdum2[0].data
+hdum2.close()
 
 hduml = fits.open(fmasklax)
 maskdatlax = hduml[0].data
+hduml.close()
 
 hdums = fits.open(fmaskstrict)
 maskdatstrict = hdums[0].data
+hdums.close()
 
 freq1 = float(hdu[0].header['CRVAL3'])  # starting frequency in the data cube
 f_step = float(hdu[0].header['CDELT3'])  # frequency step in the data cube  # note: fstep is negative for NGC_3258
@@ -49,21 +70,41 @@ freq_axis = np.arange(freq1, freq1 + ((77-29) * f_step), f_step)  # [bluest, ...
 # include it...So, for 1332, include the extra point above, then cutting it off: freq_axis = freq_axis[:-1]
 # NOTE: NGC_3258 DATA DOES *NOT* HAVE THIS ISSUE, SOOOOOOOOOO COMMENT OUT FOR NOW!
 
+# THE BELOW ARE BAD AND NOT GOOD
 # Collapse the fluxes! Sum over all slices, multiplying each slice by the slice's mask and by the frequency step
+full_masked = np.zeros(shape=np.shape(data[0]))  # np.shape(data) = (1, 120, 300, 300)
+full_masked2 = np.zeros(shape=np.shape(data[0]))
+full_maskedlax = np.zeros(shape=np.shape(data[0]))
+full_maskedstrict = np.zeros(shape=np.shape(data[0]))
+for zz in range(len(data[0])):
+    full_masked[zz] = data[0][zz] * maskdat[zz]
+    full_masked2[zz] = data[0][zz] * maskdat2[zz]
+    full_maskedlax[zz] = data[0][zz] * maskdatlax[zz]
+    full_maskedstrict[zz] = data[0][zz] * maskdatstrict[zz]
+# fits.writeto(masked, full_masked)
+# fits.writeto(masked2, full_masked2)
+# fits.writeto(maskedlax, full_maskedlax)
+# fits.writeto(maskedstrict, full_maskedstrict)
+print(oop)
+
 dataclip = data[0]  # [29:78]
-collapsed_fluxes = np.zeros(shape=(len(dataclip[0]), len(dataclip[0][0])))
 collapsed_mask2 = np.zeros(shape=(len(dataclip[0]), len(dataclip[0][0])))
 for zz in range(len(maskdat)):
     collapsed_mask2 += maskdat2[zz]  # just collapse mask
 collapsed_mask2[collapsed_mask2 > 0] = 1.
+
+collapsed_fluxes = np.zeros(shape=(len(dataclip[0]), len(dataclip[0][0])))
 for zz in range(len(maskdat)):
     collapsed_fluxes += dataclip[zz] * maskdat[zz] * abs(f_step)
+
 collapsed_fluxes2 = np.zeros(shape=(len(dataclip[0]), len(dataclip[0][0])))
 for zz in range(len(maskdat2)):
     collapsed_fluxes2 += dataclip[zz] * maskdat2[zz] * abs(f_step)
+
 collapsed_fluxeslax = np.zeros(shape=(len(dataclip[0]), len(dataclip[0][0])))
 for zz in range(len(maskdatlax)):
     collapsed_fluxeslax += dataclip[zz] * maskdatlax[zz] * abs(f_step)
+
 collapsed_fluxesstrict = np.zeros(shape=(len(dataclip[0]), len(dataclip[0][0])))
 for zz in range(len(maskdatstrict)):
     collapsed_fluxesstrict += dataclip[zz] * maskdatstrict[zz] * abs(f_step)
@@ -72,23 +113,29 @@ cf = ugc + 'ugc_2698_fluxmap_20.3kms_jonathan_casaimview_strictmask.fits'
 cf2 = ugc + 'ugc_2698_fluxmap_20.3kms_jonathan_casaimview_strictmask2.fits'
 cflax = ugc + 'ugc_2698_fluxmap_20.3kms_jonathan_casaimview_strictmasklax.fits'
 cfstrict = ugc + 'ugc_2698_fluxmap_20.3kms_jonathan_casaimview_strictmaskstrict.fits'
+cf3sigfile = ugc + 'UGC2698_C4_CO21_mom0_3sigmamask.fits'  # 3sigma noise cut strictmask from Ben!
+hdu3 = fits.open(cf3sigfile)
+cf3sig = hdu3[0].data
+hdu3.close()
+
 #fits.writeto(cflax, collapsed_fluxeslax)
 #fits.writeto(cfstrict, collapsed_fluxesstrict)
 #fits.writeto(cf2, collapsed_fluxes2)
 #fits.writeto(cf, collapsed_fluxes)
-fits.writeto(ugc + 'ugc_2698_collapsemask_20.3kms_jonathan_casaimview_strictmask2.fits', collapsed_mask2)
+# fits.writeto(ugc + 'ugc_2698_collapsemask_20.3kms_jonathan_casaimview_strictmask2.fits', collapsed_mask2)
 
 old_fmap = ugc + 'ugc_2698_summed_model_fluxmap.fits'
 hduof = fits.open(old_fmap)
 oldf = hduof[0].data
+hduof.close()
 print(np.shape(oldf), np.shape(collapsed_fluxes))
 
 plot5 = True
 if plot5:
     fig, axarr = plt.subplots(2, 3, sharex='col', sharey='row', gridspec_kw={'hspace': 0, 'wspace': 0}, figsize=(12,7))
 
-    mn = np.amin([collapsed_fluxes, collapsed_fluxes2, collapsed_fluxeslax, collapsed_fluxesstrict, oldf])
-    mx = np.amax([collapsed_fluxes, collapsed_fluxes2, collapsed_fluxeslax, collapsed_fluxesstrict, oldf])
+    mn = np.amin([collapsed_fluxes, collapsed_fluxes2, collapsed_fluxeslax, collapsed_fluxesstrict, oldf, cf3sig])
+    mx = np.amax([collapsed_fluxes, collapsed_fluxes2, collapsed_fluxeslax, collapsed_fluxesstrict, oldf, cf3sig])
     im = axarr[0,0].imshow(oldf, origin='lower', vmin=mn, vmax=mx, aspect='auto')
     axarr[0,0].text(50, 250, r'Old 20.1kms' +  '\n' + r'cube strictmask', color='w')
     im = axarr[0,1].imshow(collapsed_fluxes, origin='lower', vmin=mn, vmax=mx, aspect='auto')
@@ -99,6 +146,8 @@ if plot5:
     axarr[1,0].text(50, 250, r'Lax strictmask', color='w')
     im = axarr[1,1].imshow(collapsed_fluxesstrict, origin='lower', vmin=mn, vmax=mx, aspect='auto')
     axarr[1,1].text(50, 250, r'Strict strictmask', color='w')
+    im = axarr[1,2].imshow(cf3sig * abs(f_step), origin='lower', vmin=mn, vmax=mx, aspect='auto')
+    axarr[1,2].text(50, 250, r'3$\sigma$ strictmask', color='w')
     #plt.subplots_adjust(wspace=0., hspace=0.)
     fig.colorbar(im, ax=axarr.ravel().tolist())
 else:
@@ -142,6 +191,7 @@ gridpoints = np.vstack((x,y)).T
 
 hdu = fits.open(ugc + 'UGC2698_C4_CO21_bri_20.3kms.pbcor_copy.fits')
 data = hdu[0].data[0]
+hdu.close()
 print(np.shape(data))
 
 mask = np.zeros(shape=(len(data), nx, ny))

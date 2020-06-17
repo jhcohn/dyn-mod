@@ -96,7 +96,7 @@ def my_own_xy(results, par_labels, ax_labels, quantiles, ax_lims=None, compare_e
     plt.show()
 
 
-def table_it(things, parfiles, models, parlabels):
+def table_it(things, parfiles, models, parlabels, sig=3):
 
     hdr = '| model | '
     hdrl = '| --- |'
@@ -159,13 +159,25 @@ def table_it(things, parfiles, models, parlabels):
         weights = np.exp(dyn_res['logwt'] - dyn_res['logz'][-1])  # normalized weights
 
         for i in range(dyn_res['samples'].shape[1]):  # for each parameter
-            q = dyfunc.quantile(dyn_res['samples'][:, i], [0.0015, 0.5, 0.9985], weights=weights)
-            if i == 0:
+            quants = [0.0015, 0.5, 0.9985]
+            if sig == 1 or sig == 'mod':
+                quants = [0.16, 0.5, 0.84]
+            elif sig == 2:
+                quants = [0.025, 0.5, 0.975]
+            elif sig == 3:
+                quants = [0.0015, 0.5, 0.9985]
+            q = dyfunc.quantile(dyn_res['samples'][:, i], quants, weights=weights)
+            if i == 0 and 'nobh' not in parfiles[t]:
                 q = np.log10(q)
             title = r"${{{0}}}_{{-{1}}}^{{+{2}}}$"
-            texlines += title.format(fmt(q[1]), fmt(q[1] - q[0]), fmt(q[2] - q[1])) + ' | '
             alttitle = r"{0} -{1}/+{2}"
-            lines += alttitle.format(fmt(q[1]), fmt(q[1] - q[0]), fmt(q[2] - q[1])) + ' | '
+            if sig == 'mod':
+                mod = (2*4597) ** (1/4)  # BUCKET 4606 changes if the fitting region changes
+                texlines += title.format(fmt(q[1]), fmt((q[1] - q[0]) * mod), fmt((q[2] - q[1]) * mod)) + ' | '
+                lines += alttitle.format(fmt(q[1]), fmt((q[1] - q[0]) * mod), fmt((q[2] - q[1]) * mod)) + ' | '
+            else:
+                texlines += title.format(fmt(q[1]), fmt(q[1] - q[0]), fmt(q[2] - q[1])) + ' | '
+                lines += alttitle.format(fmt(q[1]), fmt(q[1] - q[0]), fmt(q[2] - q[1])) + ' | '
             #lines += str(q[1].format('.2f').format) + ' +' + str((q[2]-q[1]).format('.2f').format) + ' -' +\
             #         str((q[1] - q[0]).format('.2f').format) + ' | '
         lines += '\n| '
@@ -180,17 +192,21 @@ def my_own_thing(results, par_labels, ax_labels, quantiles, ax_lims=None, compar
     roundto = 3  # 2  # 4
     npar = len(par_labels)
     if npar == 10:
-        fig, axes = plt.subplots(2, 5, figsize=(20, 12))  # 2 rows, 5 cols of subplots; because there are 0 free params
+        fig, axes = plt.subplots(2, 5, figsize=(20, 12))  # 2 rows, 5 cols of subplots; because there are 10 free params
         # labels = np.array(['mbh', 'xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f',]) vrad, kappa, etc
         axes_order = [[0, 0], [1, 0], [1, 1], [1, 2], [0, 3], [0, 4], [1, 3], [0, 1], [0, 2], [1, 4]]
     elif npar == 11:
-        fig, axes = plt.subplots(3, 4, figsize=(20, 12))  # 3 rows, 3 cols of subplots; because there are 9 free params
+        fig, axes = plt.subplots(3, 4, figsize=(20, 12))  # 3 rows, 4 cols of subplots; because there are 11 free params
         # labels =   ['mbh', 'xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f', kappa, omega], etc
         axes_order = [[0, 0], [1, 1], [1, 2], [1, 3], [0, 3], [1, 0], [2, 0], [0, 1], [0, 2], [2, 1], [2, 2]]
     elif npar == 9:
         fig, axes = plt.subplots(3, 3, figsize=(20, 12))  # 3 rows, 3 cols of subplots; because there are 9 free params
-        labels = np.array(['mbh', 'xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])
+        # labels = np.array(['mbh', 'xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])
         axes_order = [[0, 0], [2, 0], [2, 1], [2, 2], [1, 0], [1, 1], [1, 2], [0, 1], [0, 2]]
+    elif npar == 8:
+        fig, axes = plt.subplots(2, 4, figsize=(20, 12))  # 2 rows, 4 cols of subplots; because there are 8 free params
+        # labels = np.array(['xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])
+        axes_order = [[0, 0], [0, 1], [1, 0], [0, 2], [0, 3], [1, 1], [1, 2], [1, 3]]
     for i in range(len(results[0])):
         row, col = axes_order[i]
         if compare_err or comp2:
@@ -486,6 +502,14 @@ dictrhe2dlz0001 = {'pkl': 'u2698_dlz0001_baseline_rhe_orig_nog_10000000_8_0.001_
                    'mod': 'rhe baseline dlz0001', 'extra_params': None}  # Runtime: 4.45 hours (128087.74 sec)
 
 # RHE BASELINE Beam15, DIST85
+dictrhe2gs5 = {'pkl': 'u2698_gs5_d85_baseline_rhe_orig_nog_10000000_8_0.02_1590624161.6140797_end.pkl', # 2698 mask2 rhe gs5 d85
+               'name': 'ugc_2698_newmasks/u2698_nest_gs5_d85_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_gs5_d85_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_gs5_d85_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_gs5_d85_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline nog gs5 d85', 'extra_params': None}  # Runtime: 5.48489583 hours (157965.00 sec)
+
+# RHE BASELINE Beam15, DIST85
 dictrhe2gs15 = {'pkl': 'u2698_gs15_d85_baseline_rhe_orig_nog_10000000_8_0.02_1590439381.911974_end.pkl', # 2698 mask2 rhe gs15 d85
                 'name': 'ugc_2698_newmasks/u2698_nest_gs15_d85_baseline_rhe_orig_nog_3sig.png',
                 'cornername': 'ugc_2698_newmasks/u2698_nest_gs15_d85_baseline_rhe_orig_nog_corner_3sig.png',
@@ -501,22 +525,216 @@ dictrhe2gs71 = {'pkl': 'u2698_gs71_d85_baseline_rhe_orig_nog_10000000_8_0.02_159
                 'outpf': 'ugc_2698/ugc_2698_gs71_d85_baseline_rhe_orig_nog_out.txt',
                 'mod': 'rhe baseline nog gs71 d85', 'extra_params': None}  # Runtime: 9.84351667 hours (283493.28 sec)
 
+# RHE BASELINE os2, d91 // Runtime: 3.86155764 hours (111212.86 s), 99910 total calls, 32514 in initial stage
+dictrhe2os2 = {'pkl': 'u2698_os2_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590693577.7494018_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_os2_d91_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_os2_d91_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_os2_d91_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_os2_d91_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline (os2, d91)', 'extra_params': None}
+
+# RHE BASELINE os3, d91 // Runtime: 3.53416181 hours (101783.86 s), 83881 total calls, 29171 in initial stage
+dictrhe2os3 = {'pkl': 'u2698_os3_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590692584.260687_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_os3_d91_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_os3_d91_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_os3_d91_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_os3_d91_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline (os3, d91)', 'extra_params': None}
+
+# RHE BASELINE os4, d91 // Runtime: 3.38293333 hours (97428.48 s), 74588 total calls, 28648 in initial stage
+dictrhe2os4 = {'pkl': 'u2698_os4_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590692888.5767071_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_os4_d91_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_os4_d91_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_os4_d91_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_os4_d91_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline (os4, d91)', 'extra_params': None}
+
+# RHE BASELINE os6, d91 // Runtime: 4.91630278 hours (141589.52 s), 92306 total calls, 28768 in initial stage
+dictrhe2os6 = {'pkl': 'u2698_os6_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590699379.3008854_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_os6_d91_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_os6_d91_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_os6_d91_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_os6_d91_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline (os6, d91)', 'extra_params': None}
+'''
+# Note: pre-batch 
+| rhe baseline (os6, d91) | 1.303 (5990.287) | 9.39 -0.03/+0.04 | 126.90 -0.33/+0.33 | 150.96 -0.28/+0.29 | 17.14 -2.60/+2.84 | 67.67 -0.91/+0.91 | 18.74 -0.82/+0.80 | 6454.76 -2.56/+2.23 | 1.71 -0.05/+0.04 | 1.10 -0.04/+0.05 | 
+
+'''
+
+# RHE BASELINE os8, d91 // Runtime: 5.45515556 hours (157108.48 s); 80759 total calls, 28235 in initial stage
+dictrhe2os8 = {'pkl': 'u2698_os8_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590701499.9093819_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_os8_d91_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_os8_d91_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_os8_d91_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_os8_d91_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline (os8, d91)', 'extra_params': None}
+
+# RHE BASELINE os10, d91 // Runtime: 6.35648819 hours (183066.86 s); 74868 total calls; 28623 in initial stage
+dictrhe2os10 = {'pkl': 'u2698_os10_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590705487.6493137_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_os10_d91_baseline_rhe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_os10_d91_baseline_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_os10_d91_baseline_rhe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_os10_d91_baseline_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline (os10, d91)', 'extra_params': None}
+
+# RHE BASELINE os12, d91 // Runtime: 9.00957396 hours (259475.73 s); 81068 total calls; 28501 in initial stage
+dictrhe2os12 = {'pkl': 'u2698_os12_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590715106.442782_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_os12_d91_baseline_rhe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_os12_d91_baseline_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_os12_d91_baseline_rhe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_os12_d91_baseline_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline (os12, d91)', 'extra_params': None}
+
+# RHE BASELINE os14, d91 // Runtime: 12.6801323 hours (365187.81 s); 91474 total calls; 27918 in initial stage
+dictrhe2os14 = {'pkl': 'u2698_os14_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590729076.410538_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_os14_d91_baseline_rhe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_os14_d91_baseline_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_os14_d91_baseline_rhe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_os14_d91_baseline_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline (os14, d91)', 'extra_params': None}
+
+# RHE BASELINE os16, d91 // Runtime: 13.230291 hours (381032.38 s); 83169 total calls; 28864 in initial stage
+dictrhe2os16 = {'pkl': 'u2698_os16_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590732620.6191862_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_os16_d91_baseline_rhe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_os16_d91_baseline_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_os16_d91_baseline_rhe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_os16_d91_baseline_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline (os16, d91)', 'extra_params': None}
+
+# RHE BASELINE priset2 // Runtime: 5.82 hrs (167512.72 s) (~3.33 hrs initial); 127117 total calls; 39273 initial calls
+dictrhe2set2 = {'pkl': 'u2698_priset2_d91_baseline_rhe_orig_nog_10000000_8_0.02_1591064673.5489726_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_priset2_d91_baseline_rhe_orig_nog_3sig_fullpri.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_priset2_d91_baseline_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_priset2_d91_baseline_rhe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_priset2_d91_baseline_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline (priset2, d91)', 'extra_params': None}
+
+# RHE BASELINE priset3 // Runtime: 4.34 hrs (125138.24 s) (~3.33 hrs initial); 98311 total calls; 44026 initial calls
+#dictrhe2set3 = {'pkl': 'u2698_priset3_d91_baseline_rhe_orig_nog_10000000_8_0.02_1591056752.7983973_end.pkl',
+#                'name': 'ugc_2698_newmasks/u2698_nest_priset3_d91_baseline_rhe_orig_nog_3sig.png',
+#                'cornername': 'ugc_2698_newmasks/u2698_nest_priset3_d91_baseline_rhe_orig_nog_corner_3sig.png',
+#                'inpf': 'ugc_2698/ugc_2698_priset3_d91_baseline_rhe_orig_nog.txt',
+#                'outpf': 'ugc_2698/ugc_2698_priset3_d91_baseline_rhe_orig_nog_out.txt',
+#                'mod': 'rhe baseline (priset3, d91)', 'extra_params': None}
+
+# RHE BASELINE NOBH // Runtime: 3.32 hrs (95689.48 s) (~1.8hr in initial); 86416 total calls; 32600 initial calls
+dictrhe2nobh = {'pkl': 'u2698_nobh_baseline_rhe_orig_nog_10000000_8_0.02_1591290916.2051768_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_nobh_baseline_rhe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_nobh_baseline_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_nobh_baseline_rhe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_nobh_baseline_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline (nobh, d91)', 'extra_params': None}
+
+# RHE BASELINE PRISET3 PROPER // 7.21 hrs (207733.30s); 157996 total calls; 49752 initial calls
+dictrhe2set3 = {'pkl': 'u2698_priset3_d91_baseline_rhe_orig_nog_10000000_8_0.02_1591304348.7719812_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_priset32_d91_baseline_rhe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_priset32_d91_baseline_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_priset32_d91_baseline_rhe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_priset32_d91_baseline_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline (priset32, d91)', 'extra_params': None}
+
+# RE_RUNNING MGE SETS: RRE BASELINE // 5.36hrs (154349.38s); 121481 total calls; 51351 initial calls
+dictrre2set3 = {'pkl': 'u2698_baseline_rre_orig_nog_10000000_8_0.02_1591298519.005904_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_baseline_rre_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_baseline_rre_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_baseline_rre_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_baseline_rre_orig_nog_out.txt',
+                'mod': 'rre baseline (d91)', 'extra_params': None}
+
+# RE_RUNNING MGE SETS: AHE BASELINE // 6.31hrs (181747.31s); 144642 total calls; 44556 initial calls
+dictahe2set3 = {'pkl': 'u2698_baseline_ahe_orig_nog_10000000_8_0.02_1591301727.9228723_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_baseline_ahe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_baseline_ahe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_baseline_ahe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_baseline_ahe_orig_nog_out.txt',
+                'mod': 'ahe baseline (d91)', 'extra_params': None}
+
+# RE_RUNNING MGE SETS: AKIN BASELINE // 13.73hrs (395424.19s); 165523 total calls; 55631 initial calls
+dictakin2set3 = {'pkl': 'u2698_baseline_akin_orig_nog_10000000_8_0.02_1591329308.3132455_end.pkl',
+                 'name': 'ugc_2698_newmasks/u2698_nest_baseline_akin_orig_nog_3sig.png',
+                 'cornername': 'ugc_2698_newmasks/u2698_nest_baseline_akin_orig_nog_corner_3sig.png',
+                 'inpf': 'ugc_2698/ugc_2698_baseline_akin_orig_nog.txt',
+                 'outpf': 'ugc_2698/ugc_2698_baseline_akin_orig_nog_out.txt',
+                 'mod': 'akin baseline (d91)', 'extra_params': None}
+
+# RHE BASELINE RFIT 1.0 // 6.04hrs (174034.81s); 141325 total calls; 45170 initial calls
+dictrhe2rfit1 = {'pkl': 'u2698_rfit10_baseline_rhe_orig_nog_10000000_8_0.02_1591306649.6288242_end.pkl',
+                 'name': 'ugc_2698_newmasks/u2698_nest_rfit10_baseline_rhe_orig_nog_3sig.png',
+                 'cornername': 'ugc_2698_newmasks/u2698_nest_rfit10_baseline_rhe_orig_nog_corner_3sig.png',
+                 'inpf': 'ugc_2698/ugc_2698_rfit10_baseline_rhe_orig_nog.txt',
+                 'outpf': 'ugc_2698/ugc_2698_rfit10_baseline_rhe_orig_nog_out.txt',
+                 'mod': 'rhe baseline rfit10', 'extra_params': None}
+
+# RHE BASELINE RFIT 05 // 9.60hrs (276603.16s); 197189 total calls; 51459 initial calls
+dictrhe2rfit05 = {'pkl': 'u2698_rfit05_baseline_rhe_orig_nog_10000000_8_0.02_1591597783.1773756_end.pkl',
+                  'name': 'ugc_2698_newmasks/u2698_nest_rfit05_baseline_rhe_orig_nog_3sig.png',
+                  'cornername': 'ugc_2698_newmasks/u2698_nest_rfit05_baseline_rhe_orig_nog_corner_3sig.png',
+                  'inpf': 'ugc_2698/ugc_2698_rfit05_baseline_rhe_orig_nog.txt',
+                  'outpf': 'ugc_2698/ugc_2698_rfit05_baseline_rhe_orig_nog_out.txt',
+                  'mod': 'rhe baseline rfit05', 'extra_params': None}
+
+# RHE BASELINE RFIT 03 // original 21019 calls; latest at 281155 calls
+dictrhe2rfit03 = {'pkl': 'u2698_rfit03_baseline_rhe_orig_nog_10000000_8_10.0_1592252035.7531602_tempsave.pkl',
+                  'name': 'ugc_2698_newmasks/u2698_nest_rfit03_baseline_rhe_orig_nog_3sig.png',
+                  'cornername': 'ugc_2698_newmasks/u2698_nest_rfit03_baseline_rhe_orig_nog_corner_3sig.png',
+                  'inpf': 'ugc_2698/ugc_2698_rfit03_baseline_rhe_orig_nog.txt',
+                  'outpf': 'ugc_2698/ugc_2698_rfit03_baseline_rhe_orig_nog_out.txt',
+                  'mod': 'rhe baseline rfit03', 'extra_params': None}
+# rfit03: 310743 323595 333650
+
+# RHE BASELINE EXPSIG // 37.97hrs (1093493.88s); 848668 total calls; 432880 initial calls
+dictrhe2exp = {'pkl': 'u2698_expsig_baseline_rhe_orig_nog_10000000_8_0.02_1591464018.0182757_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_expsig_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_expsig_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_expsig_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_expsig_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline expsig', 'extra_params': [['r0', 'pc'], ['sig1', 'km/s']]}
+
+# RHE BASELINE JUSTEXV // 4.87hrs (140325.02s); 95871 total calls; 43280 initial calls
+dictrhe2jexv = {'pkl': 'u2698_justexv2582_10000000_8_0.02_1592357354.1659029_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_justexv_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_justexv_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_justexv.txt',
+                'outpf': 'ugc_2698/ugc_2698_justexv_out.txt',
+                'mod': 'rhe baseline exv', 'extra_params': None}
+
 # CHOOSE DICTIONARY, DEFINE LABELS
-dict = dictrhe2gs71
-labels = np.array(['mbh', 'xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])
-ax_lab = np.array([r'$\log_{10}$(M$_{\odot}$)', 'pixels', 'pixels', 'km/s', 'deg', 'deg', 'km/s',
-                   r'M$_{\odot}$/L$_{\odot}$', 'unitless'])
-tablabs = np.array(['reduced chi^2', 'log10(mbh) [Msol]', 'xloc [pix]', 'yloc [pix]', 'sig0 [km/s]', 'inc [deg]',
-                    'PAdisk [deg]', 'vsys [km/s]', 'ml_ratio [Msol/Lsol]', 'f [unitless]'])
+dict = dictrhe2jexv
+if 'nobh' in dict['pkl']:
+    labels = np.array(['xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])
+    ax_lab = np.array(['pixels', 'pixels', 'km/s', 'deg', 'deg', 'km/s', r'M$_{\odot}$/L$_{\odot}$', 'unitless'])
+    tablabs = np.array(['reduced chi^2', 'xloc [pix]', 'yloc [pix]', 'sig0 [km/s]', 'inc [deg]',
+                        'PAdisk [deg]', 'vsys [km/s]', 'ml_ratio [Msol/Lsol]', 'f [unitless]'])
+else:
+    labels = np.array(['mbh', 'xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])
+    ax_lab = np.array([r'$\log_{10}$(M$_{\odot}$)', 'pixels', 'pixels', 'km/s', 'deg', 'deg', 'km/s',
+                       r'M$_{\odot}$/L$_{\odot}$', 'unitless'])
+    tablabs = np.array(['reduced chi^2', 'log10(mbh) [Msol]', 'xloc [pix]', 'yloc [pix]', 'sig0 [km/s]', 'inc [deg]',
+                        'PAdisk [deg]', 'vsys [km/s]', 'ml_ratio [Msol/Lsol]', 'f [unitless]'])
 if dict['extra_params'] is not None:
     for par in dict['extra_params']:
         labels = np.append(labels, par[0])
         ax_lab = np.append(ax_lab, par[1])
         tablabs = np.append(tablabs, par[0] + ' [' + par[1] + ']')
 
+print(labels)
+
 '''  #
+<details><summary>rfit = 0.3 arcsec</summary>
+
+* First I show the ellipse with rfit = 0.3 arcsec (using a PA = 19 deg, q = 0.38). Then I show the normal posterior plots.
+
+   ![ellipse](https://github.tamu.edu/joncohn/gas-dynamical-modeling/blob/master/2020-06-01/ellipse_0.38_19_0.3.png)
+
+   ![1D posteriors](https://github.tamu.edu/joncohn/gas-dynamical-modeling/blob/master/2020-06-01/u2698_nest_rfit03_baseline_rhe_orig_nog_3sig.png)
+
+   ![corner plot](https://github.tamu.edu/joncohn/gas-dynamical-modeling/blob/master/2020-06-01/u2698_nest_rfit03_baseline_rhe_orig_nog_corner_3sig.png)
+
+</details>
+
 # ONLY table_it *AFTER* OUT FILE CREATED
-hd, hl, li, tx = table_it([direc + dict['pkl']], [dict['outpf']], [dict['mod']], tablabs)
+hd, hl, li, tx = table_it([direc + dict['pkl']], [dict['outpf']], [dict['mod']], tablabs, sig=1)
 print(hd)
 print(hl)
 print(li)
@@ -591,7 +809,7 @@ for i in range(dyn_res['samples'].shape[1]):  # for each parameter
         print(quantiles_1)
         three_sigs.append(quantiles_3)
         one_sigs.append(quantiles_1)
-    elif i == 0:
+    elif i == 0 and 'nobh' not in dict['pkl']:
         print(np.log10(quantiles_3), quantiles_3)
         print(np.log10(quantiles_2), quantiles_2)
         print(np.log10(quantiles_1), quantiles_1)
@@ -639,7 +857,7 @@ print(vax[labels=='sig0'])
 print(vwidth[labels=='sig0'])
 
 logm = True
-if logm and 'xy' not in dict['pkl']:
+if logm and 'xy' not in dict['pkl'] and 'nobh' not in dict['pkl']:
     dyn_res['samples'][:, 0] = np.log10(dyn_res['samples'][:, 0])
     labels[0] = 'log mbh'  # r'log$_{10}$mbh'
 
@@ -692,7 +910,20 @@ elif 'omega' in out_name and 'rhe' in out_name:
 elif 'mask' in out_name:
     ax_lims = [[9.3, 9.6], [126.2, 127.8], [150.2, 151.8], [7.8, 21.4], [66., 70.], [15., 23.], [6447., 6462.],
                [1.52, 1.8], [0.93, 1.2]]  # [19.13, 19.23]
-elif 'd85' in out_name or 'rhe' in out_name:
+elif 'expsig' in out_name:
+    ax_lims = [[8., 10.], [124., 128.], [148, 152], [0., 100.], [52.4, 85], [5., 35.], [6405, 6505],
+               [0.3, 3.], [0.5, 1.5], [0., 100.], [0., 100.]]  # [19.13, 19.23]
+elif 'set3' in out_name or 'set2' in out_name or 'rre' in out_name or 'ahe' in out_name or 'akin' in out_name\
+        or 'rfit' in out_name or 'jexv' in out_name:
+    ax_lims = [[8., 10.], [124., 128.], [148, 152], [0., 40.], [52.4, 85], [5., 35.], [6405, 6505],
+               [0.3, 3.], [0.5, 1.5]]  # [19.13, 19.23]
+elif 'nobh' in out_name:
+    ax_lims = [[124., 128.], [148, 152], [0., 40.], [52.4, 85], [5., 35.], [6405, 6505],
+               [0.3, 3.], [0.5, 1.5]]  # [19.13, 19.23]
+elif 'd91' in out_name or 'rhe' in out_name:
+    ax_lims = [[9.32, 9.47], [126.2, 127.8], [150.2, 151.8], [13., 21.4], [66., 69.5], [17., 20.8], [6450.5, 6459.5],
+               [1.59, 1.82], [1.01, 1.2]]  # [19.13, 19.23]
+elif 'd85' in out_name:
     ax_lims = [[9.3, 9.47], [126.2, 127.8], [150.2, 151.8], [13., 21.4], [66., 69.5], [17., 20.8], [6450.5, 6459.5],
                [1.69, 1.91], [1.01, 1.2]]  # [19.13, 19.23]
 else:
