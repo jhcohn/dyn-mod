@@ -16,15 +16,7 @@ from astropy.modeling.models import Ellipse2D
 import sys
 # sys.path.insert(0, '/Users/jonathancohn/Documents/jam/')  # lets me import file from different folder/path
 import mge_vcirc_mine as mvm  # import mge_vcirc code
-
-
-def innerint(rvals, avals, sigr3, del_r, h=0):
-
-    int1_a3 = np.zeros(shape=len(rvals))
-    for i in range(1, len(rvals)):  # for i=1.,n_elements(rvals)-1 (BC IDL INDEXING INCLUSIVE!)
-        int1_a3[i] = np.sum(rvals[i:] * sigr3[i:] * del_r / np.sqrt(rvals[i:] ** 2 - (avals[i - 1] - h) ** 2))
-
-    return int1_a3
+from scipy.interpolate import UnivariateSpline as unsp
 
 
 def integral22(rad, dda):
@@ -34,72 +26,23 @@ def integral22(rad, dda):
     return int22
 
 
-def doubl_grand(R, sig_func, incl, f_convert, h=1e-5):
-
-
-    f_dg = lambda a, r: 1 / np.sqrt(R**2 - a**2)
-
-    int_result = integrate.dblquad(f_dg, a, np.inf, lambda r: 0, lambda r: R)
-
-    return int_result
-
-
 def integrand22(a, rad, dda):
 
-    #if rad == a:
-    #    integ22 = 0
-    #else:
     integ22 = a * dda / np.sqrt(rad**2 - a**2)
 
     return integ22
 
 
-def integral2(rad, rmax, sigma_func, inclination, conversion_factor):
-
-    int2 = integrate.quad(integrand2, 0, rad, args=(rad, rmax, sigma_func, inclination, conversion_factor))[0]
-    print(int2, 'int2 done')
-
-    return int2
-
-
-def integrand2(a, rad, rmax, sigma_func, inclination, conversion_factor):
-
-    # print('integrand 2 get ready')
-    # da = 0.1
-    #integ2 = misc.derivative(integral1, a, dx=da, args=(sigma_func, inclination, conversion_factor)) * a\
-    #         / np.sqrt(rad[-1]**2 - a**2)
-    integ2 = deriv(a, rmax, sigma_func, inclination, conversion_factor, h=1e-5) * a / np.sqrt(rad**2 - a**2)
-    # integ2 = 186.82929873466492 * a / np.sqrt(rad[-1]**2 - a**2)
-    # print('integrand 2 built', integ2)
-
-    return integ2
-
-
-def deriv(a, rmax, sigma_func, inclination, conversion_factor, h=1e-5):
-    # h is included for easy manual derivation
-
-    deriv = (integral1(a+h, rmax, sigma_func, inclination, conversion_factor) -
-             integral1(a, rmax, sigma_func, inclination, conversion_factor)) / h
-
-    return deriv
-
-
 def integral1(a, rmax, sigma_func, inclination, conversion_factor):
 
-    #print('pre inner integral')
-    # replacing np.inf with rmax
     int1 = integrate.quad(integrand1, a, rmax, args=(sigma_func, a, inclination, conversion_factor))[0]
-    # print('inner int calculated')
-    # print(int1)
 
     return int1
 
 
 def integrand1(r, sigma_func, a, inclination, conversion_factor):
 
-    #print('integrand inner get ready')
     integ1 = r * sigma_func(r) * np.cos(inclination) * conversion_factor / np.sqrt(r ** 2 - a ** 2)
-    #print('integrand inner built')
 
     return integ1
 
@@ -680,291 +623,76 @@ class ModelGrid:
 
         # CALCULATE KEPLERIAN VELOCITY DUE TO ENCLOSED STELLAR MASS
         vg = 0  # default to ignoring the gas mass!
-        if self.incl_gas:  # If incl_mass, overwrite vg with a gas mass estimate, then add it in quadrature to velocity!
-            t_gas = time.time()  # FANTSTIC THIS ONLY ADDS ~0.015 seconds! DEPENDS ON len(rvals); using R, takes ~300s
+        if self.incl_gas:  # If incl_mass, overwrite vg with v_circ,gas estimate, then add it in quadrature to velocity!
+            t_gas = time.time()  # Only adds ~0.015 seconds! DEPENDS ON len(rvals); using R, takes ~300s
             # pix per beam = 2pi sigx sigy [pix^2]
             pix_per_beam = 2. * np.pi * (0.197045 / self.resolution / 2.35482) * (0.103544 / self.resolution / 2.35482)
             pc2_per_beam = pix_per_beam * self.pc_per_pix**2  # pc^2 per beam = pix/beam * pc^2/pix
 
-            co_annuli_radii = self.co_rad * self.pc_per_pix  # convert input annulus mean radii from pix to pc
-            co_annuli_sb = np.nan_to_num(self.co_sb)  # replace NaNs with 0s in input CO mean surface brightness profile
-            print('cosb done')
+            co_radii = self.co_rad * self.pc_per_pix  # convert input annulus mean radii from pix to pc
+            co_sb = np.nan_to_num(self.co_sb)  # replace NaNs with 0s in input CO mean surface brightness profile
+
             # Set up integration bounds, numerical step size, vectors r & a (see Binney & Tremaine eqn 2.157)
-            # maxr >> than maximum CO radius, s.t. relative gravitational potential contributions are small compared to
-            # those near the disk edge.
+            # use maxr >> than maximum CO radius, so potential contributions at maxr << those near the disk edge.
             min_r = 0.  # integration lower bound [pix or pc]
-            max_r = 1300.  # upper bound [pc]; disk peak <~100pc, extend <~700pc; maxr >2x max CO radius  # 510 for edge
-            nr = 500  # 500  # number of steps used in integration process
-            del_r = (max_r - min_r) / nr  # integration step size [pc]
+            max_r = 1300.  # upper bound [pc]; disk peaks <~100pc, extends <~700pc  # 510 for edge
+            nr = 200  # 500  # number of steps used in integration process
             avals = np.linspace(min_r,max_r,nr)  # [pc]  # range(min_r,max_r,(max_r-min_r)/del_r)
             rvals = np.linspace(min_r,max_r,nr)  # [pc]  # range(min_r,max_r,(max_r-min_r)/del_r)
 
             # convert from Jy km/s to Msol (Boizelle+17; Carilli & Walter 13, S2.4: https://arxiv.org/pdf/1301.0371.pdf)
             msol_per_jykms = 3.25e7 * self.alpha_co10 * self.f_he * self.dist ** 2 / \
-                             ((1 + self.zred) * self.r21 * (self.f_0/1e9) ** 2)  # f_0 in GHz, not Hz?!
+                             ((1 + self.zred) * self.r21 * (self.f_0/1e9) ** 2)  # f_0 in GHz, not Hz
             # equation for (1+z)^3 is for observed freq, but using rest freq -> nu0^2 = (nu*(1+z))^2
             # units on 3.25e7 are [K Jy^-1 pc^2/Mpc^2 GHz^2] --> total units [Msol (Jy km/s)^-1]
 
-            # Fit the CO distribution w/ an exp profile (w/ scale radius & norm), then construct Sigma(R) for R=rvals
-            # CASE (2)
-            # radius_pc = self.gas_radius * self.pc_per_pix  # convert free parameter from [pix] to [pc]
-            # gas_norm_pc = self.gas_norm / self.pc_per_pix ** 2  # convert [Jy km/s / pix] to [Jy km/s / pc^2]
-            # sigr2 = gas_norm_pc * np.cos(self.inc) * msol_per_jykms * np.exp(-rvals / radius_pc)  # [Msol pc^-2]
-
-            # CASE (3)
             # Interpolate CO surface brightness vs elliptical mean radii, to construct Sigma(rvals).
             # Units [Jy km/s/beam] * [Msol/(Jy km/s)] / [pc^2/beam] = [Msol/pc^2]
+            sigr3_func_r = interpolate.interp1d(co_radii, co_sb, kind='quadratic', fill_value='extrapolate')
 
-            # Test setting inner-most annulus to 0 (no discernible change in final v_c,gas)
-            #co_annuli_sb = np.insert(co_annuli_sb, 0, 0)
-            #co_annuli_radii = np.insert(co_annuli_radii, 0, 0)
-
-            sigr3_func_r = interpolate.interp1d(co_annuli_radii, co_annuli_sb, kind='quadratic', fill_value='extrapolate')
-            sigr3 = sigr3_func_r(rvals) * np.cos(self.inc) * msol_per_jykms / pc2_per_beam  # Msol pc^-2
-            plt.plot(co_annuli_radii, co_annuli_sb * np.cos(self.inc) * msol_per_jykms / pc2_per_beam, 'ro',
-                     label='CO flux map')
-            plt.plot(rvals, sigr3, 'b+', label='Interpolation')
-            plt.ylabel(r'Surface density [M$_{\odot} / $pc$^2$]')
-            plt.xlabel(r'Mean elliptical radius [pc]')
-            plt.legend()
-            plt.show()
-
-            # ESTIMATE GAS MASS
-            #i1 = integrate.quad(sigr3_func_r, 0, rvals[-1])[0]
-            #print(i1)
-            #i1 *= np.cos(self.inc) * msol_per_jykms  # convert to Msol/pc^2
-            #print(np.log10(i1))  # 8.71174327436427
-            # END ESTIMATE GAS MASS
-
-            # BUCKET TESTING PYTHON INTEGRATION
-            # '''  #
-            print('testing python integration')
-            #int2 = integrate.quad(deriv, 0, rvals[-1], args=(rvals, sigr3_func_r, self.inc, msol_per_jykms))
-            #print(int2)
-            #print(oop)
-            # int2 = integrate.quad(integrand2, 0, rvals[-1], args=(rvals, sigr3_func_r, self.inc, msol_per_jykms))
-            # grand = integrand2(rvals[-1], rvals, sigr3_func_r, self.inc, msol_per_jykms)
-            #print(int2, 'grand')
-            #td = time.time()
-            #dda = misc.derivative(integral1, rvals[-1], dx=0.001, args=(sigr3_func_r, self.inc, msol_per_jykms))
+            # PYTHON INTEGRATION: calculate the inner integral (see eqn 2.157 from Binney & Tremaine)
+            t11 = time.time()
             int1 = np.zeros(shape=len(avals))
-            int1h = np.zeros(shape=len(avals))
-            hh = 1e-5
             for av in range(len(avals)):
                 int1[av] = integral1(avals[av], np.inf, sigr3_func_r, self.inc, msol_per_jykms / pc2_per_beam)
-                int1h[av] = integral1(avals[av] - hh, np.inf, sigr3_func_r, self.inc, msol_per_jykms / pc2_per_beam)
-                # dda.append(deriv(rv, np.inf, sigr3_func_r, self.inc, msol_per_jykms, 1e-5))
-            dda = (int1 - int1h) / hh
-            print(dda)
-            zerocut = 580  # 530
-            dda[rvals > zerocut] = 0
-            # dda[dda > 0] = 0.
-            # dda[np.abs(dda) > 1e6] = 0.
+            print(time.time() - t11)
+            t12 = time.time()
+            zerocut = 580  # [pc] select point at or just beyond the disk edge
+            int1[rvals > zerocut] = 0.  # set all points outside the disk edge = 0 (sometimes get spurious points)
 
-            from scipy.interpolate import UnivariateSpline as unsp
-            int1[rvals > zerocut] = 0.
-            interp_int1 = unsp(rvals, int1)
-            # hint that smoothing factor needs to be big: https://stackoverflow.com/questions/8719754/scipy-interpolate-univariatespline-not-smoothing-regardless-of-parameters
-            interp_int1.set_smoothing_factor(9e8)  # 1e8  # 1e9 smoothed
-            intintr = interp_int1(rvals)
-            # intintr[rvals > 530] = 0.
-            #plt.plot(rvals, int1, 'k+')
-            #plt.plot(rvals, intintr, 'r-')
-            #plt.show()
-            dda_sp = interp_int1.derivative()
-            dda_sp_r = dda_sp(rvals)
-            # dda_sp_r[rvals > 530] = 0
-            #plt.plot(dda, 'ko')
-            #plt.plot(dda_sp_r, 'r+')
-            #plt.show()
+            interp_int1 = unsp(rvals, int1)  # interpolate the inner integral using UnivariateSpline
+            interp_int1.set_smoothing_factor(9e8)  # smooth the inner integral, so it will be well-behaved
 
-            # print(oop)
-            #dda = deriv(rvals[-1], sigr3_func_r, self.inc, msol_per_jykms, 1e-5)  # if use h too small, deriv explodes
-            #print(dda, 'hi')
-            #dda = deriv(rvals[0], sigr3_func_r, self.inc, msol_per_jykms, 1e-5)  # if use h too small, deriv explodes
-            #print(dda, 'hey')
-            # print(oop)
-            #print(time.time() - td)
-            #td2 = time.time()
-            #dda0 = deriv(rvals[0], sigr3_func_r, self.inc, msol_per_jykms, 1e-5)
-            #print(time.time() - td2)
-            #print(dda, dda0)
-            #print(oop)
-            int2 = np.zeros(shape=len(rvals))
-            int2_before = np.zeros(shape=len(rvals))
+            dda_sp = interp_int1.derivative()  # calculate the derivative of the spline smoothed integral
+            dda_sp_r = dda_sp(rvals)  # define the derivative on the rvals grid
+
+            print(time.time() - t12)
+            t21 = time.time()
+            int2 = np.zeros(shape=len(rvals))  # calculate the outer integral! # this integral takes ~0.35 seconds
             for rv in range(len(rvals[1:])):
-                #trv = time.time()
-                #dda = deriv(rvals[rv], sigr3_func_r, self.inc, msol_per_jykms, 1e-5)
                 int2[rv] = integral22(rvals[rv], dda_sp_r[rv])
-                int2_before[rv] = integral22(rvals[rv], dda[rv])
-                #print(rvals[rv], time.time() - trv)
-                # deriv(rv, sigr3_func_r, self.inc, msol_per_jykms, 1e-5) * rv / np.sqrt(rvals[-1]**2 - rv**2)
-            #    int2[rv] = integral2(rv, sigr3_func_r, self.inc, msol_per_jykms)
-            print(int2, 'int2')
-            #plt.plot(int2_before, 'ko')
-            #plt.plot(int2, 'r+')
-            #plt.show()
-            #print(oop)
-            #dda = integral1(rvals[-1], sigr3_func_r, self.inc, msol_per_jykms)
-            # print(dda, 'deriv')
-            #int2 = int22(integrand22, 0, rvals[-1], args=(rvals, dda, sigr3_func_r, self.inc, msol_per_jykms))
-            #int1 = integral1(rvals[-1], sigr3_func_r, self.inc, msol_per_jykms)
-            #print(int1, 'look')  # could maybe go to a higher rvals value than 1500, but it relatively levels off here
-            # print(oop)
-            #integral_2 = integral2(rvals, sigr3_func_r, self.inc, msol_per_jykms)
-            #print(integral_2)
-            # int2 = 186.82929873466492 * np.asarray(rvals)
-            vcg = np.sqrt(-4 * self.G_pc * int2)
-            vcg = np.nan_to_num(vcg)
-            print(vcg)
+
+            print(time.time() - t21)
+
+            vcg = np.sqrt(-4 * self.G_pc * int2)  # calculate the circular velocity due to the gas!
+            vcg = np.nan_to_num(vcg)  # set all NaNs (as a result of negative sqrt values) = 0
+
+            # create a function to interpolate from vcg(rvals) to vcg(R)
             vcg_func = interpolate.interp1d(rvals, vcg, kind='quadratic', fill_value='extrapolate')
-            vcgr = vcg_func(R)
-            alpha = abs(np.arctan(y_disk / (np.cos(self.inc) * x_disk)))  # measure alpha from +x (minor ax) to +y (maj ax)
-            sign = x_disk / abs(x_disk)  # (+x now back to redshifted side, so don't need extra minus sign back in front!)
-            #vcgr = sign * abs(vcgr * np.cos(alpha) * np.sin(self.inc))  # v_los > 0 -> redshift; v_los < 0 -> blueshift
-            plt.imshow(vcgr, origin='lower', extent=[x_obs[0], x_obs[-1], y_obs[0], y_obs[-1]])  # , cmap='RdBu_r')  #, vmin=-50, vmax=50)  #
+            vg = vcg_func(R)  # interpolate vcg onto vcg(R)
+            plt.imshow(vg, origin='lower',
+                       extent=[x_obs[0], x_obs[-1], y_obs[0], y_obs[-1]])  # , cmap='RdBu_r')  #, vmin=-50, vmax=50)  #
             cbar = plt.colorbar()
             cbar.set_label(r'km/s')
             plt.xlabel(r'x\_obs [pc]')
             plt.ylabel(r'y\_obs [pc]')
             plt.show()
-
-            #hdu = fits.PrimaryHDU(vcgr)
-            #hdul = fits.HDUList([hdu])
-            #hdul.writeto('/Users/jonathancohn/Documents/dyn_mod/groupmtg/ugc_2698_newmasks/vlosgas_smooth5e8.fits')
-            #print(oop)
-            # '''  #
-            # BUCKET END TESTING PYTHON INTEGRATION
-
-            # Calculate the (inner) integral (see eqn 2.157 from Binney & Tremaine)
-            # int1_a2 = np.zeros(shape=len(rvals))
-            int1_a3 = np.zeros(shape=len(rvals))
-            for i in range(1, len(rvals)):  # for i=1.,n_elements(rvals)-1 (BC IDL INDEXING INCLUSIVE!)
-                # int1_a2[i] = np.sum(rvals[i:] * sigr2[i:] * del_r / np.sqrt(rvals[i:]**2 - avals[i-1]**2))
-                int1_a3[i] = np.sum(rvals[i:] * sigr3[i:] * del_r / np.sqrt(rvals[i:]**2 - avals[i-1]**2))
-
-            plt.plot(rvals, int1_a3, 'bo', markerfacecolor='none', label="Ben's integration")
-            plt.plot(rvals, int1, 'k+', label="My integration")
-            plt.plot(rvals, intintr, 'r-', label="Smoothed spline interpolation of my integration")
-            plt.legend()
-            plt.show()
-            #hh = 1e-5
-            #int1[rvals > 550] = 0.
-            #plt.plot(rvals, int1, 'k+', label='My integral')
-            #plt.plot(rvals, int1_a3, 'bo', label="Ben's integration", markerfacecolor='none')
-            #plt.legend()
-            #plt.show()
-            #fx_minus_h = innerint(rvals, avals, sigr3, del_r, h=hh)
-            #fx = innerint(rvals, avals, sigr3, del_r, h=0)
-            #dda3 = (fx - fx_minus_h) / hh
-            #plt.plot(dda, 'k+')
-            #plt.plot(dda3, 'bo')
-            #plt.show()
-            # print(oop)
-
-            #dda3 = np.zeros(shape=len(rvals))
-            #hh = 1e-9  # robust for at LEAST 1e-9 <= h <= 1e-3
-            #for i in range(1, len(rvals)):  # for i=1.,n_elements(rvals)-1 (BC IDL INDEXING INCLUSIVE!)
-            #    # int1_a2[i] = np.sum(rvals[i:] * sigr2[i:] * del_r / np.sqrt(rvals[i:]**2 - avals[i-1]**2))
-            #    dhi = np.sum(rvals[i:] * sigr3[i:] * del_r / np.sqrt(rvals[i:]**2 - (avals[i-1]+hh)**2))
-            #    dlo = np.sum(rvals[i:] * sigr3[i:] * del_r / np.sqrt(rvals[i:]**2 - avals[i-1]**2))
-            #    dda3[i] = (dhi - dlo) / hh
-
-            #int1r = interpolate.interp1d(rvals, fx, kind='quadratic', fill_value='extrapolate')
-            #plt.imshow(int1r(R), origin='lower')
-            #plt.colorbar()
-            #plt.show()
-
-            # Crude numerical differential wrt radius (d/da) for 2nd (outer) integral (see eqn 2.157 Binney & Tremaine)
-            # int1_dda2 = np.zeros(shape=len(rvals))
-            int1_dda3 = np.zeros(shape=len(rvals))
-
-            # int1_dda2[1:] = (int1_a2[1:] - int1_a2[0:-1]) / del_r
-            int1_dda3[1:] = (int1_a3[1:] - int1_a3[0:-1]) / del_r  # Offset indices in int1_a* by 1 so diff -> deriv
-
-
-            plt.plot(rvals, int1_dda3, 'bo', markerfacecolor='none', label="Ben's derivative")
-            plt.plot(rvals, dda, 'k+', label="My old derivative")
-            plt.plot(rvals, dda_sp_r, 'r-', label="Derivative at each point from the spline function")
-            plt.legend()
-            plt.show()
-
-            #plt.plot(int1_dda3, 'ko')
-            #plt.show()
-
-            #plt.plot(dda3 - int1_dda3, 'ko')
-            #plt.ylabel("My derivative - Ben's derivative")
-            #plt.xlabel("Radius")
-            #plt.show()
-
-            print(int1_dda3, 'hi')
-            #ddar = interpolate.interp1d(rvals, dda3, kind='quadratic', fill_value='extrapolate')
-            #ddarr = ddar(R)
-            #ddarr[np.abs(ddarr) >= 5e3] = 0.
-            #plt.imshow(ddarr, origin='lower')
-            #plt.colorbar()
-            #plt.show()
-            # Calculate the second (outer) integral (eqn 2.157 Binney & Tremaine)
-            # int2_r2 = np.zeros(shape=len(avals))
-            int2_r3 = np.zeros(shape=len(avals))
-            for i in range(1, len(rvals) - 1):  # only go to len(avals)-1 (in IDL: -2) bc index rvals[i+1]
-                # int2_r2[i] = np.sum(avals[0:i] * int1_dda2[0:i] / np.sqrt(rvals[i+1]**2 - avals[0:i]**2) * del_r)
-                int2_r3[i] = np.sum(avals[0:i] * int1_dda3[0:i] / np.sqrt(rvals[i+1]**2 - avals[0:i]**2) * del_r)
-
-            print(int2_r3, 'int2')
-            # print(oop)
-
-            int22 = interpolate.interp1d(rvals, int2_r3, kind='quadratic', fill_value='extrapolate')
-            int22r = int22(R)
-            #plt.imshow(int22r, origin='lower')
-            #plt.colorbar()
-            #plt.show()
-            plt.plot(rvals, np.sqrt(-4 * self.G_pc * int2_r3), 'bo', markerfacecolor='none', label="Ben's vcirc,gas")
-            plt.plot(rvals, np.sqrt(-4 * self.G_pc * int2_before), 'k+', label="My old vcirc,gas")
-            plt.plot(rvals, np.sqrt(-4 * self.G_pc * int2), 'r-', label="vcirc,gas based on the spline function")
-            plt.legend()
-            plt.show()
-
-            plt.plot(rvals, int2_r3, 'bo', markerfacecolor='none', label="Ben's outer integral")
-            plt.plot(rvals, int2_before, 'k+', label="My old outer integral")
-            plt.plot(rvals, int2, 'r-', label="My outer integral based on the spline function")
-            plt.legend()
-            plt.show()
-
-            plt.plot(rvals, np.sqrt(-4 * self.G_pc * int2_r3), 'bo', markerfacecolor='none', label="Ben's vcirc,gas")
-            plt.plot(rvals, np.sqrt(-4 * self.G_pc * int2_before), 'k+', label="My old vcirc,gas")
-            plt.plot(rvals, np.sqrt(-4 * self.G_pc * int2), 'r-', label="vcirc,gas based on the spline function")
-            plt.legend()
-            plt.show()
-
-            # Numerical v_cg solution assuming an exponential mass distribution (vc2) & one following the CO sb (vc3)
-            # vc2 = np.sqrt(np.abs(-4 * self.G_pc * int2_r2))
-            #vc3 = np.sqrt(np.abs(-4 * self.G_pc * int2_r3))
-            print(np.amax(int2_r3), np.amin(int2_r3))
-            vc3 = np.sqrt(-4 * self.G_pc * int2_r3)
-            print(np.amax(vc3), np.amin(vc3))
-            #print(oop)
-            #vc3 = np.nan_to_num(vc3)
-
-            # INTERPOLATE/EXTRAPOLATE FROM velocity(rvals) TO velcoity(R)
-            # vc2_r = interpolate.interp1d(rvals, vc2, kind='zero', fill_value='extrapolate')
-            vc3_r = interpolate.interp1d(rvals, vc3, kind='quadratic', fill_value='extrapolate')
-
-            # Note that since potentials are additive, sum up the velocity contributions in quadrature:
-            # vg = vc2_r(R)
-            # vg = vc3_r(R)
-            alpha = abs(np.arctan(y_disk / (np.cos(self.inc) * x_disk)))  # measure alpha from +x (minor ax) to +y (maj ax)
-            sign = x_disk / abs(x_disk)  # (+x now back to redshifted side, so don't need extra minus sign back in front!)
-            vg = sign * abs(vcgr * np.cos(alpha) * np.sin(self.inc))  # v_los > 0 -> redshift; v_los < 0 -> blueshift
-            plt.imshow(vg, origin='lower', extent=[x_obs[0], x_obs[-1], y_obs[0], y_obs[-1]], cmap='RdBu_r')
-            cbar = plt.colorbar()
-            cbar.set_label(r'km/s')
-            plt.xlabel(r'x\_obs [pc]')
-            plt.ylabel(r'y\_obs [pc]')
-            plt.show()
-            print(oop)
+            # alpha = abs(np.arctan(y_disk / (np.cos(self.inc) * x_disk)))  # measured from +x (minor ax) to +y (maj ax)
+            # sign = x_disk / abs(x_disk)  # +x is the redshifted side
+            # vg = sign * abs(vg * np.cos(alpha) * np.sin(self.inc))  # v_los > 0 -> redshift; v_los < 0 -> blueshift
             if not self.quiet:
                 print(time.time() - t_gas, ' seconds spent in gas calculation')
+            print(oop)
 
         if self.menc_type == 0:  # if calculating v(R) due to stars directly from MGE parameters
             if not self.quiet:
