@@ -648,7 +648,7 @@ class ModelGrid:
             # CASE (3)
             # Interpolate CO surface brightness vs elliptical mean radii, to construct Sigma(rvals).
             # Units [Jy km/s/beam] * [Msol/(Jy km/s)] / [pc^2/beam] = [Msol/pc^2]
-            sigr3_func_r = interpolate.interp1d(co_annuli_radii, co_annuli_sb, kind='zero', fill_value='extrapolate')
+            sigr3_func_r = interpolate.interp1d(co_annuli_radii, co_annuli_sb, kind='quadratic', fill_value='extrapolate')
             sigr3 = sigr3_func_r(rvals) * np.cos(self.inc) * msol_per_jykms / pc2_per_beam  # Msol pc^-2
             #plt.plot(co_ell_rad, co_ell_sb * np.cos(self.inc) * msol_per_jykms / pc2_per_beam, 'ro',
             #         label='CO flux map')
