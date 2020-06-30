@@ -1697,14 +1697,14 @@ if __name__ == "__main__":
     mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1)
     mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=2)
     mg.line_profiles(7, 5)  # decent blue
-    mg.line_profiles(4, 6)  # blue orig (not great)
-    mg.line_profiles(6, 6)  # blue okay? (meh)
-    mg.line_profiles(10, 9)  # near ctr orig (meh)
+    #mg.line_profiles(4, 6)  # blue orig (not great)
+    #mg.line_profiles(6, 6)  # blue okay? (meh)
+    #mg.line_profiles(10, 9)  # near ctr orig (meh)
     mg.line_profiles(14, 8)  # decent red
-    mg.line_profiles(14, 9)  # good red
+    #mg.line_profiles(14, 9)  # good red
     mg.line_profiles(14, 10)  # decent red
-    mg.line_profiles(15, 9)  # good red
-    mg.line_profiles(15, 10)  # decent red
+    #mg.line_profiles(15, 9)  # good red
+    #mg.line_profiles(15, 10)  # decent red
 
     '''  #
     mg.line_profiles(8, 8)
