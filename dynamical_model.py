@@ -3,7 +3,6 @@ import astropy.io.fits as fits
 import matplotlib.pyplot as plt
 from matplotlib import rc
 from matplotlib import patches
-from mpl_toolkits.axes_grid1 import AxesGrid
 from scipy import integrate, signal, interpolate, misc
 from scipy.ndimage import filters, interpolation
 import time
@@ -77,9 +76,9 @@ def par_dicts(parfile, q=False):
                         params[cols[1]] = cols[2]
 
     if q:
-        import sys
-        sys.path.insert(0, '/Users/jonathancohn/Documents/jam/')  # lets me import file from different folder/path
-        import mge_vcirc_mine as mvm
+        # import sys
+        # sys.path.insert(0, '/Users/jonathancohn/Documents/jam/')  # lets me import file from different folder/path
+        # import mge_vcirc_mine as mvm
         comp, surf_pots, sigma_pots, qobs = mvm.load_mge(params['mass'])
 
         return params, priors, nfree, qobs
@@ -166,30 +165,11 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
     hdu.close()
 
     # ESTIMATE NOISE (RMS) IN ORIGINAL DATA CUBE [z, y, x]
-    #print(input_data.shape)
-    #fig, ax = plt.subplots(1)
-    #ax.imshow(fluxes, origin='lower')
-    #rect = patches.Rectangle((xyerr[0], xyerr[2]), xyerr[1] - xyerr[0], xyerr[3] - xyerr[2], linewidth=2, edgecolor='w',
-    #                         facecolor='none')
-    #ax.add_patch(rect)
-    #plt.show()
-    #print(oop)
     noise_4 = rebin(input_data, ds)  # rebin the noise to the pixel scale on which chi^2 will be calculated
     noise = []  # For large N, Variance ~= std^2
-    for z in range(zrange[0], zrange[1]):  # for each relevant freq slice
-        # noise.append(np.std(noise_4[z, xyerr[2]:xyerr[3], xyerr[0]:xyerr[1]]))  # ~variance
+    for z in range(zrange[0], zrange[1]):  # for each relevant freq slice, calculte std (aka rms) ~variance
         noise.append(np.std(noise_4[z, int(xyerr[2]/ds):int(xyerr[3]/ds), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
 
-    #print(noise)
-    #print(oop)
-    #plt.plot(freq_ax[zrange[0]:zrange[1]] / 1e9, noise, 'k+')#, label='How my code is currently set up')
-    #plt.xlabel('GHz')
-    #plt.ylabel('std [Jy/beam]')
-    #plt.legend()
-    #plt.show()
-    #print(oop)
-
-    # CALCULATE FLUX MAP FOR GAS MASS ESTIMATE
     # CALCULATE VELOCITY WIDTH  # vsys = 6454.9 estimated based on various test runs; see Week of 2020-05-04 on wiki
     v_width = 2.99792458e5 * (1 + (6454.9 / 2.99792458e5)) * fstep / f_0  # velocity width [km/s] = c*(1+v/c)*fstep/f0
 
@@ -471,7 +451,7 @@ class ModelGrid:
         self.kappa = kappa  # optional radial inflow term; tie inflow to the overall line-of-sight velocity [unitless]
         self.omega = omega  # optional velocity coefficient, used with kappa for radial inflow [unitless]
         self.vtype = vtype  # 'vrad', 'kappa', 'omega', any other value for original (no radial velocity component)
-        self.dist = dist / (1 + self.z_fixed) ** 2  # distance to the galaxy [Mpc]
+        self.dist = dist  # angular diameter distance to the galaxy [Mpc]
         self.pc_per_ac = self.dist * 1e6 / self.arcsec_per_rad  # small angle formula (convert dist to pc, from Mpc)
         self.pc_per_pix = self.dist * 1e6 / self.arcsec_per_rad * self.resolution  # small angle formula, as above
         self.pc_per_sp = self.pc_per_pix / self.os  # pc per subpixel (over-sampling pc pixel scale)
@@ -624,7 +604,7 @@ class ModelGrid:
         # CALCULATE KEPLERIAN VELOCITY DUE TO ENCLOSED STELLAR MASS
         vg = 0  # default to ignoring the gas mass!
         if self.incl_gas:  # If incl_mass, overwrite vg with v_circ,gas estimate, then add it in quadrature to velocity!
-            t_gas = time.time()  # Only adds ~0.015 seconds! DEPENDS ON len(rvals); using R, takes ~300s
+            t_gas = time.time()  # Adds ~5s for nr=200, ~13s for nr=500
             # pix per beam = 2pi sigx sigy [pix^2]
             pix_per_beam = 2. * np.pi * (0.197045 / self.resolution / 2.35482) * (0.103544 / self.resolution / 2.35482)
             pc2_per_beam = pix_per_beam * self.pc_per_pix**2  # pc^2 per beam = pix/beam * pc^2/pix
@@ -692,7 +672,6 @@ class ModelGrid:
             # vg = sign * abs(vg * np.cos(alpha) * np.sin(self.inc))  # v_los > 0 -> redshift; v_los < 0 -> blueshift
             if not self.quiet:
                 print(time.time() - t_gas, ' seconds spent in gas calculation')
-            print(oop)
 
         if self.menc_type == 0:  # if calculating v(R) due to stars directly from MGE parameters
             if not self.quiet:
@@ -824,23 +803,11 @@ class ModelGrid:
         #                          self.xyrange[0]:self.xyrange[1]] * ell_mask  # mask the input data cube
 
         # REBIN THE ELLIPSE MASK BY THE DOWN-SAMPLING FACTOR
-        #fig = plt.figure(figsize=(12,8))
-        #plt.imshow(self.ell_mask, origin='lower')
-        #plt.colorbar()
-        #plt.show()
         self.ell_ds = rebin(self.ell_mask, self.ds)[0]  # rebin the mask by the down-sampling factor
-        #fig = plt.figure(figsize=(12,8))
-        #plt.imshow(self.ell_ds, origin='lower')
-        #plt.colorbar()
-        #plt.show()
         #self.ell_ds[self.ell_ds < 0.5] = 0.  # if averaging instead of summing
         self.ell_ds[self.ell_ds < self.ds**2 / 2.] = 0.  # set all pix < 50% "inside" the ellipse to be outside -> mask
         self.ell_ds = np.nan_to_num(self.ell_ds / np.abs(self.ell_ds))  # set all points in ellipse = 1, convert nan->0
-        #fig = plt.figure(figsize=(12,8))
-        #plt.imshow(self.ell_ds, origin='lower')
-        #plt.colorbar()
-        #plt.show()
-        #print(oop)
+
         # REBIN THE DATA AND MODEL BY THE DOWN-SAMPLING FACTOR: compare data and model in binned groups of dsxds pix
         data_ds = rebin(self.clipped_data, self.ds)
         ap_ds = rebin(self.convolved_cube, self.ds)
@@ -894,7 +861,6 @@ class ModelGrid:
         for zi in range(len(data_ds)):
             collapse_flux_v += data_ds[zi] * mask_ds[zi] * v_width
             # self.clipped_data[zi] * data_mask[zi, self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]]* v_width
-        # fluxes_ds = rebin(collapse_flux_v, self.ds)[0]
         #plt.imshow(collapse_flux_v, origin='lower')
         #cbar = plt.colorbar()
         #cbar.set_label(r'Jy km s$^{-1}$ beam$^{-1}$', rotation=270, labelpad=20.)
@@ -913,14 +879,10 @@ class ModelGrid:
             vel_ax = []
             for v in range(len(self.freq_ax)):
                 vel_ax.append(self.c_kms * (1. - (self.freq_ax[v] / self.f_0) * (1 + self.zred)))
-            # ['#377eb8', '#ff7f00', '#4daf4a', '#f781bf', '#a65628', '#984ea3', '#999999', '#e41a1c', '#dede00']
-            # [pale blue, orange red,  green,   pale pink, red brown,  lavender, pale gray,    red, yellow green]
             plt.errorbar(vel_ax, data_ds[:, iy, ix], yerr=self.noise, color='k', marker='+', label=r'Data')
             plt.bar(vel_ax, data_ds[:, iy, ix], width=vel_ax[1] - vel_ax[0], color='k', alpha=0.4)
             plt.plot(vel_ax, ap_ds[:, iy, ix], color='r', marker='+', ls='none', label=r'Model')  # 'r+'
             plt.bar(vel_ax, ap_ds[:, iy, ix], width=vel_ax[1] - vel_ax[0], color='r', alpha=0.5)
-            #plt.plot(vel_ax, self.noise, 'k--', label=r'Noise (std)')
-            #plt.bar(vel_ax, self.noise, 'k--', label=r'Noise (std)')
             plt.axvline(x=0., color='k', ls='--', label=r'v$_{\text{sys}}$')
             plt.xlabel(r'Line-of-sight velocity [km/s]')
         plt.legend()
@@ -1050,15 +1012,6 @@ class ModelGrid:
         for zi in range(len(self.convolved_cube)):
             model_masked_m0 += self.convolved_cube[zi] * abs(velwidth) * clipped_mask[zi]
 
-        '''
-        fig = plt.figure()
-        grid = AxesGrid(fig, 111,
-                        nrows_ncols=(3, 1),
-                        axes_pad=0.01,
-                        cbar_mode='single',
-                        cbar_location='right',
-                        cbar_pad=0.1)
-        '''
         fig, ax = plt.subplots(3, 1)
         plt.subplots_adjust(hspace=0.02)
 
@@ -1181,16 +1134,6 @@ class ModelGrid:
             d2_num[d2_num < 0] = 0.  # BUCKET ADDING TO GET RID OF NANs
             d2 = np.sqrt(d2_num / d2_den) # * d1  # BUCKET: no need for MASKING using d1?
 
-            '''
-            fig = plt.figure()
-            grid = AxesGrid(fig, 111,
-                            nrows_ncols=(3, 1),
-                            axes_pad=0.01,
-                            cbar_mode='single',
-                            cbar_location='right',
-                            cbar_pad=0.1)
-            i = 0
-            '''
             fig, ax = plt.subplots(3, 1)
             plt.subplots_adjust(hspace=0.02)
 
@@ -1252,16 +1195,6 @@ class ModelGrid:
             plt.show()
 
         elif mom == 1:
-            '''
-            fig = plt.figure()
-            grid = AxesGrid(fig, 111,
-                            nrows_ncols=(1, 3),
-                            axes_pad=0.01,
-                            cbar_mode='single',
-                            cbar_location='right',
-                            cbar_pad=0.1)
-            i = 0
-            '''
             fig, ax = plt.subplots(3, 1)
             plt.subplots_adjust(hspace=0.02)
 
