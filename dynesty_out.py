@@ -285,130 +285,7 @@ def my_own_thing(results, par_labels, ax_labels, quantiles, ax_lims=None, compar
 direc = '/Users/jonathancohn/Documents/dyn_mod/nest_out/'
 grp = '/Users/jonathancohn/Documents/dyn_mod/groupmtg/'
 inpf = None
-# OLDER
-#out_name = direc + 'dyndyncluster_test_n8_1568739677.2582278_tempsave.pkl'  # 'dynesty_demo_output.pkl'
-#out_name = direc + 'dyndyncluster_test_n8_1568739677.1305604_tempsave.pkl'
-#out_name = direc + 'dyndyn2_test_n8_1568739677.1305604_tempsave.pkl'
 
-# WORKED
-# out_name = direc + 'dyndyncluster_test_n8_1568739677.2582278_tempsave.pkl'  # 2698 old prior
-# out_name = direc + 'dyndyn3258_test_n8_dlogz1.5_1569249221.642805_tempsave.pkl'  # 3258 old TINY prior
-# thing = 'dyndyn3258_test_n8_dlogz1.5_1569249222.4063346_tempsave.pkl'  # 3258 old TINY prior (same as above)
-# out_name = direc + 'dyndyn3258_test_n8_dlogz15_1569434823.359717_tempsave.pkl'  # 3258 old TINY prior
-# out_name = direc + 'dyndyn3258_newpri_test_n8_dlogz1.5_1569620562.4751067_tempsave.pkl'  # 3258 newprior TYPO (PRIOR for f was BAD 0.5<f<0.65) (AHA!)
-# out_name = direc + 'dyndyn3258_newpri_test_n8_dlogz1.5_1569620562.355544_tempsave.pkl'  # 3258 newprior TYPO same as above!
-# out_name = direc + 'dyndyn_newpri_test_n8_1569798600.5749478_end.pkl' # 2698 newprior GOOD (altho typo 1e8<mbh<1e18)
-# out_name = direc + 'dyndyn_newpri_test_n8_1569620951.5581834_tempsave.pkl' # 2698 newprior GOOD (same as above)
-# out_name = direc + 'dyndyn105newpri_test_n8_1569855263.300289_tempsave.pkl'  # 2698 newprior 4x8(?) REALLY BAD WHY
-# out_name = direc + 'dyndyn3258_test_n8_dlogz1.5_1570221683.4872622_tempsave.pkl'  # 3258 old-prior style good
-# out_name = direc + 'dyndyn3258_newpri_test_n8_dlogz1.5_1570464872.8310175_tempsave.pkl'  # 3258 newprior BAD WHY
-# out_name = direc + 'dyndyn105newpri_test_n8_1570545604.3403502_tempsave.pkl'  # 2698 newprior 4x8(?) REALLY BAD WHY
-# out_name = direc + 'dyndyn105newpri_test_n8_ds3_1570633918.9553041_tempsave.pkl'  # 2698 neworior 3x6 REALLY BAD WHY
-# out_name = direc + 'dyndyn105newpri_test_n8_1570545604.3403502_tempsave.pkl'  # 2698 neworior 4x8 REALLY BAD WHY
-# out_name = direc + 'dyndyn3258_newpri_2_test_n8_dlogz0.15_1570807500.0458014_tempsave.pkl'  # 3258 newprior 2 REALLY BAD STILL WHYYYY (BECAUSE MAXCALL IS REACHED!!!)
-# out_name = direc + 'dyndyn3258_narrowpri_n8_dlogz1.5_1571063422.9054961_tempsave.pkl'  # 3258 narrow priors, yep still works
-# thing = 'dyndyn105newpri_2_maxcmil_n8_ds3_1571235624.2196844_tempsave.pkl'  # 2698 105newpri2 3x6 BAD PA NOT IN RADS
-# thing = 'dyndyn105newpri_2_maxcmil_n8_ds3_1571410705.2218955_end.pkl'  # 2698 105newpri2 3x6 end BAD PA NOT IN RADS
-# thing = 'dyndyn105newpri_3_maxcmil_n8_ds3_1571323790.6415393_tempsave.pkl'  # 2698 105newpri3 3x6 (fine)
-# thing = 'dyndyn105newpri_3_maxcmil_n8_ds3_1571374539.7854428_end.pkl'  # 2698 105newpri3 3x6 (fine)
-# thing = 'dyndyn105newpri_maxcmil_n8_ds3_1571092540.929372_tempsave.pkl'  # 2698 105newpri 3x6 VERY BAD (must've hit mil)
-# thing = 'dyndyn105newpri_maxcmil_n8_ds4_1571092684.7476249_tempsave.pkl'  # 2698 105newpri 4x8 VERY BAD (must've hit mil)
-# thing = 'dyndyn_newpri_2_n8_1571236232.359415_tempsave.pkl'  # 2698 newpri2 BAD because hit mil (getting closer tho)
-# thing = 'dyndyn_newpri_2_maxc10mil_n8_1571596549.628827_tempsave.pkl'  # 2698 newpri2 BAD because PA NOT IN RADS
-# thing = 'dyndyn_newpri_2_maxc10mil_n8_1571981879.8668501_end.pkl'  # 2698 newpri2 BAD because PA NOT IN RADS
-# thing = 'dyndyn_newpri_3_maxc10mil_n8_0.02_1572037132.3993847_tempsave.pkl'  # 2698 newpri3 GOOD PA CORRECTED!
-# thing = 'dyndyn3258_newpri_5_max10mil_test_n8_dlogz0.15_1572883759.2018988_tempsave.pkl'  # 3258 newpri5 PA GOOD!
-# thing = 'dyndyn3258_newpri_5_max10mil_n8_dlogz0.15_1573010828.1336136_end.pkl'  # 3258 newpri5 PA GOOD end! (same good)
-# thing = 'dyndyn3258_xy_max10mil_n8_dlogz0.15_1574217317.0507047_end.pkl'  # 3258 xy free, else fixed
-# NEW MASKS BELOW
-# RHE 2
-# thing = 'dyndyn_newpri_3_maxc10mil_n8_mask2rhe_1586505950.4425063_end.pkl'  # 2698 mask2 rhe (sig0 prior now too low)
-# thing = 'dyndyn_newpri_3_maxc10mil_n8_mask2rhe_1586825623.941504_end.pkl'  # 2698 mask2 rhe sig0 extended!
-# name = 'ugc_2698_newmasks/u2698_nest_mask2rhe_sig0extend_3sig.png'
-# cornername = 'ugc_2698_newmasks/u2698_nest_mask2rhe_sig0extend_corner_3sig.png'
-# inpf = 'ugc_2698/ugc_2698_newmask2_rhe_n8.txt'
-# mod = 'rhe baseline'
-# RHE LAX
-# thing = 'dyndyn_newpri_3_maxc10mil_n8_masklaxrhe_1586572307.33264_end.pkl'  # 2698 masklax rhe (bad priors)
-# thing = 'dyndyn_newpri_3_maxc10mil_n8_masklaxrhe_1586800510.8196273_end.pkl'  # 2698 masklax rhe prior extended!
-# name = 'ugc_2698_newmasks/u2698_nest_masklaxrhe_priextend_3sig.png'
-# cornername = 'ugc_2698_newmasks/u2698_nest_masklaxrhe_priextend_corner_3sig.png'
-# inpf = 'ugc_2698/ugc_2698_newmasklax_rhe_n8.txt'
-# mod = 'rhe lax'
-# RHE STRICT
-# thing = 'dyndyn_newpri_3_maxc10mil_n8_maskstrictrhe_1586573455.940675_end.pkl'  # 2698 maskstrict rhe (bad priors)
-# thing = 'dyndyn_newpri_3_maxc10mil_n8_maskstrictrhe_1586801056.355033_end.pkl'  # 2698 maskstrict rhe prior extended!
-# name = 'ugc_2698_newmasks/u2698_u2698_nest_maskstrictrhe_priextend_3sig.png'
-# cornername = 'ugc_2698_newmasks/u2698_nest_maskstrictrhe_priextend_corner_3sig.png'
-# inpf = 'ugc_2698/ugc_2698_newmaskstrict_rhe_n8.txt'
-# mod = 'rhe strict'
-# AKIN 2
-# thing = 'dyndyn_newpri_3_maxc10mil_n8_mask2akin_1586613935.0107005_end.pkl'  # 2698 mask2 akin's mge (bad priors)
-# thing = 'dyndyn_newpri_3_maxc10mil_n8_mask2akin_1586820818.1132705_end.pkl'  # 2698 mask2 akin's mge prior extended!
-# name = 'ugc_2698_newmasks/u2698_nest_mask2akin_priextend_3sig.png'
-# cornername = 'ugc_2698_newmasks/u2698_nest_mask2akin_priextend_corner_3sig.png'
-# inpf = 'ugc_2698/ugc_2698_newmask2_akin_n8.txt'
-# mod = 'akin baseline'
-# AKIN 2
-dictakin2 = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_mask2akin_1586820818.1132705_end.pkl', # 2698 mask2 akin (good priors)
-             'name': 'ugc_2698_newmasks/u2698_nest_mask2akin_priextend_3sig.png',
-             'cornername': 'ugc_2698_newmasks/u2698_nest_mask2akin_priectend_corner_3sig.png',
-             'inpf': 'ugc_2698/ugc_2698_newmask2_akin_n8.txt', 'outpf': 'ugc_2698/ugc_2698_newmask2_akin_n8_out.txt',
-             'mod': 'akin baseline', 'extra_params': None}
-# RRE 2
-dictrre2 = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_mask2rre_1586801196.254912_end.pkl', # 2698 mask2 rre (good priors)
-            'name': 'ugc_2698_newmasks/u2698_nest_mask2rre_3sig.png',
-            'cornername': 'ugc_2698_newmasks/u2698_nest_mask2rre_corner_3sig.png',
-            'inpf': 'ugc_2698/ugc_2698_newmask2_rre_n8.txt', 'outpf': 'ugc_2698/ugc_2698_newmask2_rre_n8_out.txt',
-            'mod': 'rre baseline', 'extra_params': None}
-# RRE LAX
-dictrrelax = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_masklaxrre_1586982579.9110975_end.pkl', # 2698 masklax rre (good priors)
-              'name': 'ugc_2698_newmasks/u2698_nest_masklaxrre_3sig.png',
-              'cornername': 'ugc_2698_newmasks/u2698_nest_masklaxrre_corner_3sig.png',
-              'inpf': 'ugc_2698/ugc_2698_newmasklax_rre_n8.txt', 'outpf': 'ugc_2698/ugc_2698_newmasklax_rre_n8_out.txt',
-              'mod': 'rre lax', 'extra_params': None}
-# RRE STRICT
-dictrrestrict = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_maskstrictrre_1586987192.3806183_end.pkl', # 2698 maskstrict rre (good priors)
-                 'name': 'ugc_2698_newmasks/u2698_nest_maskstrictrre_3sig.png',
-                 'cornername': 'ugc_2698_newmasks/u2698_nest_maskstrictrre_corner_3sig.png',
-                 'inpf': 'ugc_2698/ugc_2698_newmaskstrict_rre_n8.txt',
-                 'outpf': 'ugc_2698/ugc_2698_newmaskstrict_rre_n8_out.txt', 'mod': 'rre strict', 'extra_params': None}
-# AHE 2
-dictahe2 = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_mask2ahe_1586560467.2338874_end.pkl', # 2698 mask2 ahe (good priors)
-            'name': 'ugc_2698_newmasks/u2698_nest_mask2ahe_sig0extend_3sig.png',
-            'cornername': 'ugc_2698_newmasks/u2698_nest_mask2ahe_sig0extend_corner_3sig.png',
-            'inpf': 'ugc_2698/ugc_2698_newmask2_ahe_n8.txt', 'outpf': 'ugc_2698/ugc_2698_newmask2_ahe_n8_out.txt',
-            'mod': 'ahe baseline', 'extra_params': None}
-# AHE LAX
-dictahelax = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_masklaxahe_1586985474.5780168_end.pkl', # 2698 masklax ahe (good priors)
-              'name': 'ugc_2698_newmasks/u2698_nest_masklaxahe_3sig.png',
-              'cornername': 'ugc_2698_newmasks/u2698_nest_masklaxahe_corner_3sig.png',
-              'inpf': 'ugc_2698/ugc_2698_newmasklax_ahe_n8.txt', 'outpf': 'ugc_2698/ugc_2698_newmasklax_ahe_n8_out.txt',
-              'mod': 'ahe lax', 'extra_params': None}
-# AHE STRICT
-dictahestrict = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_maskstrictahe_1586987362.5191674_end.pkl', # 2698 maskstrict ahe (good priors)
-                 'name': 'ugc_2698_newmasks/u2698_nest_maskstrictahe_3sig.png',
-                 'cornername': 'ugc_2698_newmasks/u2698_nest_maskstrictahe_corner_3sig.png',
-                 'inpf': 'ugc_2698/ugc_2698_newmaskstrict_ahe_n8.txt',
-                 'outpf': 'ugc_2698/ugc_2698_newmaskstrict_ahe_n8_out.txt', 'mod': 'ahe strict', 'extra_params': None}
-# RHE 2
-dictrhe2 = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_mask2rhe_1586825623.941504_end.pkl', # 2698 mask2 rhe (good priors)
-            'name': 'ugc_2698_newmasks/u2698_nest_mask2rhe_sig0extend_3sig.png',
-            'cornername': 'ugc_2698_newmasks/u2698_nest_mask2rhe_sig0extend_corner_3sig.png',
-            'inpf': 'ugc_2698/ugc_2698_newmask2_rhe_n8.txt', 'outpf': 'ugc_2698/ugc_2698_newmask2_rhe_n8_out.txt',
-            'mod': 'rhe baseline', 'extra_params': None}
-# RHE LAX
-dictrhelax = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_masklaxrhe_1586800510.8196273_end.pkl', # 2698 masklax rhe (good priors)
-              'name': 'ugc_2698_newmasks/u2698_nest_masklaxrhe_priextend_3sig.png',
-              'cornername': 'ugc_2698_newmasks/u2698_nest_masklaxrhe_priextend_corner_3sig.png',
-              'inpf': 'ugc_2698/ugc_2698_newmasklax_rhe_n8.txt', 'outpf': 'ugc_2698/ugc_2698_newmasklax_rhe_n8_out.txt',
-              'mod': 'rhe lax', 'extra_params': None}
-# RHE STRICT
-dictrhestrict = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_maskstrictrhe_1586801056.355033_end.pkl', # 2698 maskstrict rhe (good priors)
-                 'name': 'ugc_2698_newmasks/u2698_nest_maskstrictrhe_priextend_3sig.png',
-                 'cornername': 'ugc_2698_newmasks/u2698_nest_maskstrictrhe_priextend_corner_3sig.png',
-                 'inpf': 'ugc_2698/ugc_2698_newmaskstrict_rhe_n8.txt',
-                 'outpf': 'ugc_2698/ugc_2698_newmaskstrict_rhe_n8_out.txt', 'mod': 'rhe strict', 'extra_params': None}
 
 # RHE 2 VRAD
 dictrhe2vrad = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_mask2rhevrad_1587724128.296138_end.pkl',  # 2698 mask2 rhe, vrad
@@ -501,106 +378,101 @@ dictrhe2dlz0001 = {'pkl': 'u2698_dlz0001_baseline_rhe_orig_nog_10000000_8_0.001_
                    'outpf': 'ugc_2698/ugc_2698_dlz0001_baseline_rhe_orig_nog_out.txt',
                    'mod': 'rhe baseline dlz0001', 'extra_params': None}  # Runtime: 4.45 hours (128087.74 sec)
 
-# RHE BASELINE Beam15, DIST85
-dictrhe2gs5 = {'pkl': 'u2698_gs5_d85_baseline_rhe_orig_nog_10000000_8_0.02_1590624161.6140797_end.pkl', # 2698 mask2 rhe gs5 d85
-               'name': 'ugc_2698_newmasks/u2698_nest_gs5_d85_baseline_rhe_orig_nog_3sig.png',
-               'cornername': 'ugc_2698_newmasks/u2698_nest_gs5_d85_baseline_rhe_orig_nog_corner_3sig.png',
-               'inpf': 'ugc_2698/ugc_2698_gs5_d85_baseline_rhe_orig_nog.txt',
-               'outpf': 'ugc_2698/ugc_2698_gs5_d85_baseline_rhe_orig_nog_out.txt',
-               'mod': 'rhe baseline nog gs5 d85', 'extra_params': None}  # Runtime: 5.48489583 hours (157965.00 sec)
+# RHE BASELINE Beam5, exv
+dictgs5exv = {'pkl': 'u2698_gs5exv_d91_baseline_rhe_orig_nog_10000000_8_0.02_1593210256.584204_end.pkl',
+              'name': 'ugc_2698_newmasks/u2698_nest_gs5exv_d91_baseline_rhe_orig_nog_3sig.png',
+              'cornername': 'ugc_2698_newmasks/u2698_nest_gs5exv_d91_baseline_rhe_orig_nog_corner_3sig.png',
+              'inpf': 'ugc_2698/ugc_2698_gs5exv_d91_baseline_rhe_orig_nog.txt',
+              'outpf': 'ugc_2698/ugc_2698_gs5exv_d91_baseline_rhe_orig_nog_out.txt',
+              'mod': 'rhe baseline (gs5 exv)', 'extra_params': None}
 
-# RHE BASELINE Beam15, DIST85
-dictrhe2gs15 = {'pkl': 'u2698_gs15_d85_baseline_rhe_orig_nog_10000000_8_0.02_1590439381.911974_end.pkl', # 2698 mask2 rhe gs15 d85
-                'name': 'ugc_2698_newmasks/u2698_nest_gs15_d85_baseline_rhe_orig_nog_3sig.png',
-                'cornername': 'ugc_2698_newmasks/u2698_nest_gs15_d85_baseline_rhe_orig_nog_corner_3sig.png',
-                'inpf': 'ugc_2698/ugc_2698_gs15_d85_baseline_rhe_orig_nog.txt',
-                'outpf': 'ugc_2698/ugc_2698_gs15_d85_baseline_rhe_orig_nog_out.txt',
-                'mod': 'rhe baseline nog gs15 d85', 'extra_params': None}  # Runtime: 3.52119931 hours (101410.54 sec)
+# RHE BASELINE Beam15, exv
+dictgs15exv = {'pkl': 'u2698_gs15exv_d91_baseline_rhe_orig_nog_10000000_8_0.02_1593203819.1309927_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_gs15exv_d91_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_gs15exv_d91_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_gs15exv_d91_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_gs15exv_d91_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline (gs15 exv)', 'extra_params': None}
 
-# RHE BASELINE Beam71, DIST85
-dictrhe2gs71 = {'pkl': 'u2698_gs71_d85_baseline_rhe_orig_nog_10000000_8_0.02_1590463525.87706_end.pkl', # 2698 mask2 rhe gs71 d85
-                'name': 'ugc_2698_newmasks/u2698_nest_gs71_d85_baseline_rhe_orig_nog_3sig.png',
-                'cornername': 'ugc_2698_newmasks/u2698_nest_gs71_d85_baseline_rhe_orig_nog_corner_3sig.png',
-                'inpf': 'ugc_2698/ugc_2698_gs71_d85_baseline_rhe_orig_nog.txt',
-                'outpf': 'ugc_2698/ugc_2698_gs71_d85_baseline_rhe_orig_nog_out.txt',
-                'mod': 'rhe baseline nog gs71 d85', 'extra_params': None}  # Runtime: 9.84351667 hours (283493.28 sec)
+# RHE BASELINE Beam71, exv
+dictgs71exv = {'pkl': 'u2698_gs71exv_d91_baseline_rhe_orig_nog_10000000_8_0.02_1593241440.3739042_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_gs71exv_d91_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_gs71exv_d91_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_gs71exv_d91_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_gs71exv_d91_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline (gs71 exv)', 'extra_params': None}
 
-# RHE BASELINE os2, d91 // Runtime: 3.86155764 hours (111212.86 s), 99910 total calls, 32514 in initial stage
-dictrhe2os2 = {'pkl': 'u2698_os2_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590693577.7494018_end.pkl',
-               'name': 'ugc_2698_newmasks/u2698_nest_os2_d91_baseline_rhe_orig_nog_3sig.png',
-               'cornername': 'ugc_2698_newmasks/u2698_nest_os2_d91_baseline_rhe_orig_nog_corner_3sig.png',
-               'inpf': 'ugc_2698/ugc_2698_os2_d91_baseline_rhe_orig_nog.txt',
-               'outpf': 'ugc_2698/ugc_2698_os2_d91_baseline_rhe_orig_nog_out.txt',
-               'mod': 'rhe baseline (os2, d91)', 'extra_params': None}
+# RHE BASELINE os2, d91 // Runtime:
+dictrhe2os2 = {'pkl': 'u2698_exv_os2_baseline_rhe_orig_nog_10000000_8_0.02_1593211158.390702_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_exv_os2_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_exv_os2_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_exv_os2_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_exv_os2_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline (exv os2)', 'extra_params': None}
 
-# RHE BASELINE os3, d91 // Runtime: 3.53416181 hours (101783.86 s), 83881 total calls, 29171 in initial stage
-dictrhe2os3 = {'pkl': 'u2698_os3_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590692584.260687_end.pkl',
-               'name': 'ugc_2698_newmasks/u2698_nest_os3_d91_baseline_rhe_orig_nog_3sig.png',
-               'cornername': 'ugc_2698_newmasks/u2698_nest_os3_d91_baseline_rhe_orig_nog_corner_3sig.png',
-               'inpf': 'ugc_2698/ugc_2698_os3_d91_baseline_rhe_orig_nog.txt',
-               'outpf': 'ugc_2698/ugc_2698_os3_d91_baseline_rhe_orig_nog_out.txt',
-               'mod': 'rhe baseline (os3, d91)', 'extra_params': None}
+# RHE BASELINE os3, d91 // Runtime:
+dictrhe2os3 = {'pkl': 'u2698_exv_os3_baseline_rhe_orig_nog_10000000_8_0.02_1593216852.5147808_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_exv_os3_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_exv_os3_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_exv_os3_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_exv_os3_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline (exv os3)', 'extra_params': None}
 
-# RHE BASELINE os4, d91 // Runtime: 3.38293333 hours (97428.48 s), 74588 total calls, 28648 in initial stage
-dictrhe2os4 = {'pkl': 'u2698_os4_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590692888.5767071_end.pkl',
-               'name': 'ugc_2698_newmasks/u2698_nest_os4_d91_baseline_rhe_orig_nog_3sig.png',
-               'cornername': 'ugc_2698_newmasks/u2698_nest_os4_d91_baseline_rhe_orig_nog_corner_3sig.png',
-               'inpf': 'ugc_2698/ugc_2698_os4_d91_baseline_rhe_orig_nog.txt',
-               'outpf': 'ugc_2698/ugc_2698_os4_d91_baseline_rhe_orig_nog_out.txt',
-               'mod': 'rhe baseline (os4, d91)', 'extra_params': None}
+# RHE BASELINE os4, d91 // Runtime:
+dictrhe2os4 = {'pkl': 'u2698_exv_os4_baseline_rhe_orig_nog_10000000_8_0.02_1593211776.966962_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_exv_os4_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_exv_os4_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_exv_os4_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_exv_os4_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline (exv os4)', 'extra_params': None}
 
-# RHE BASELINE os6, d91 // Runtime: 4.91630278 hours (141589.52 s), 92306 total calls, 28768 in initial stage
-dictrhe2os6 = {'pkl': 'u2698_os6_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590699379.3008854_end.pkl',
-               'name': 'ugc_2698_newmasks/u2698_nest_os6_d91_baseline_rhe_orig_nog_3sig.png',
-               'cornername': 'ugc_2698_newmasks/u2698_nest_os6_d91_baseline_rhe_orig_nog_corner_3sig.png',
-               'inpf': 'ugc_2698/ugc_2698_os6_d91_baseline_rhe_orig_nog.txt',
-               'outpf': 'ugc_2698/ugc_2698_os6_d91_baseline_rhe_orig_nog_out.txt',
-               'mod': 'rhe baseline (os6, d91)', 'extra_params': None}
-'''
-# Note: pre-batch 
-| rhe baseline (os6, d91) | 1.303 (5990.287) | 9.39 -0.03/+0.04 | 126.90 -0.33/+0.33 | 150.96 -0.28/+0.29 | 17.14 -2.60/+2.84 | 67.67 -0.91/+0.91 | 18.74 -0.82/+0.80 | 6454.76 -2.56/+2.23 | 1.71 -0.05/+0.04 | 1.10 -0.04/+0.05 | 
+# RHE BASELINE os6, d91 // Runtime:
+dictrhe2os6 = {'pkl': 'u2698_exv_os6_baseline_rhe_orig_nog_10000000_8_0.02_1593218525.8919191_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_exv_os6_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_exv_os6_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_exv_os6_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_exv_os6_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline (exv os6)', 'extra_params': None}
 
-'''
+# RHE BASELINE os8, d91 // Runtime:
+dictrhe2os8 = {'pkl': 'u2698_exv_os8_baseline_rhe_orig_nog_10000000_8_0.02_1593227152.5059612_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_exv_os8_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_exv_os8_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_exv_os8_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_exv_os8_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline (exv os8)', 'extra_params': None}
 
-# RHE BASELINE os8, d91 // Runtime: 5.45515556 hours (157108.48 s); 80759 total calls, 28235 in initial stage
-dictrhe2os8 = {'pkl': 'u2698_os8_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590701499.9093819_end.pkl',
-               'name': 'ugc_2698_newmasks/u2698_nest_os8_d91_baseline_rhe_orig_nog_3sig.png',
-               'cornername': 'ugc_2698_newmasks/u2698_nest_os8_d91_baseline_rhe_orig_nog_corner_3sig.png',
-               'inpf': 'ugc_2698/ugc_2698_os8_d91_baseline_rhe_orig_nog.txt',
-               'outpf': 'ugc_2698/ugc_2698_os8_d91_baseline_rhe_orig_nog_out.txt',
-               'mod': 'rhe baseline (os8, d91)', 'extra_params': None}
+# RHE BASELINE os10, d91 // Runtime:
+dictrhe2os10 = {'pkl': 'u2698_exv_os10_baseline_rhe_orig_nog_10000000_8_0.02_1593239740.6758_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_exv_os10_baseline_rhe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_exv_os10_baseline_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_exv_os10_baseline_rhe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_exv_os10_baseline_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline (exv os10)', 'extra_params': None}
 
-# RHE BASELINE os10, d91 // Runtime: 6.35648819 hours (183066.86 s); 74868 total calls; 28623 in initial stage
-dictrhe2os10 = {'pkl': 'u2698_os10_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590705487.6493137_end.pkl',
-                'name': 'ugc_2698_newmasks/u2698_nest_os10_d91_baseline_rhe_orig_nog_3sig.png',
-                'cornername': 'ugc_2698_newmasks/u2698_nest_os10_d91_baseline_rhe_orig_nog_corner_3sig.png',
-                'inpf': 'ugc_2698/ugc_2698_os10_d91_baseline_rhe_orig_nog.txt',
-                'outpf': 'ugc_2698/ugc_2698_os10_d91_baseline_rhe_orig_nog_out.txt',
-                'mod': 'rhe baseline (os10, d91)', 'extra_params': None}
+# RHE BASELINE os12, d91 // Runtime:
+dictrhe2os12 = {'pkl': 'u2698_exv_os12_baseline_rhe_orig_nog_10000000_8_0.02_1593265549.3681285_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_exv_os12_baseline_rhe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_exv_os12_baseline_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_exv_os12_baseline_rhe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_exv_os12_baseline_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline (exv os12)', 'extra_params': None}
 
-# RHE BASELINE os12, d91 // Runtime: 9.00957396 hours (259475.73 s); 81068 total calls; 28501 in initial stage
-dictrhe2os12 = {'pkl': 'u2698_os12_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590715106.442782_end.pkl',
-                'name': 'ugc_2698_newmasks/u2698_nest_os12_d91_baseline_rhe_orig_nog_3sig.png',
-                'cornername': 'ugc_2698_newmasks/u2698_nest_os12_d91_baseline_rhe_orig_nog_corner_3sig.png',
-                'inpf': 'ugc_2698/ugc_2698_os12_d91_baseline_rhe_orig_nog.txt',
-                'outpf': 'ugc_2698/ugc_2698_os12_d91_baseline_rhe_orig_nog_out.txt',
-                'mod': 'rhe baseline (os12, d91)', 'extra_params': None}
+# RHE BASELINE os14, d91 // Runtime:
+dictrhe2os14 = {'pkl': 'u2698_exv_os14_baseline_rhe_orig_nog_10000000_8_0.02_1593261183.7849855_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_exv_os14_baseline_rhe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_exv_os14_baseline_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_exv_os14_baseline_rhe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_exv_os14_baseline_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline (exv os14)', 'extra_params': None}
 
-# RHE BASELINE os14, d91 // Runtime: 12.6801323 hours (365187.81 s); 91474 total calls; 27918 in initial stage
-dictrhe2os14 = {'pkl': 'u2698_os14_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590729076.410538_end.pkl',
-                'name': 'ugc_2698_newmasks/u2698_nest_os14_d91_baseline_rhe_orig_nog_3sig.png',
-                'cornername': 'ugc_2698_newmasks/u2698_nest_os14_d91_baseline_rhe_orig_nog_corner_3sig.png',
-                'inpf': 'ugc_2698/ugc_2698_os14_d91_baseline_rhe_orig_nog.txt',
-                'outpf': 'ugc_2698/ugc_2698_os14_d91_baseline_rhe_orig_nog_out.txt',
-                'mod': 'rhe baseline (os14, d91)', 'extra_params': None}
-
-# RHE BASELINE os16, d91 // Runtime: 13.230291 hours (381032.38 s); 83169 total calls; 28864 in initial stage
-dictrhe2os16 = {'pkl': 'u2698_os16_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590732620.6191862_end.pkl',
-                'name': 'ugc_2698_newmasks/u2698_nest_os16_d91_baseline_rhe_orig_nog_3sig.png',
-                'cornername': 'ugc_2698_newmasks/u2698_nest_os16_d91_baseline_rhe_orig_nog_corner_3sig.png',
-                'inpf': 'ugc_2698/ugc_2698_os16_d91_baseline_rhe_orig_nog.txt',
-                'outpf': 'ugc_2698/ugc_2698_os16_d91_baseline_rhe_orig_nog_out.txt',
-                'mod': 'rhe baseline (os16, d91)', 'extra_params': None}
+# RHE BASELINE os16, d91 // Runtime:
+dictrhe2os16 = {'pkl': 'u2698_exv_os16_baseline_rhe_orig_nog_10000000_8_0.02_1593336953.3834007_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_exv_os16_baseline_rhe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_exv_os16_baseline_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_exv_os16_baseline_rhe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_exv_os16_baseline_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline (exv os16)', 'extra_params': None}
 
 # RHE BASELINE priset2 // Runtime: 5.82 hrs (167512.72 s) (~3.33 hrs initial); 127117 total calls; 39273 initial calls
 dictrhe2set2 = {'pkl': 'u2698_priset2_d91_baseline_rhe_orig_nog_10000000_8_0.02_1591064673.5489726_end.pkl',
@@ -658,21 +530,21 @@ dictakin2set3 = {'pkl': 'u2698_baseline_akin_orig_nog_10000000_8_0.02_1591329308
                  'outpf': 'ugc_2698/ugc_2698_baseline_akin_orig_nog_out.txt',
                  'mod': 'akin baseline (d91)', 'extra_params': None}
 
-# RHE BASELINE RFIT 1.0 // 6.04hrs (174034.81s); 141325 total calls; 45170 initial calls
-dictrhe2rfit1 = {'pkl': 'u2698_rfit10_baseline_rhe_orig_nog_10000000_8_0.02_1591306649.6288242_end.pkl',
-                 'name': 'ugc_2698_newmasks/u2698_nest_rfit10_baseline_rhe_orig_nog_3sig.png',
-                 'cornername': 'ugc_2698_newmasks/u2698_nest_rfit10_baseline_rhe_orig_nog_corner_3sig.png',
-                 'inpf': 'ugc_2698/ugc_2698_rfit10_baseline_rhe_orig_nog.txt',
-                 'outpf': 'ugc_2698/ugc_2698_rfit10_baseline_rhe_orig_nog_out.txt',
-                 'mod': 'rhe baseline rfit10', 'extra_params': None}
+# RHE BASELINE RFIT 1.0 //
+dictrhe2rfit1 = {'pkl': 'u2698_exv_rfit10_baseline_rhe_orig_nog_10000000_8_0.02_1593210731.047426_end.pkl',
+                 'name': 'ugc_2698_newmasks/u2698_nest_exv_rfit10_baseline_rhe_orig_nog_3sig.png',
+                 'cornername': 'ugc_2698_newmasks/u2698_nest_exv_rfit10_baseline_rhe_orig_nog_corner_3sig.png',
+                 'inpf': 'ugc_2698/ugc_2698_exv_rfit10_baseline_rhe_orig_nog.txt',
+                 'outpf': 'ugc_2698/ugc_2698_exv_rfit10_baseline_rhe_orig_nog_out.txt',
+                 'mod': 'exv rfit10', 'extra_params': None}
 
-# RHE BASELINE RFIT 05 // 9.60hrs (276603.16s); 197189 total calls; 51459 initial calls
-dictrhe2rfit05 = {'pkl': 'u2698_rfit05_baseline_rhe_orig_nog_10000000_8_0.02_1591597783.1773756_end.pkl',
-                  'name': 'ugc_2698_newmasks/u2698_nest_rfit05_baseline_rhe_orig_nog_3sig.png',
-                  'cornername': 'ugc_2698_newmasks/u2698_nest_rfit05_baseline_rhe_orig_nog_corner_3sig.png',
-                  'inpf': 'ugc_2698/ugc_2698_rfit05_baseline_rhe_orig_nog.txt',
-                  'outpf': 'ugc_2698/ugc_2698_rfit05_baseline_rhe_orig_nog_out.txt',
-                  'mod': 'rhe baseline rfit05', 'extra_params': None}
+# RHE BASELINE RFIT 05 //
+dictrhe2rfit05 = {'pkl': 'u2698_exv_rfit05_baseline_rhe_orig_nog_10000000_8_0.02_1593224203.9691062_end.pkl',
+                  'name': 'ugc_2698_newmasks/u2698_nest_exv_rfit05_baseline_rhe_orig_nog_3sig.png',
+                  'cornername': 'ugc_2698_newmasks/u2698_nest_exv_rfit05_baseline_rhe_orig_nog_corner_3sig.png',
+                  'inpf': 'ugc_2698/ugc_2698_exv_rfit05_baseline_rhe_orig_nog.txt',
+                  'outpf': 'ugc_2698/ugc_2698_exv_rfit05_baseline_rhe_orig_nog_out.txt',
+                  'mod': 'exv rfit05', 'extra_params': None}
 
 # RHE BASELINE RFIT 03 // original 21019 calls; latest at 281155 calls
 dictrhe2rfit03 = {'pkl': 'u2698_rfit03_baseline_rhe_orig_nog_10000000_8_10.0_1592252035.7531602_tempsave.pkl',
@@ -683,13 +555,13 @@ dictrhe2rfit03 = {'pkl': 'u2698_rfit03_baseline_rhe_orig_nog_10000000_8_10.0_159
                   'mod': 'rhe baseline rfit03', 'extra_params': None}
 # rfit03: 310743 323595 333650
 
-# RHE BASELINE EXPSIG // 37.97hrs (1093493.88s); 848668 total calls; 432880 initial calls
-dictrhe2exp = {'pkl': 'u2698_expsig_baseline_rhe_orig_nog_10000000_8_0.02_1591464018.0182757_end.pkl',
-               'name': 'ugc_2698_newmasks/u2698_nest_expsig_baseline_rhe_orig_nog_3sig.png',
-               'cornername': 'ugc_2698_newmasks/u2698_nest_expsig_baseline_rhe_orig_nog_corner_3sig.png',
-               'inpf': 'ugc_2698/ugc_2698_expsig_baseline_rhe_orig_nog.txt',
-               'outpf': 'ugc_2698/ugc_2698_expsig_baseline_rhe_orig_nog_out.txt',
-               'mod': 'rhe baseline expsig', 'extra_params': [['r0', 'pc'], ['sig1', 'km/s']]}
+# RHE BASELINE EXPSIG //
+dictrhe2exp = {'pkl': 'u2698_exv_expsig_baseline_rhe_orig_nog_10000000_8_0.02_1593413892.3351653_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_exv_expsig_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_exv_expsig_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_exv_expsig_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_exv_expsig_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline (exv expsig)', 'extra_params': [['r0', 'pc'], ['sig1', 'km/s']]}
 
 # RHE BASELINE JUSTEXV // 4.87hrs (140325.02s); 95871 total calls; 43280 initial calls
 dictrhe2jexv = {'pkl': 'u2698_justexv2582_10000000_8_0.02_1592357354.1659029_end.pkl',
@@ -699,8 +571,72 @@ dictrhe2jexv = {'pkl': 'u2698_justexv2582_10000000_8_0.02_1592357354.1659029_end
                 'outpf': 'ugc_2698/ugc_2698_justexv_out.txt',
                 'mod': 'rhe baseline exv', 'extra_params': None}
 
+# RHE BASELINE JUSTEXV2
+dictrhe2exv2 = {'pkl': 'u2698_justexv2285_10000000_8_0.02_1592434117.080876_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_justexv2285_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_justexv2285_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_justexv2.txt',
+                'outpf': 'ugc_2698/ugc_2698_justexv2_out.txt',
+                'mod': 'rhe baseline exv2285', 'extra_params': None}
+
+# RHE BASELINE EXT2582 //
+dictrhe22582 = {'pkl': 'u2698_ext2582_rhe_orig_nog_10000000_8_0.02_1592432286.5908952_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_ext2582_rhe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_ext2582_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_ext2582_rhe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_ext2582_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline ext (25 through 81)', 'extra_params': None}
+
+# RHE BASELINE EXT2285 //
+dictrhe22285 = {'pkl': 'u2698_ext2285_rhe_orig_nog_10000000_8_0.02_1592436678.2997265_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_ext2285_rhe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_ext2285_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_ext2285_rhe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_ext2285_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline ext (22 through 84)', 'extra_params': None}
+
+# RRE BASELINE EXV //
+dictrre2exv = {'pkl': 'u2698_exv_baseline_rre_orig_nog_10000000_8_0.02_1593575192.5770922_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_exv_baseline_rre_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_exv_baseline_rre_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_exv_baseline_rre_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_exv_baseline_rre_orig_nog_out.txt',
+               'mod': 'exv rre', 'extra_params': None}
+
+# AKIN BASELINE EXV //
+dictakin2exv = {'pkl': 'u2698_exv_baseline_akin_orig_nog_10000000_8_0.02_1593581383.7123172_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_exv_baseline_akin_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_exv_baseline_akin_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_exv_baseline_akin_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_exv_baseline_akin_orig_nog_out.txt',
+                'mod': 'exv akin', 'extra_params': None}
+
+# AHE BASELINE EXV //
+dictahe2exv = {'pkl': 'u2698_exv_baseline_ahe_orig_nog_10000000_8_0.02_1593556493.7369697_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_exv_baseline_ahe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_exv_baseline_ahe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_exv_baseline_ahe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_exv_baseline_ahe_orig_nog_out.txt',
+               'mod': 'exv ahe', 'extra_params': None}
+
+# EXV NOBH //
+dictnobhexv = {'pkl': 'u2698_exv_nobh_baseline_rhe_orig_nog_10000000_8_0.02_1593543099.0485752_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_exv_nobh_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_exv_nobh_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_exv_nobh_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_exv_nobh_baseline_rhe_orig_nog_out.txt',
+               'mod': 'exv nobh', 'extra_params': None}
+
+# EXV d89 //
+dictd89exv = {'pkl': 'u2698_exv_d89_baseline_rhe_orig_nog_10000000_8_0.02_1593558519.453994_end.pkl',
+              'name': 'ugc_2698_newmasks/u2698_nest_exv_d89_baseline_rhe_orig_nog_3sig.png',
+              'cornername': 'ugc_2698_newmasks/u2698_nest_exv_d89_baseline_rhe_orig_nog_corner_3sig.png',
+              'inpf': 'ugc_2698/ugc_2698_exv_d89_baseline_rhe_orig_nog.txt',
+              'outpf': 'ugc_2698/ugc_2698_exv_d89_baseline_rhe_orig_nog_out.txt',
+              'mod': 'exv d89', 'extra_params': None}
+
 # CHOOSE DICTIONARY, DEFINE LABELS
-dict = dictrhe2jexv
+dict = dictgs71exv
 if 'nobh' in dict['pkl']:
     labels = np.array(['xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])
     ax_lab = np.array(['pixels', 'pixels', 'km/s', 'deg', 'deg', 'km/s', r'M$_{\odot}$/L$_{\odot}$', 'unitless'])
@@ -721,17 +657,6 @@ if dict['extra_params'] is not None:
 print(labels)
 
 '''  #
-<details><summary>rfit = 0.3 arcsec</summary>
-
-* First I show the ellipse with rfit = 0.3 arcsec (using a PA = 19 deg, q = 0.38). Then I show the normal posterior plots.
-
-   ![ellipse](https://github.tamu.edu/joncohn/gas-dynamical-modeling/blob/master/2020-06-01/ellipse_0.38_19_0.3.png)
-
-   ![1D posteriors](https://github.tamu.edu/joncohn/gas-dynamical-modeling/blob/master/2020-06-01/u2698_nest_rfit03_baseline_rhe_orig_nog_3sig.png)
-
-   ![corner plot](https://github.tamu.edu/joncohn/gas-dynamical-modeling/blob/master/2020-06-01/u2698_nest_rfit03_baseline_rhe_orig_nog_corner_3sig.png)
-
-</details>
 
 # ONLY table_it *AFTER* OUT FILE CREATED
 hd, hl, li, tx = table_it([direc + dict['pkl']], [dict['outpf']], [dict['mod']], tablabs, sig=1)
@@ -762,7 +687,6 @@ print(oop)
 # '''  #
 
 out_name = direc + dict['pkl']
-
 
 # https://stackoverflow.com/questions/2121874/python-pickling-after-changing-a-modules-directory
 with open(out_name, 'rb') as pk:
@@ -1133,4 +1057,120 @@ print(oop)
     cube[8] = cube[8] * 1.5 + 0.5  # f: uniform prior 0.5:2
 # relative time taken: nc 115840 niter 18389
 # CPU time: 365789.09s (12 hours/8 CPUs)
+'''
+
+'''
+# RHE BASELINE os2, d91 // Runtime: 3.86155764 hours (111212.86 s), 99910 total calls, 32514 in initial stage
+dictrhe2os2 = {'pkl': 'u2698_os2_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590693577.7494018_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_os2_d91_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_os2_d91_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_os2_d91_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_os2_d91_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline (os2, d91)', 'extra_params': None}
+
+# RHE BASELINE os3, d91 // Runtime: 3.53416181 hours (101783.86 s), 83881 total calls, 29171 in initial stage
+dictrhe2os3 = {'pkl': 'u2698_os3_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590692584.260687_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_os3_d91_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_os3_d91_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_os3_d91_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_os3_d91_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline (os3, d91)', 'extra_params': None}
+
+# RHE BASELINE os4, d91 // Runtime: 3.38293333 hours (97428.48 s), 74588 total calls, 28648 in initial stage
+dictrhe2os4 = {'pkl': 'u2698_os4_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590692888.5767071_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_os4_d91_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_os4_d91_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_os4_d91_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_os4_d91_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline (os4, d91)', 'extra_params': None}
+
+# RHE BASELINE os6, d91 // Runtime: 4.91630278 hours (141589.52 s), 92306 total calls, 28768 in initial stage
+dictrhe2os6 = {'pkl': 'u2698_os6_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590699379.3008854_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_os6_d91_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_os6_d91_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_os6_d91_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_os6_d91_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline (os6, d91)', 'extra_params': None}
+'''
+# Note: pre-batch
+# | rhe baseline (os6, d91) | 1.303 (5990.287) | 9.39 -0.03/+0.04 | 126.90 -0.33/+0.33 | 150.96 -0.28/+0.29 | 17.14 -2.60/+2.84 | 67.67 -0.91/+0.91 | 18.74 -0.82/+0.80 | 6454.76 -2.56/+2.23 | 1.71 -0.05/+0.04 | 1.10 -0.04/+0.05 |
+
+'''
+
+# RHE BASELINE os8, d91 // Runtime: 5.45515556 hours (157108.48 s); 80759 total calls, 28235 in initial stage
+dictrhe2os8 = {'pkl': 'u2698_os8_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590701499.9093819_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_os8_d91_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_os8_d91_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_os8_d91_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_os8_d91_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline (os8, d91)', 'extra_params': None}
+
+# RHE BASELINE os10, d91 // Runtime: 6.35648819 hours (183066.86 s); 74868 total calls; 28623 in initial stage
+dictrhe2os10 = {'pkl': 'u2698_os10_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590705487.6493137_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_os10_d91_baseline_rhe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_os10_d91_baseline_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_os10_d91_baseline_rhe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_os10_d91_baseline_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline (os10, d91)', 'extra_params': None}
+
+# RHE BASELINE os12, d91 // Runtime: 9.00957396 hours (259475.73 s); 81068 total calls; 28501 in initial stage
+dictrhe2os12 = {'pkl': 'u2698_os12_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590715106.442782_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_os12_d91_baseline_rhe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_os12_d91_baseline_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_os12_d91_baseline_rhe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_os12_d91_baseline_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline (os12, d91)', 'extra_params': None}
+
+# RHE BASELINE os14, d91 // Runtime: 12.6801323 hours (365187.81 s); 91474 total calls; 27918 in initial stage
+dictrhe2os14 = {'pkl': 'u2698_os14_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590729076.410538_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_os14_d91_baseline_rhe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_os14_d91_baseline_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_os14_d91_baseline_rhe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_os14_d91_baseline_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline (os14, d91)', 'extra_params': None}
+
+# RHE BASELINE os16, d91 // Runtime: 13.230291 hours (381032.38 s); 83169 total calls; 28864 in initial stage
+dictrhe2os16 = {'pkl': 'u2698_os16_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590732620.6191862_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_os16_d91_baseline_rhe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_os16_d91_baseline_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_os16_d91_baseline_rhe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_os16_d91_baseline_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline (os16, d91)', 'extra_params': None}
+
+
+# RHE BASELINE RFIT 1.0 // 6.04hrs (174034.81s); 141325 total calls; 45170 initial calls
+dictrhe2rfit1 = {'pkl': 'u2698_rfit10_baseline_rhe_orig_nog_10000000_8_0.02_1591306649.6288242_end.pkl',
+                 'name': 'ugc_2698_newmasks/u2698_nest_rfit10_baseline_rhe_orig_nog_3sig.png',
+                 'cornername': 'ugc_2698_newmasks/u2698_nest_rfit10_baseline_rhe_orig_nog_corner_3sig.png',
+                 'inpf': 'ugc_2698/ugc_2698_rfit10_baseline_rhe_orig_nog.txt',
+                 'outpf': 'ugc_2698/ugc_2698_rfit10_baseline_rhe_orig_nog_out.txt',
+                 'mod': 'rhe baseline rfit10', 'extra_params': None}
+
+# RHE BASELINE RFIT 05 // 9.60hrs (276603.16s); 197189 total calls; 51459 initial calls
+dictrhe2rfit05 = {'pkl': 'u2698_rfit05_baseline_rhe_orig_nog_10000000_8_0.02_1591597783.1773756_end.pkl',
+                  'name': 'ugc_2698_newmasks/u2698_nest_rfit05_baseline_rhe_orig_nog_3sig.png',
+                  'cornername': 'ugc_2698_newmasks/u2698_nest_rfit05_baseline_rhe_orig_nog_corner_3sig.png',
+                  'inpf': 'ugc_2698/ugc_2698_rfit05_baseline_rhe_orig_nog.txt',
+                  'outpf': 'ugc_2698/ugc_2698_rfit05_baseline_rhe_orig_nog_out.txt',
+                  'mod': 'rhe baseline rfit05', 'extra_params': None}
+
+# RHE BASELINE EXPSIG // 37.97hrs (1093493.88s); 848668 total calls; 432880 initial calls
+dictrhe2exp = {'pkl': 'u2698_expsig_baseline_rhe_orig_nog_10000000_8_0.02_1591464018.0182757_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_expsig_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_expsig_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_expsig_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_expsig_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline expsig', 'extra_params': [['r0', 'pc'], ['sig1', 'km/s']]}
+
+<details><summary>rfit = 0.3 arcsec</summary>
+
+* First I show the ellipse with rfit = 0.3 arcsec (using a PA = 19 deg, q = 0.38). Then I show the normal posterior plots.
+
+   ![ellipse](https://github.tamu.edu/joncohn/gas-dynamical-modeling/blob/master/2020-06-01/ellipse_0.38_19_0.3.png)
+
+   ![1D posteriors](https://github.tamu.edu/joncohn/gas-dynamical-modeling/blob/master/2020-06-01/u2698_nest_rfit03_baseline_rhe_orig_nog_3sig.png)
+
+   ![corner plot](https://github.tamu.edu/joncohn/gas-dynamical-modeling/blob/master/2020-06-01/u2698_nest_rfit03_baseline_rhe_orig_nog_corner_3sig.png)
+
+</details>
 '''
