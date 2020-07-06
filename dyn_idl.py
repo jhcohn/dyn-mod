@@ -529,7 +529,7 @@ class ModelGrid:
         self.kappa = kappa  # optional radial inflow term; tie inflow to the overall line-of-sight velocity [unitless]
         self.omega = omega  # optional velocity coefficient, used with kappa for radial inflow [unitless]
         self.vtype = vtype  # 'vrad', 'kappa', 'omega', any other value for original (no radial velocity component)
-        self.dist = dist / (1 + self.z_fixed) ** 2  # distance to the galaxy [Mpc]
+        self.dist = dist  # angular diameter distance to the galaxy [Mpc]
         self.pc_per_ac = self.dist * 1e6 / self.arcsec_per_rad  # small angle formula (convert dist to pc, from Mpc)
         self.pc_per_pix = self.dist * 1e6 / self.arcsec_per_rad * self.resolution  # small angle formula, as above
         self.pc_per_sp = self.pc_per_pix / self.os  # pc per subpixel (over-sampling pc pixel scale)
@@ -575,6 +575,8 @@ class ModelGrid:
         self.kin_file = kin_file  # filename to save info for kinemetry input into IDL later
         # Parameters to be built in create_grid(), convolve_cube(), or chi2 functions inside the class
         self.z_ax = None  # velocity axis, constructed from freq_ax, f_0, and vsys, based on opt
+        self.xobs = None
+        self.yobs = None
         self.weight = None  # 2D weight map, constructed from lucy_output (the deconvolved fluxmap)
         self.freq_obs = None  # the 2D line-of-sight velocity map, converted to frequency
         self.delta_freq_obs = None  # the 2D turbulent velocity map, converted to delta-frequency
@@ -667,6 +669,9 @@ class ModelGrid:
         # convert all x,y observed grid positions to pc
         x_obs = np.asarray([self.dist * 10 ** 6 * np.tan(x / self.arcsec_per_rad) for x in x_obs_ac])
         y_obs = np.asarray([self.dist * 10 ** 6 * np.tan(y / self.arcsec_per_rad) for y in y_obs_ac])
+
+        self.xobs = x_obs_ac
+        self.yobs = y_obs_ac
 
         # CONVERT FROM x_obs, y_obs TO 2D ARRAYS OF x_disk, y_disk [arcsec] and [pc] versions
         x_disk_ac = (x_obs_ac[None, :] - x_bh_ac) * np.cos(self.theta) +\
@@ -1108,6 +1113,157 @@ class ModelGrid:
         print('convolution loop ' + str(time.time() - tc))
 
 
+    def vorbinning(self, m1, snr, filename=None):
+        hdu_m = fits.open(self.data_mask)
+        data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
+        hdu_m.close()
+
+        # estimate the 2D collapsed signal, and estimate a constant noise
+        sig = np.zeros(shape=self.input_data[0].shape)
+        noi = 0
+        for z in range(len(self.input_data)):
+            sig += self.input_data[z] * data_mask[z] / len(self.input_data)
+            noi += np.mean(self.input_data[z, 96:120, 144:168]) / len(self.input_data)
+        import vorbin
+        from vorbin.voronoi_2d_binning import voronoi_2d_binning
+
+        sig = sig[self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]]
+        print(noi)
+        #plt.imshow(sig, origin='lower')
+        #plt.colorbar()
+        #plt.show()
+
+        signal_input = []
+        noise_input = []
+        x_in = []  # used as arcsec-scale input
+        y_in = []  # used as arcsec-scale input
+        xpix = []  # just store pixel number
+        ypix = []  # just store pixel number
+        if len(sig) % 2. == 0:  # if even
+            yctr = (len(sig)) / 2.  # set the center of the axes (in pixel number)
+        else:  # elif odd
+            yctr = (len(sig) + 1.) / 2.  # +1 bc python starts counting at 0
+        if len(sig[0]) % 2 == 0.:
+            xctr = (len(sig[0])) / 2.  # set the center of the axes (in pixel number)
+        else:  # elif odd
+            xctr = (len(sig[0]) + 1.) / 2.  # +1 bc python starts counting at 0
+
+        for yy in range(len(sig)):
+            for xx in range(len(sig[0])):
+                if sig[yy, xx] != 0:  # don't include pixels that have been masked out!
+                    xpix.append(xx)
+                    ypix.append(yy)
+                    x_in.append(xx - xctr)  # pixel scale, with 0 at center
+                    y_in.append(yy - yctr)  # pixel scale, with 0 at center
+                    noise_input.append(noi)
+                    signal_input.append(sig[yy, xx])
+
+        target_snr = snr
+        signal_input = np.asarray(signal_input)
+        noise_input = np.asarray(noise_input)
+        x_in = np.asarray(x_in) * self.resolution  # convert to arcsec-scale
+        y_in = np.asarray(y_in) * self.resolution  # convert to arcsec-scale
+
+        # Perform voronoi binning! The vectors (binNum, xNode, yNode, xBar, yBar, sn, nPixels, scale) are *output*
+        binNum, xNode, yNode, xBar, yBar, sn, nPixels, scale = voronoi_2d_binning(x_in, y_in, signal_input, noise_input,
+                                                                                  target_snr, plot=1, quiet=1)
+        plt.show()
+        print(binNum, sn, nPixels)  # len=# of pix, bin # for each pix; len=# of bins: SNR/bin; len=# of bins: # pix/bin
+        # print(oop)
+
+        # flatten and bin the moment 1 map
+        flattened_binned_m1 = np.zeros(shape=max(binNum)+1)
+        for xy in range(len(x_in)):
+            flattened_binned_m1[binNum[xy]] += m1[ypix[xy], xpix[xy]] / nPixels[binNum[xy]]
+
+        # convert the flattened binned moment 1 map into a vector of the same size as the x & y inputs
+        full_binned_m1 = np.zeros(shape=len(binNum))
+        for xy in range(len(x_in)):
+            full_binned_m1[xy] += flattened_binned_m1[binNum[xy]]
+
+        '''  #
+        dir = '/Users/jonathancohn/Documents/dyn_mod/'
+        with open(dir+'voronoi_2d_binning_2698_output.txt', 'r') as vb:
+            for line in vb:
+                if not line.startswith('#'):
+                    cols = line.split()
+                    flattened_binned_m1[int(cols[2])] += m1[int(cols[1]), int(cols[0])] / nPixels[int(cols[2])]
+
+        full_binned_m1 = np.zeros(shape=len(binNum))
+        dir = '/Users/jonathancohn/Documents/dyn_mod/'
+        with open(dir+'voronoi_2d_binning_2698_output.txt', 'r') as vb:
+            ii = 0
+            for line in vb:
+                if not line.startswith('#'):
+                    cols = line.split()
+                    full_binned_m1[ii] += flattened_binned_m1[int(cols[2])]
+                    ii += 1
+        # '''
+
+        # '''
+        if filename is not None:
+            dir = '/Users/jonathancohn/Documents/dyn_mod/'
+            with open(dir+filename, 'w+') as vb:  # dir+'u2698_moment_vorbin_snr15.txt'
+                vb.write('# targetSN=' + str(target_snr) + '\n')
+                vb.write('#######################\n')
+                vb.write('   XBIN   YBIN   VEL   \n')
+                vb.write('#######################\n')
+                # vb.write('# x y binNum\n')
+                for xy in range(len(x_in)):
+                    vb.write(str(x_in[xy]) + ' ' + str(y_in[xy]) + ' ' + str(full_binned_m1[xy]) + '\n')
+                    # m1_vb[y_in[xy], x_in[xy]] = full_binned_m1[xy]
+                #for xy in range(len(x_in)):
+                #    vb.write(str(x_in[xy]) + ' ' + str(y_in[xy]) + ' ' + str(binNum[xy]) + ' ' + str(full_binned_m1[xy]) +
+                #             '\n')
+                #    m1_vb[y_in[xy], x_in[xy]] = full_binned_m1[xy]
+            # '''
+
+            ###  dlogz 1.1431055564826238 thresh 0.02 nc 518024 niter 9051
+        '''
+        start
+% Compiled module: KINEMETRY_MINE.
+% Compiled module: RDFLOAT.
+% RDFLOAT: 5376 lines of data read
+start
+% Compiled module: KINEMETRY.
+% Loaded DLM: QHULL.
+% Compiled module: MPFIT.
+       Radius,      RAD,     PA,        Q,        Xcen,     Ycen,  # of ellipse elements
+  0-th radius:     0.020    18.000     0.200     0.000     0.000     9
+% TRIANGULATE: Not enough valid and unique points specified.
+% Execution halted at: KINEM_TRIGRID_IRREGULAR  524
+   /Users/jonathancohn/Data/idl/lib/krajnovic/kinemetry/kinemetry.pro
+%                      KINEMETRY        1474
+   /Users/jonathancohn/Data/idl/lib/krajnovic/kinemetry/kinemetry.pro
+%                      KINEMETRY_MINE     50
+   /Users/jonathancohn/Data/idl/lib/krajnovic/kinemetry/kinemetry_mine.pro
+%                      $MAIN$          
+IDL>  
+### NEW ERROR BELOW
+% Compiled module: KINEMETRY_MINE.
+% Compiled module: RDFLOAT.
+% RDFLOAT: 2875 lines of data read
+start
+% Compiled module: KINEMETRY.
+% Loaded DLM: QHULL.
+% Compiled module: MPFIT.
+% Variable is undefined: ERR_SOL.
+% Execution halted at: KINEMETRY        1137
+   /Users/jonathancohn/Data/idl/lib/krajnovic/kinemetry/kinemetry.pro
+%                      KINEMETRY_MINE     51
+   /Users/jonathancohn/Data/idl/lib/krajnovic/kinemetry/kinemetry_mine.pro
+%                      $MAIN$    
+        '''
+        # create the binned moment map for display
+        m1_vb = np.zeros(shape=m1.shape)
+        for xy in range(len(x_in)):
+            m1_vb[ypix[xy], xpix[xy]] = full_binned_m1[xy]
+
+        plt.imshow(m1_vb, origin='lower', cmap='RdBu_r')  # plot it!
+        plt.colorbar()
+        plt.show()
+
+
     def chi2(self):
         # ONLY WANT TO FIT WITHIN ELLIPTICAL REGION! CREATE ELLIPSE MASK
         self.ell_mask = ellipse_fitting(self.convolved_cube, self.rfit, self.xell, self.yell, self.resolution,
@@ -1185,6 +1341,7 @@ class ModelGrid:
 
         hdu_m = fits.open(self.data_mask)
         data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
+        hdu_m.close()
         v_width = 2.99792458e5 * (1 + (6454.9 / 2.99792458e5)) * self.fstep / self.f_0  # velocity width [km/s] = c*(1+v/c)*fstep/f0
         mask_ds = rebin(data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]], self.ds)
 
@@ -1330,6 +1487,7 @@ class ModelGrid:
         # if using equation from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
         hdu_m = fits.open(self.data_mask)
         data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
+        hdu_m.close()
         vel_ax = []
         velwidth = self.c_kms * (1 + self.zred) * self.fstep / self.f_0
         for v in range(len(self.freq_ax)):
@@ -1417,7 +1575,7 @@ class ModelGrid:
         plt.show()
 
 
-    def moment_12(self, abs_diff, incl_beam, norm, mom, samescale=False):
+    def moment_12(self, abs_diff, incl_beam, norm, mom, samescale=False, snr=5, filename=None):
         """
         Create 1st or 2nd moment map
         :param abs_diff: True or False; if True, show absolute value of the residual
@@ -1431,7 +1589,7 @@ class ModelGrid:
 
         hdu_m = fits.open(self.data_mask)
         data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
-
+        hdu_m.close()
         vel_ax = []
         velwidth = self.c_kms * (1 + self.zred) * self.fstep / self.f_0
         for v in range(len(self.freq_ax)):
@@ -1548,6 +1706,8 @@ class ModelGrid:
             ax[2].set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
 
             plt.show()
+            self.vorbinning(m1=np.nan_to_num(d2), snr=snr, filename=filename)
+
 
         elif mom == 1:
             '''
@@ -1615,31 +1775,37 @@ class ModelGrid:
 
             plt.show()
 
+            # NOTE HERE IS VORONOI BINNING STUFF
+            for i in range(len(data_mom)):
+                for j in range(len(data_mom[0])):
+                    if np.isnan(data_mom[i, j]):
+                        data_mom[i, j] = 0.
+            self.vorbinning(m1=data_mom, snr=snr, filename=filename)  # 4, filename='u2698_moment_vorbin_snr4_ac.txt')
+
             if self.kin_file is not None:
-
-                m1_smoothed = np.zeros(shape=data_mom.shape)
-                for i in range(len(data_mom)):
-                    for j in range(len(data_mom[0])):
-                        if np.isnan(data_mom[i, j]):
-                            data_mom[i, j] = 0.
-
                 print(self.kin_file)
+                #for i in range(len(data_mom)):
+                #    for j in range(len(data_mom[0])):
+                #        if np.isnan(data_mom[i, j]):
+                #            data_mom[i, j] = 0.
+                #self.vorbinning(m1=data_mom)
+                '''
                 with open(self.kin_file, 'w+') as kv:  # 'kin_velbin.txt'
                     kv.write('#######################\n')
                     kv.write('   XBIN   YBIN   VEL   \n')
                     kv.write('#######################\n')
                     for i in range(len(data_mom)):
                         for j in range(len(data_mom[0])):
-                            if i <= 2 or j <= 2 or i >= len(data_mom[0]) - 2 or j <= len(data_mom[0]) - 2:
-                                m1_smoothed[i,j] = data_mom[i,j]
-                            else:
-                                m1_smoothed[i, j] = np.mean(data_mom[i-2:i+2, j-2:j+2])
-                            kv.write('   ' + str(i) + '   ' + str(j) + '   ' + str(m1_smoothed[i, j]) + '\n')
-                    plt.imshow(m1_smoothed, origin='lower')
+                            if np.isnan(data_mom[i, j]):
+                                data_mom[i, j] = 0.
+                            # kv.write('   ' + str(i) + '   ' + str(j) + '   ' + str(data_mom[i, j]) + '\n')
+                            kv.write('   ' + str(self.xobs[i]) + '   ' + str(self.yobs[j]) + '   ' + str(data_mom[i, j])
+                                     + '\n')
+                    plt.imshow(data_mom, origin='lower')
                     plt.colorbar()
                     plt.show()
                 print('done')
-
+                '''
 
     def kin_pa(self):
 
@@ -1726,6 +1892,20 @@ if __name__ == "__main__":
     # CREATE MODEL CUBE!
     out = params['outname']
     t0m = time.time()
+
+    v = []
+    x = []
+    y = []
+    with open('kinemetry/NGC2974_SAURON_kinematics.dat', 'r') as f:
+        c = 0
+        for line in f:
+            c += 1
+            if c >= 3:
+                cols = line.split()
+                x = cols[1]
+                y = cols[2]
+                v = cols[3]
+
     mg = ModelGrid(resolution=params['resolution'], os=params['os'], x_loc=params['xloc'], y_loc=params['yloc'],
                    mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'], dist=params['dist'],
                    theta=np.deg2rad(params['PAdisk']), input_data=input_data, lucy_out=lucy_out, out_name=out,
@@ -1738,14 +1918,17 @@ if __name__ == "__main__":
                    n_params=n_free, data_mask=params['mask'], incl_gas=params['incl_gas']=='True', vrad=params['vrad'],
                    kappa=params['kappa'], omega=params['omega'], co_rad=co_ell_rad, co_sb=co_ell_sb,
                    pvd_width=(params['x_fwhm']+params['y_fwhm'])/params['resolution']/2., #)
-                   kin_file='/Users/jonathancohn/Documents/dyn_mod/ugc_2698/ugc_2698_smoothkin.txt')
+                   kin_file='/Users/jonathancohn/Documents/dyn_mod/ugc_2698/ugc_2698_kinpc.txt')
     # gas_norm=params['gas_norm'], gas_radius=params['gas_radius']
 
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()
     # mg.pvd()
-    mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1)
+    # mg.vorbinning()
+    # filename='u2698_moment_vorbin_snr4_ac.txt'
+    mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1, snr=10, filename='u2698_moment_vorbin_snr10_ac.txt')
+    # For moment 2: SNR 5 bad, 10 good, 7 has ~1 bad pixel near center still; 8 a little rough but no more bad pixels
     print(oop)
     mg.moment_0(abs_diff=False, incl_beam=True, norm=False)
     mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1)
@@ -1797,3 +1980,6 @@ if __name__ == "__main__":
 
     print(time.time() - t0m, ' seconds')
     print('True Total time: ' + str(time.time() - t0_true) + ' seconds')  # ~1 second for a cube of 84x64x49
+
+# ['#377eb8', '#ff7f00', '#4daf4a', '#f781bf', '#a65628', '#984ea3', '#999999', '#e41a1c', '#dede00']
+# [pale blue, orange red,  green,   pale pink, red brown,  lavender, pale gray,    red, yellow green]
