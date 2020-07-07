@@ -88,8 +88,8 @@ def par_dicts(parfile, q=False):
 
 
 def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it=None, data=None, data_mask=None,
-               grid_size=None, res=1., x_std=1., y_std=1., pa=0., ds=4, zrange=None, xyerr=None, theta_ell=0, q_ell=0,
-               xell=0, yell=0):
+               grid_size=None, res=1., x_std=1., y_std=1., pa=0., ds=4, ds2=4, zrange=None, xyerr=None, theta_ell=0,
+               q_ell=0, xell=0, yell=0):
     """
 
     :param lucy_out: output from running lucy on data cube and beam PSF; if it doesn't exist, create it!
@@ -105,6 +105,7 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
     :param y_std: FWHM in the y-direction of the ALMA beam (arcsec) to use for the make_beam() function
     :param pa: position angle (in degrees) to use for the make_beam() function
     :param ds: down-sampling factor for pixel scale used to calculate chi^2
+    :param ds2: down-sampling factor for pixel scale used to calculate chi^2, allowing for non-square down-sampling
     :param zrange: range of frequency slices containing emission [zi, zf]
     :param xyerr: x & y pixel region, on the down-sampled pixel scale, where the noise is calculated [xi, xf, yi, yf]
     :param theta_ell: position angle of the annuli for the gas mass, same as for the ellipse fitting region [radians]
@@ -165,10 +166,19 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
     hdu.close()
 
     # ESTIMATE NOISE (RMS) IN ORIGINAL DATA CUBE [z, y, x]
-    noise_4 = rebin(input_data, ds)  # rebin the noise to the pixel scale on which chi^2 will be calculated
+    cut_y = len(input_data[0]) % ds2
+    cut_x = len(input_data[0][0]) % ds
+    if cut_x == 0:
+        cut_x = -len(input_data[0][0])
+    if cut_y == 0:
+        cut_y = -len(input_data[0])
+    noise_4 = rebin(input_data[:, :-cut_y, :-cut_x], ds2, ds)  # down-sample noise to the same pixel as scale chi^2
     noise = []  # For large N, Variance ~= std^2
     for z in range(zrange[0], zrange[1]):  # for each relevant freq slice, calculte std (aka rms) ~variance
-        noise.append(np.std(noise_4[z, int(xyerr[2]/ds):int(xyerr[3]/ds), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
+        noise.append(np.std(noise_4[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
+
+    plt.plot(freq_ax[zrange[0]:zrange[1]] / 1e9, noise, 'k+')
+    plt.show()
 
     # CALCULATE VELOCITY WIDTH  # vsys = 6454.9 estimated based on various test runs; see Week of 2020-05-04 on wiki
     v_width = 2.99792458e5 * (1 + (6454.9 / 2.99792458e5)) * fstep / f_0  # velocity width [km/s] = c*(1+v/c)*fstep/f0
@@ -317,27 +327,28 @@ def blockshaped(arr, nrow, ncol):
     return arr.reshape(h // nrow, nrow, -1, ncol).swapaxes(1, 2).reshape(-1, nrow, ncol)
 
 
-def rebin(data, n):
+def rebin(data, nr, nc):
     """
     Rebin data or model cube (or one slice of a cube) in blocks of n x n pixels
 
     :param data: input data cube, model cube, or slice of a cube, e.g. a 2Darray
-    :param n: size of pixel binning (e.g. n=4 rebins the date in blocks of 4x4 pixels)
+    :param nr: size of pixel binning, rows (e.g. nr=4, nc=4 rebins the date in blocks of 4x4 pixels)
+    :param nc: size of pixel binning, columns
     :return: rebinned cube or slice
     """
 
     rebinned = []
     if len(data.shape) == 2:
-        subarrays = blockshaped(data, n, n)  # bin the data in groups of nxn (4x4) pixels
+        subarrays = blockshaped(data, nr, nc)  # bin the data in groups of nxn (4x4) pixels
         # each pixel in the new, rebinned data cube is the mean of each 4x4 set of original pixels
-        reshaped = n**2 * np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data) / n),
-                                                                                 int(len(data[0]) / n)))
+        reshaped = nr*nc * np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data) / nr),
+                                                                                 int(len(data[0]) / nc)))
         rebinned.append(reshaped)
     else:
         for z in range(len(data)):  # for each slice
-            subarrays = blockshaped(data[z, :, :], n, n)  # bin the data as above
-            reshaped = n**2 * np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data[0]) / n),
-                                                                                     int(len(data[0][0]) / n)))
+            subarrays = blockshaped(data[z, :, :], nr, nc)  # bin the data as above
+            reshaped = nr*nc * np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data[0]) / nr),
+                                                                                     int(len(data[0][0]) / nc)))
             rebinned.append(reshaped)
 
     return np.asarray(rebinned)
@@ -419,15 +430,87 @@ def annuli_sb(flux_map, semi_major_axes, position_angle, axis_ratio, x_center, y
     return average_co, errs_co
 
 
+def gas_vel(resolution, co_rad, co_sb, dist, f_0, inc_fixed, zfixed=0.02152):
+    """
+
+    :param radius_array: 2D R array grid built in the ModelGrid class
+    :param resolution: resolution of observations [arcsec/pixel]
+    :param co_rad: mean elliptical radii of annuli used in calculation of co_sb [pix]
+    :param co_sb: mean CO surface brightness in elliptical annuli [Jy km/s beam^-1]
+    :param dist: angular diameter distance to the galaxy [Mpc]
+    :param f_0: rest frequency of the observed line in the data cube [Hz]
+    :param inc_fixed: fixed inclination, used for the Binney & Tremaine integration [radians]
+    :param zfixed: fixed redshift, used for unit conversion
+
+    :return: circular gas velocity interpolation function
+    """
+    G_pc = (6.67 * 10**-11) * 1.989e30 * (1 / 3.086e16) / 1e3**2
+    f_he = 1.36
+    r21 = 0.7
+    alpha_co10 = 3.1
+
+    # pix per beam = 2pi sigx sigy [pix^2]
+    pix_per_beam = 2. * np.pi * (0.197045 / resolution / 2.35482) * (0.103544 / resolution / 2.35482)
+    pc_per_pix = dist * 1e6 / 206265 * resolution
+    pc2_per_beam = pix_per_beam * pc_per_pix ** 2  # pc^2 per beam = pix/beam * pc^2/pix
+
+    co_radii = co_rad * pc_per_pix  # convert input annulus mean radii from pix to pc
+    co_sb = np.nan_to_num(co_sb)  # replace NaNs with 0s in input CO mean surface brightness profile
+
+    # Set up integration bounds, numerical step size, vectors r & a (see Binney & Tremaine eqn 2.157)
+    # use maxr >> than maximum CO radius, so potential contributions at maxr << those near the disk edge.
+    min_r = 0.  # integration lower bound [pix or pc]
+    max_r = 1300.  # upper bound [pc]; disk peaks <~100pc, extends <~700pc  # 510 for edge
+    nr = 500  # 500  # number of steps used in integration process
+    avals = np.linspace(min_r, max_r, nr)  # [pc]  # range(min_r,max_r,(max_r-min_r)/del_r)
+    rvals = np.linspace(min_r, max_r, nr)  # [pc]  # range(min_r,max_r,(max_r-min_r)/del_r)
+
+    # convert from Jy km/s to Msol (Boizelle+17; Carilli & Walter 13, S2.4: https://arxiv.org/pdf/1301.0371.pdf)
+    msol_per_jykms = 3.25e7 * alpha_co10 * f_he * dist ** 2 / \
+                     ((1 + zfixed) * r21 * (f_0 / 1e9) ** 2)  # f_0 in GHz, not Hz
+    # equation for (1+z)^3 is for observed freq, but using rest freq -> nu0^2 = (nu*(1+z))^2
+    # units on 3.25e7 are [K Jy^-1 pc^2/Mpc^2 GHz^2] --> total units [Msol (Jy km/s)^-1]
+
+    # Interpolate CO surface brightness vs elliptical mean radii, to construct Sigma(rvals).
+    # Units [Jy km/s/beam] * [Msol/(Jy km/s)] / [pc^2/beam] = [Msol/pc^2]
+    sigr3_func_r = interpolate.interp1d(co_radii, co_sb, kind='quadratic', fill_value='extrapolate')
+
+    # PYTHON INTEGRATION: calculate the inner integral (see eqn 2.157 from Binney & Tremaine)
+    int1 = np.zeros(shape=len(avals))
+    for av in range(len(avals)):
+        int1[av] = integral1(avals[av], np.inf, sigr3_func_r, inc_fixed, msol_per_jykms / pc2_per_beam)
+    zerocut = 580  # [pc] select point at or just beyond the disk edge
+    int1[rvals > zerocut] = 0.  # set all points outside the disk edge = 0 (sometimes get spurious points)
+
+    interp_int1 = unsp(rvals, int1)  # interpolate the inner integral using UnivariateSpline
+    interp_int1.set_smoothing_factor(9e8)  # smooth the inner integral, so it will be well-behaved
+
+    dda_sp = interp_int1.derivative()  # calculate the derivative of the spline smoothed integral
+    dda_sp_r = dda_sp(rvals)  # define the derivative on the rvals grid
+
+    int2 = np.zeros(shape=len(rvals))  # calculate the outer integral! # this integral takes ~0.35 seconds
+    for rv in range(len(rvals[1:])):
+        int2[rv] = integral22(rvals[rv], dda_sp_r[rv])
+
+    vcg = np.sqrt(-4 * G_pc * int2)  # calculate the circular velocity due to the gas!
+    vcg = np.nan_to_num(vcg)  # set all NaNs (as a result of negative sqrt values) = 0
+
+    # create a function to interpolate from vcg(rvals) to vcg(R)
+    vcg_func = interpolate.interp1d(rvals, vcg, kind='quadratic', fill_value='extrapolate')
+    # vg = vcg_func(radius_array)  # interpolate vcg onto vcg(R)
+
+    return vcg_func
+
+
 class ModelGrid:
 
     def __init__(self, resolution=0.05, os=4, x_loc=0., y_loc=0., mbh=4e8, inc=np.deg2rad(60.), vsys=None, vrad=0.,
                  kappa=0., omega=0., dist=17., theta=np.deg2rad(200.), input_data=None, lucy_out=None, vtype='orig',
                  out_name=None, beam=None, rfit=1., q_ell=1., theta_ell=0., xell=360., yell=350., bl=False,
                  enclosed_mass=None, menc_type=0, ml_ratio=1., sig_type='flat', sig_params=None, f_w=1., noise=None,
-                 ds=None, zrange=None, xyrange=None, reduced=False, freq_ax=None, f_0=0., fstep=0., opt=True,
+                 ds=None, ds2=None, zrange=None, xyrange=None, reduced=False, freq_ax=None, f_0=0., fstep=0., opt=True,
                  quiet=False, n_params=8, data_mask=None, f_he=1.36, r21=0.7, alpha_co10=3.1, incl_gas=False,
-                 co_rad=None, co_sb=None, gas_norm=1e5, gas_radius=5, z_fixed=0.02152, pvd_width=None):
+                 co_rad=None, co_sb=None, gas_norm=1e5, gas_radius=5, z_fixed=0.02152, pvd_width=None, vcg_func=None):
         # Astronomical Constants:
         self.c = 2.99792458 * 10 ** 8  # [m / s]
         self.pc = 3.086 * 10 ** 16  # [m / pc]
@@ -476,6 +559,7 @@ class ModelGrid:
         self.f_w = f_w  # multiplicative weight factor for the line profiles [unitless]
         self.noise = noise  # array of the estimated (ds x ds-binned) noise per slice (within the zrange) [Jy/beam]
         self.ds = ds  # downsampling factor to use when averaging pixels together for actual model-data comparison [int]
+        self.ds2 = ds2  # downsampling factor (same as self.ds, but for second dimension) [int]
         self.zrange = zrange  # array with the slices of the data cube where real emission shows up [zi, zf]
         self.xyrange = xyrange  # array with the subset of the cube (in pixels) that contains emission [xi, xf, yi, yf]
         self.reduced = reduced  # if True, ModelGrid.chi2() returns the reduced chi^2 instead of the regular chi^2
@@ -494,6 +578,7 @@ class ModelGrid:
         self.gas_norm = gas_norm  # best-fit exponential coefficient for gas mass calculation [Msol/pix^2]
         self.gas_radius = gas_radius  # best-fit scale radius for gas-mass calculation [pix]
         self.pvd_width = pvd_width  # width (in pixels) for the PVD extraction
+        self.vcg_func = vcg_func  # gas circular velocity interpolation function, returns v_c,gas(R) in units of km/s
         # Parameters to be built in create_grid(), convolve_cube(), or chi2 functions inside the class
         self.z_ax = None  # velocity axis, constructed from freq_ax, f_0, and vsys, based on opt
         self.weight = None  # 2D weight map, constructed from lucy_output (the deconvolved fluxmap)
@@ -604,7 +689,9 @@ class ModelGrid:
         # CALCULATE KEPLERIAN VELOCITY DUE TO ENCLOSED STELLAR MASS
         vg = 0  # default to ignoring the gas mass!
         if self.incl_gas:  # If incl_mass, overwrite vg with v_circ,gas estimate, then add it in quadrature to velocity!
+            vg = self.vcg_func(R)
             t_gas = time.time()  # Adds ~5s for nr=200, ~13s for nr=500
+            '''  #
             # pix per beam = 2pi sigx sigy [pix^2]
             pix_per_beam = 2. * np.pi * (0.197045 / self.resolution / 2.35482) * (0.103544 / self.resolution / 2.35482)
             pc2_per_beam = pix_per_beam * self.pc_per_pix**2  # pc^2 per beam = pix/beam * pc^2/pix
@@ -670,6 +757,7 @@ class ModelGrid:
             # alpha = abs(np.arctan(y_disk / (np.cos(self.inc) * x_disk)))  # measured from +x (minor ax) to +y (maj ax)
             # sign = x_disk / abs(x_disk)  # +x is the redshifted side
             # vg = sign * abs(vg * np.cos(alpha) * np.sin(self.inc))  # v_los > 0 -> redshift; v_los < 0 -> blueshift
+            # '''  #
             if not self.quiet:
                 print(time.time() - t_gas, ' seconds spent in gas calculation')
 
@@ -778,8 +866,8 @@ class ModelGrid:
         # RE-SAMPLE BACK TO CORRECT PIXEL SCALE (take avg of sxs sub-pixels for real alma pixel) --> intrinsic data cube
         if self.os == 1:
             intrinsic_cube = cube_model
-        else:
-            intrinsic_cube = rebin(cube_model, self.os)  # intrinsic_cube = block_reduce(cube_model, self.os, np.mean)
+        else:  # intrinsic_cube = block_reduce(cube_model, self.os, np.mean)
+            intrinsic_cube = rebin(cube_model, self.os, self.os)
 
         tc = time.time()
         # CONVERT INTRINSIC TO OBSERVED (convolve each slice of intrinsic_cube with ALMA beam --> observed data cube)
@@ -802,15 +890,25 @@ class ModelGrid:
         # self.input_data_masked = self.input_data[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
         #                          self.xyrange[0]:self.xyrange[1]] * ell_mask  # mask the input data cube
 
+        plt.imshow(self.ell_mask, origin='lower')
+        plt.colorbar()
+        plt.show()
+
+        print(self.ell_mask.shape)
+        print(self.ds2, self.ds)
+
         # REBIN THE ELLIPSE MASK BY THE DOWN-SAMPLING FACTOR
-        self.ell_ds = rebin(self.ell_mask, self.ds)[0]  # rebin the mask by the down-sampling factor
+        self.ell_ds = rebin(self.ell_mask, self.ds2, self.ds)[0]  # rebin the mask by the down-sampling factor
+        plt.imshow(self.ell_ds, origin='lower')
+        plt.colorbar()
+        plt.show()
         #self.ell_ds[self.ell_ds < 0.5] = 0.  # if averaging instead of summing
-        self.ell_ds[self.ell_ds < self.ds**2 / 2.] = 0.  # set all pix < 50% "inside" the ellipse to be outside -> mask
+        self.ell_ds[self.ell_ds < self.ds * self.ds2 / 2.] = 0.  # pixels < 50% "inside" the ellipse are masked (i.e.=0)
         self.ell_ds = np.nan_to_num(self.ell_ds / np.abs(self.ell_ds))  # set all points in ellipse = 1, convert nan->0
 
         # REBIN THE DATA AND MODEL BY THE DOWN-SAMPLING FACTOR: compare data and model in binned groups of dsxds pix
-        data_ds = rebin(self.clipped_data, self.ds)
-        ap_ds = rebin(self.convolved_cube, self.ds)
+        data_ds = rebin(self.clipped_data, self.ds2, self.ds)
+        ap_ds = rebin(self.convolved_cube, self.ds2, self.ds)
 
         # APPLY THE ELLIPTICAL MASK TO MODEL CUBE & INPUT DATA
         data_ds *= self.ell_ds
@@ -849,13 +947,13 @@ class ModelGrid:
     def line_profiles(self, ix, iy, show_freq=False):  # compare line profiles at the given indices ix, iy
         f_sys = self.f_0 / (1 + self.zred)
         print(ix, iy)
-        data_ds = rebin(self.clipped_data, self.ds)
-        ap_ds = rebin(self.convolved_cube, self.ds)
+        data_ds = rebin(self.clipped_data, self.ds2, self.ds)
+        ap_ds = rebin(self.convolved_cube, self.ds2, self.ds)
 
         hdu_m = fits.open(self.data_mask)
         data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
         v_width = 2.99792458e5 * (1 + (6454.9 / 2.99792458e5)) * self.fstep / self.f_0  # velocity width [km/s] = c*(1+v/c)*fstep/f0
-        mask_ds = rebin(data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]], self.ds)
+        mask_ds = rebin(data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]], self.ds2, self.ds)
 
         collapse_flux_v = np.zeros(shape=(len(data_ds[0]), len(data_ds[0][0])))
         for zi in range(len(data_ds)):
@@ -969,7 +1067,7 @@ class ModelGrid:
 
     def test_ellipse(self):
         # USE BELOW FOR TESTING
-        cf = rebin(rebin(self.weight, self.os), self.ds)[0]  # re-binned weight map, for reference
+        cf = rebin(rebin(self.weight, self.os, self.os), self.ds2, self.ds)[0]  # re-binned weight map, for reference
         plt.imshow(self.ell_ds * cf, origin='lower')  # masked weight map
         plt.title('4x4-binned ellipse * weight map')
         plt.colorbar()
@@ -1308,8 +1406,12 @@ if __name__ == "__main__":
         pars_str += str(params[key]) + '_'
     out = '/Users/jonathancohn/Documents/dyn_mod/outputs/test_' + pars_str + '.fits'
 
+    if 'ds2' not in params:
+        params['ds2'] = params['ds']
+
     # CREATE THINGS THAT ONLY NEED TO BE CALCULATED ONCE (collapse fluxes, lucy, noise)
-    mod_ins = model_prep(data=params['data'], ds=params['ds'], lucy_out=params['lucy'], lucy_mask=params['lucy_mask'],
+    mod_ins = model_prep(data=params['data'], ds=params['ds'], ds2=params['ds2'], lucy_out=params['lucy'],
+                         lucy_mask=params['lucy_mask'],
                          lucy_b=params['lucy_b'], lucy_in=params['lucy_in'], lucy_it=params['lucy_it'],
                          data_mask=params['mask'], grid_size=params['gsize'], res=params['resolution'],
                          x_std=params['x_fwhm'], y_std=params['y_fwhm'], pa=params['PAbeam'],
@@ -1334,6 +1436,11 @@ if __name__ == "__main__":
     # ig = params['incl_gas'] == 'True'
 
     # CREATE MODEL CUBE!
+    inc_fixed = np.deg2rad(67.7)  # based on fiducial model (67.68 deg)
+    vcg_in = None
+    if params['incl_gas'] == 'True':
+        vcg_in = gas_vel(params['resolution'], co_ell_rad, co_ell_sb, params['dist'], f_0, inc_fixed, zfixed=0.02152)
+
     out = params['outname']
     t0m = time.time()
     mg = ModelGrid(resolution=params['resolution'], os=params['os'], x_loc=params['xloc'], y_loc=params['yloc'],
@@ -1342,28 +1449,28 @@ if __name__ == "__main__":
                    beam=beam, rfit=params['rfit'], enclosed_mass=params['mass'], ml_ratio=params['ml_ratio'],
                    sig_type=params['s_type'], zrange=[params['zi'], params['zf']], menc_type=params['mtype'],
                    sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], f_w=params['f'],
-                   ds=params['ds'], noise=noise, reduced=True, freq_ax=freq_ax, q_ell=params['q_ell'],
+                   ds=params['ds'], ds2=params['ds2'], noise=noise, reduced=True, freq_ax=freq_ax, q_ell=params['q_ell'],
                    theta_ell=np.deg2rad(params['theta_ell']), xell=params['xell'], yell=params['yell'], fstep=fstep,
                    f_0=f_0, bl=params['bl'], xyrange=[params['xi'], params['xf'], params['yi'], params['yf']],
                    n_params=n_free, data_mask=params['mask'], incl_gas=params['incl_gas']=='True', vrad=params['vrad'],
                    kappa=params['kappa'], omega=params['omega'], co_rad=co_ell_rad, co_sb=co_ell_sb,
-                   pvd_width=(params['x_fwhm']+params['y_fwhm'])/params['resolution']/2.)
+                   pvd_width=(params['x_fwhm']+params['y_fwhm'])/params['resolution']/2., vcg_func=vcg_in)
     # gas_norm=params['gas_norm'], gas_radius=params['gas_radius']
 
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()
-    mg.pvd()
-    mg.moment_0(abs_diff=False, incl_beam=True, norm=False)
-    mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1)
-    mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=2)
-    mg.line_profiles(7, 5)  # decent blue
+    #mg.pvd()
+    #mg.moment_0(abs_diff=False, incl_beam=True, norm=False)
+    #mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1)
+    #mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=2)
+    #mg.line_profiles(7, 5)  # decent blue [was using this]
     #mg.line_profiles(4, 6)  # blue orig (not great)
     #mg.line_profiles(6, 6)  # blue okay? (meh)
     #mg.line_profiles(10, 9)  # near ctr orig (meh)
-    mg.line_profiles(14, 8)  # decent red
+    #mg.line_profiles(14, 8)  # decent red [was using this]
     #mg.line_profiles(14, 9)  # good red
-    mg.line_profiles(14, 10)  # decent red
+    #mg.line_profiles(14, 10)  # decent red [was using this]
     #mg.line_profiles(15, 9)  # good red
     #mg.line_profiles(15, 10)  # decent red
 

@@ -15,6 +15,20 @@ omega = False  # include radial velocity with sub-Keplerian motion
 gas = False  # incl_gas
 zi = 25  # 29
 zf = 82  # 78
+# total pixels in xi:xf must be divisible by ds2; total pixels in yi:yf must be divisible by ds (same for xerr & yerr)
+ds = 4
+ds2 = 8
+xerr0 = 144  # 144 # 144 # 141
+xerr1 = 168  # 168 # 168 # 171
+yerr0 = 96   # 96  # 96  # 95
+yerr1 = 120  # 120 # 120 # 120
+xi = 82      # 84  # 82  # 81
+xf = 170     # 168 # 170 # 171
+yi = 118     # 118 # 118 # 118
+yf = 182     # 182 # 182 # 183
+# ds=4x4 -> xi=84,xf=168, yi=118,yf=182; ds=8x4 -> xi=82,xf=170, yi=118,yf=182; ds=10x5 -> xi=81,xf=171, yi=118,yf=183
+# ds=4x4 AND ds=8x4 -> xerr0=144,xerr1=168, yerr0=96,yerr1=120. ds=10x5 -> xerr0=141,xerr1=171, yerr0=95,yerr1=120.
+# confirmed: this error region has no overlap with the strictmask
 
 if masktype == 'ext2582':
     zi = 25
@@ -39,7 +53,8 @@ elif kappa:
 # run_type = 'rfit10_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
 # run_type = masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
 # run_type = 'exv_' + 'os' + str(os) + '_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
-run_type = 'exv_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
+# run_type = 'exv_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
+run_type = 'exv_ds' + str(ds) + str(ds2) + '_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
 # run_type  = 'os' + str(os) + '_d91_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
 # run_type  = 'os' + str(os) + '_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
     # 'b' + str(gs) + '_d85_' +  masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
@@ -250,16 +265,17 @@ fixed = {#'r0': 0.5,  # COULD BE FREE IN SOME MODELS
 fixed_int = {  # FIXED ints
     'zi': zi,  # cube range: zi:zf,
     'zf': zf,
-    'xi': 84,
-    'xf': 168,
-    'yi': 118,
-    'yf': 182,
-    'xerr0': 144,  # xerr & yerr must be divisible by ds
-    'xerr1': 168,
-    'yerr0': 96,
-    'yerr1': 120,
+    'xi': xi,  # 84
+    'xf': xf,  # 168
+    'yi': yi,  # 118
+    'yf': yf,  # 182
+    'xerr0': xerr0,  # 144 # xerr & yerr must be divisible by ds
+    'xerr1': xerr1,  # 168
+    'yerr0': yerr0,  # 96
+    'yerr1': yerr1,  # 120
     'os': os,
-    'ds': 4,
+    'ds': ds,
+    'ds2': ds2,
     'gsize': gs,
     'mtype': 0,  # mge file
     'bl': 0,
