@@ -456,10 +456,10 @@ def gas_vel(resolution, co_rad, co_sb, dist, f_0, inc_fixed, zfixed=0.02152):
 
     :return: circular gas velocity interpolation function
     """
-    G_pc = (6.67 * 10**-11) * 1.989e30 * (1 / 3.086e16) / 1e3**2
-    f_he = 1.36
-    r21 = 0.7
-    alpha_co10 = 3.1
+    G_pc = (6.67 * 10**-11) * 1.989e30 * (1 / 3.086e16) / 1e3**2  # G [Msol^-1 * pc * km^2 * s^-2]
+    f_he = 1.36  # additional fraction of gas that is helium (f_he = 1 + helium mass fraction)
+    r21 = 0.7  # CO(2-1)/CO(1-0) SB ratio (see pg 6-8 in Boizelle+17)
+    alpha_co10 = 3.1  # CO(1-0) to H2 conversion factor (see pg 6-8 in Boizelle+17)
 
     # pix per beam = 2pi sigx sigy [pix^2]
     pix_per_beam = 2. * np.pi * (0.197045 / resolution / 2.35482) * (0.103544 / resolution / 2.35482)
@@ -522,7 +522,7 @@ class ModelGrid:
                  enclosed_mass=None, menc_type=0, ml_ratio=1., sig_type='flat', sig_params=None, f_w=1., noise=None,
                  ds=None, ds2=None, zrange=None, xyrange=None, reduced=False, freq_ax=None, f_0=0., fstep=0., opt=True,
                  quiet=False, n_params=8, data_mask=None, f_he=1.36, r21=0.7, alpha_co10=3.1, incl_gas=False,
-                 co_rad=None, co_sb=None, gas_norm=1e5, gas_radius=5, z_fixed=0.02152, pvd_width=None, vcg_func=None):
+                 co_rad=None, co_sb=None, z_fixed=0.02152, pvd_width=None, vcg_func=None):
         # Astronomical Constants:
         self.c = 2.99792458 * 10 ** 8  # [m / s]
         self.pc = 3.086 * 10 ** 16  # [m / pc]
@@ -587,8 +587,6 @@ class ModelGrid:
         self.r21 = r21  # CO(2-1)/CO(1-0) SB ratio (see pg 6-8 in Boizelle+17)
         self.alpha_co10 = alpha_co10  # CO(1-0) to H2 conversion factor (see pg 6-8 in Boizelle+17)
         self.incl_gas = incl_gas  # if True, include gas mass in calculations
-        self.gas_norm = gas_norm  # best-fit exponential coefficient for gas mass calculation [Msol/pix^2]
-        self.gas_radius = gas_radius  # best-fit scale radius for gas-mass calculation [pix]
         self.pvd_width = pvd_width  # width (in pixels) for the PVD extraction
         self.vcg_func = vcg_func  # gas circular velocity interpolation function, returns v_c,gas(R) in units of km/s
         # Parameters to be built in create_grid(), convolve_cube(), or chi2 functions inside the class
@@ -607,13 +605,14 @@ class ModelGrid:
 
     Class functions:
         grids: calculates weight map, freq_obs map, and delta_freq_obs map
-        gas_mass: if incl_gas, calculate velocity due to gas mass
         convolution: grids must be run first; create the intrinsic model cube and convolve it with the ALMA beam
         chi2: convolution must be run first; calculates chi^2 and/or reduced chi^2
+        line_profiles: chi2 must be run first; plot the line profile of a given x,y (binned pixel) 
+        pvd: chi2 must be run first; generate the position-velocity diagram
         output_cube: convolution must be run first; store model cube in a fits file
         test_ellipse: grids must be run first; use to check how the fitting-ellipse looks with respect to the weight map
         moment_0: convolution must be run first; create 0th moment map
-        moment_12: convolution must be run first; create 1st or 2nd moment map    
+        moment_12: convolution must be run first; create 1st or 2nd moment map
     """
 
     def grids(self):
@@ -703,73 +702,7 @@ class ModelGrid:
         if self.incl_gas:  # If incl_mass, overwrite vg with v_circ,gas estimate, then add it in quadrature to velocity!
             vg = self.vcg_func(R)
             t_gas = time.time()  # Adds ~5s for nr=200, ~13s for nr=500
-            '''  #
-            # pix per beam = 2pi sigx sigy [pix^2]
-            pix_per_beam = 2. * np.pi * (0.197045 / self.resolution / 2.35482) * (0.103544 / self.resolution / 2.35482)
-            pc2_per_beam = pix_per_beam * self.pc_per_pix**2  # pc^2 per beam = pix/beam * pc^2/pix
-
-            co_radii = self.co_rad * self.pc_per_pix  # convert input annulus mean radii from pix to pc
-            co_sb = np.nan_to_num(self.co_sb)  # replace NaNs with 0s in input CO mean surface brightness profile
-
-            # Set up integration bounds, numerical step size, vectors r & a (see Binney & Tremaine eqn 2.157)
-            # use maxr >> than maximum CO radius, so potential contributions at maxr << those near the disk edge.
-            min_r = 0.  # integration lower bound [pix or pc]
-            max_r = 1300.  # upper bound [pc]; disk peaks <~100pc, extends <~700pc  # 510 for edge
-            nr = 200  # 500  # number of steps used in integration process
-            avals = np.linspace(min_r,max_r,nr)  # [pc]  # range(min_r,max_r,(max_r-min_r)/del_r)
-            rvals = np.linspace(min_r,max_r,nr)  # [pc]  # range(min_r,max_r,(max_r-min_r)/del_r)
-
-            # convert from Jy km/s to Msol (Boizelle+17; Carilli & Walter 13, S2.4: https://arxiv.org/pdf/1301.0371.pdf)
-            msol_per_jykms = 3.25e7 * self.alpha_co10 * self.f_he * self.dist ** 2 / \
-                             ((1 + self.zred) * self.r21 * (self.f_0/1e9) ** 2)  # f_0 in GHz, not Hz
-            # equation for (1+z)^3 is for observed freq, but using rest freq -> nu0^2 = (nu*(1+z))^2
-            # units on 3.25e7 are [K Jy^-1 pc^2/Mpc^2 GHz^2] --> total units [Msol (Jy km/s)^-1]
-
-            # Interpolate CO surface brightness vs elliptical mean radii, to construct Sigma(rvals).
-            # Units [Jy km/s/beam] * [Msol/(Jy km/s)] / [pc^2/beam] = [Msol/pc^2]
-            sigr3_func_r = interpolate.interp1d(co_radii, co_sb, kind='quadratic', fill_value='extrapolate')
-
-            # PYTHON INTEGRATION: calculate the inner integral (see eqn 2.157 from Binney & Tremaine)
-            t11 = time.time()
-            int1 = np.zeros(shape=len(avals))
-            for av in range(len(avals)):
-                int1[av] = integral1(avals[av], np.inf, sigr3_func_r, self.inc, msol_per_jykms / pc2_per_beam)
-            print(time.time() - t11)
-            t12 = time.time()
-            zerocut = 580  # [pc] select point at or just beyond the disk edge
-            int1[rvals > zerocut] = 0.  # set all points outside the disk edge = 0 (sometimes get spurious points)
-
-            interp_int1 = unsp(rvals, int1)  # interpolate the inner integral using UnivariateSpline
-            interp_int1.set_smoothing_factor(9e8)  # smooth the inner integral, so it will be well-behaved
-
-            dda_sp = interp_int1.derivative()  # calculate the derivative of the spline smoothed integral
-            dda_sp_r = dda_sp(rvals)  # define the derivative on the rvals grid
-
-            print(time.time() - t12)
-            t21 = time.time()
-            int2 = np.zeros(shape=len(rvals))  # calculate the outer integral! # this integral takes ~0.35 seconds
-            for rv in range(len(rvals[1:])):
-                int2[rv] = integral22(rvals[rv], dda_sp_r[rv])
-
-            print(time.time() - t21)
-
-            vcg = np.sqrt(-4 * self.G_pc * int2)  # calculate the circular velocity due to the gas!
-            vcg = np.nan_to_num(vcg)  # set all NaNs (as a result of negative sqrt values) = 0
-
-            # create a function to interpolate from vcg(rvals) to vcg(R)
-            vcg_func = interpolate.interp1d(rvals, vcg, kind='quadratic', fill_value='extrapolate')
-            vg = vcg_func(R)  # interpolate vcg onto vcg(R)
-            plt.imshow(vg, origin='lower',
-                       extent=[x_obs[0], x_obs[-1], y_obs[0], y_obs[-1]])  # , cmap='RdBu_r')  #, vmin=-50, vmax=50)  #
-            cbar = plt.colorbar()
-            cbar.set_label(r'km/s')
-            plt.xlabel(r'x\_obs [pc]')
-            plt.ylabel(r'y\_obs [pc]')
-            plt.show()
-            # alpha = abs(np.arctan(y_disk / (np.cos(self.inc) * x_disk)))  # measured from +x (minor ax) to +y (maj ax)
-            # sign = x_disk / abs(x_disk)  # +x is the redshifted side
-            # vg = sign * abs(vg * np.cos(alpha) * np.sin(self.inc))  # v_los > 0 -> redshift; v_los < 0 -> blueshift
-            # '''  #
+            
             if not self.quiet:
                 print(time.time() - t_gas, ' seconds spent in gas calculation')
 
@@ -1465,7 +1398,6 @@ if __name__ == "__main__":
                    n_params=n_free, data_mask=params['mask'], incl_gas=params['incl_gas']=='True', vrad=params['vrad'],
                    kappa=params['kappa'], omega=params['omega'], co_rad=co_ell_rad, co_sb=co_ell_sb,
                    pvd_width=(params['x_fwhm']+params['y_fwhm'])/params['resolution']/2., vcg_func=vcg_in)
-    # gas_norm=params['gas_norm'], gas_radius=params['gas_radius']
 
     mg.grids()
     mg.convolution()
@@ -1478,11 +1410,11 @@ if __name__ == "__main__":
     #mg.line_profiles(4, 6)  # blue orig (not great)
     #mg.line_profiles(6, 6)  # blue okay? (meh)
     #mg.line_profiles(10, 9)  # near ctr orig (meh)
-    mg.line_profiles(14, 8)  # decent red [was using this]
-    #mg.line_profiles(14, 9)  # good red
-    mg.line_profiles(14, 10)  # decent red [was using this]
+    #mg.line_profiles(14, 8)  # decent red [was using this]
+    mg.line_profiles(14, 9)  # good red
+    #mg.line_profiles(14, 10)  # decent red [was using this]
     #mg.line_profiles(15, 9)  # good red
-    #mg.line_profiles(15, 10)  # decent red
+    mg.line_profiles(15, 10)  # decent red
 
     '''  #
     mg.line_profiles(8, 8)
