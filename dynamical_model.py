@@ -172,13 +172,25 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
         cut_x = -len(input_data[0][0])
     if cut_y == 0:
         cut_y = -len(input_data[0])
-    noise_4 = rebin(input_data[:, :-cut_y, :-cut_x], ds2, ds)  # down-sample noise to the same pixel as scale chi^2
+    noise_ds = rebin(input_data[:, :-cut_y, :-cut_x], ds2, ds)  # down-sample noise to the same pixel as scale chi^2
+    #plt.imshow(noise_ds[30], origin='lower')
+    #plt.colorbar()
+    #plt.show()
+    #print(oop)
     noise = []  # For large N, Variance ~= std^2
     for z in range(zrange[0], zrange[1]):  # for each relevant freq slice, calculte std (aka rms) ~variance
-        noise.append(np.std(noise_4[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
+        noise.append(np.std(noise_ds[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
 
-    plt.plot(freq_ax[zrange[0]:zrange[1]] / 1e9, noise, 'k+')
-    plt.show()
+    #old_noise = np.asarray([0.0047938414, 0.0057121925, 0.005666403, 0.00455698, 0.0051469607, 0.004841708, 0.007227508, 0.0055102557, 0.004624235, 0.0056849183, 0.0062672924, 0.0041691866, 0.004935608, 0.005534195, 0.0041076047, 0.0049384222, 0.004482359, 0.005310159, 0.0043843645, 0.0049279328, 0.004954323, 0.005978033, 0.0055042678, 0.0050382675, 0.004220744, 0.0055228053, 0.005443151, 0.004432064, 0.00511151, 0.006386146, 0.0048364927, 0.0045861364, 0.004503367, 0.0059076953, 0.0041700765, 0.004106136, 0.004087357, 0.00428376, 0.0048605967, 0.005542805, 0.0042076586, 0.005303044, 0.0044478285, 0.0045871977, 0.0052732597, 0.003614018, 0.0045240363, 0.0044748993, 0.005597469, 0.004323797, 0.0040780245, 0.0045947754, 0.0055068964, 0.005745958, 0.005798084, 0.004495402, 0.004907751])
+    #old_noise /= 16
+    #noise = np.asarray(noise)
+    #noise /= (ds*ds2)
+    #plt.plot(freq_ax[zrange[0]:zrange[1]] / 1e9, np.asarray(noise), 'k+', label='ds=' + str(ds) + 'x' + str(ds2))
+    #plt.plot(freq_ax[zrange[0]:zrange[1]] / 1e9, old_noise, 'ro', label='ds=4x4')
+    #plt.ylabel('Noise per binned pixel')
+    #plt.legend()
+    #plt.show()
+    #print(oop)
 
     # CALCULATE VELOCITY WIDTH  # vsys = 6454.9 estimated based on various test runs; see Week of 2020-05-04 on wiki
     v_width = 2.99792458e5 * (1 + (6454.9 / 2.99792458e5)) * fstep / f_0  # velocity width [km/s] = c*(1+v/c)*fstep/f0
@@ -890,18 +902,11 @@ class ModelGrid:
         # self.input_data_masked = self.input_data[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
         #                          self.xyrange[0]:self.xyrange[1]] * ell_mask  # mask the input data cube
 
-        plt.imshow(self.ell_mask, origin='lower')
-        plt.colorbar()
-        plt.show()
-
-        print(self.ell_mask.shape)
-        print(self.ds2, self.ds)
-
         # REBIN THE ELLIPSE MASK BY THE DOWN-SAMPLING FACTOR
         self.ell_ds = rebin(self.ell_mask, self.ds2, self.ds)[0]  # rebin the mask by the down-sampling factor
-        plt.imshow(self.ell_ds, origin='lower')
-        plt.colorbar()
-        plt.show()
+        #plt.imshow(self.ell_ds, origin='lower')
+        #plt.colorbar()
+        #plt.show()
         #self.ell_ds[self.ell_ds < 0.5] = 0.  # if averaging instead of summing
         self.ell_ds[self.ell_ds < self.ds * self.ds2 / 2.] = 0.  # pixels < 50% "inside" the ellipse are masked (i.e.=0)
         self.ell_ds = np.nan_to_num(self.ell_ds / np.abs(self.ell_ds))  # set all points in ellipse = 1, convert nan->0
@@ -977,10 +982,15 @@ class ModelGrid:
             vel_ax = []
             for v in range(len(self.freq_ax)):
                 vel_ax.append(self.c_kms * (1. - (self.freq_ax[v] / self.f_0) * (1 + self.zred)))
-            plt.errorbar(vel_ax, data_ds[:, iy, ix], yerr=self.noise, color='k', marker='+', label=r'Data')
-            plt.bar(vel_ax, data_ds[:, iy, ix], width=vel_ax[1] - vel_ax[0], color='k', alpha=0.4)
-            plt.plot(vel_ax, ap_ds[:, iy, ix], color='r', marker='+', ls='none', label=r'Model')  # 'r+'
-            plt.bar(vel_ax, ap_ds[:, iy, ix], width=vel_ax[1] - vel_ax[0], color='r', alpha=0.5)
+            dv = vel_ax[1] - vel_ax[0]
+            #vel_ax.insert(0, vel_ax[0])
+            #plt.errorbar(vel_ax, data_ds[:, iy, ix], yerr=self.noise, color='k', marker='+', label=r'Data')
+            plt.fill_between(vel_ax, data_ds[:, iy, ix] - self.noise, data_ds[:, iy, ix] + self.noise, color='k',
+                             step='mid', alpha=0.3)
+            plt.step(vel_ax, data_ds[:, iy, ix], color='k', where='mid', label=r'Data')  # width=vel_ax[1] - vel_ax[0], alpha=0.4
+            #plt.plot(vel_ax + dv/2., data_ds[:, iy, ix], ls='steps', color='k', label=r'Data')  # width=vel_ax[1] - vel_ax[0], alpha=0.4
+            #plt.plot(vel_ax, ap_ds[:, iy, ix], color='r', marker='+', ls='none', label=r'Model')  # 'r+'
+            plt.step(vel_ax, ap_ds[:, iy, ix], color='b', where='mid', label=r'Model')  # width=vel_ax[1] - vel_ax[0], alpha=0.5
             plt.axvline(x=0., color='k', ls='--', label=r'v$_{\text{sys}}$')
             plt.xlabel(r'Line-of-sight velocity [km/s]')
         plt.legend()
@@ -1464,13 +1474,13 @@ if __name__ == "__main__":
     #mg.moment_0(abs_diff=False, incl_beam=True, norm=False)
     #mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1)
     #mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=2)
-    #mg.line_profiles(7, 5)  # decent blue [was using this]
+    mg.line_profiles(7, 5)  # decent blue [was using this]
     #mg.line_profiles(4, 6)  # blue orig (not great)
     #mg.line_profiles(6, 6)  # blue okay? (meh)
     #mg.line_profiles(10, 9)  # near ctr orig (meh)
-    #mg.line_profiles(14, 8)  # decent red [was using this]
+    mg.line_profiles(14, 8)  # decent red [was using this]
     #mg.line_profiles(14, 9)  # good red
-    #mg.line_profiles(14, 10)  # decent red [was using this]
+    mg.line_profiles(14, 10)  # decent red [was using this]
     #mg.line_profiles(15, 9)  # good red
     #mg.line_profiles(15, 10)  # decent red
 
