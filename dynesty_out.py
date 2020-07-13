@@ -96,7 +96,7 @@ def my_own_xy(results, par_labels, ax_labels, quantiles, ax_lims=None, compare_e
     plt.show()
 
 
-def table_it(things, parfiles, models, parlabels, sig=3):
+def table_it(things, parfiles, models, parlabels, sig=3, avg=True):
 
     hdr = '| model | '
     hdrl = '| --- |'
@@ -106,15 +106,21 @@ def table_it(things, parfiles, models, parlabels, sig=3):
 
     texlines = '| '
     lines = '| '
+
     for t in range(len(things)):
         print(t, len(things), len(parfiles), len(models))
         params, priors, nfree, qobs = dm.par_dicts(parfiles[t], q=True)  # get params and file names from output parfile
-        mod_ins = dm.model_prep(data=params['data'], ds=params['ds'], lucy_out=params['lucy'], lucy_b=params['lucy_b'],
+
+        if 'ds2' not in params:
+            params['ds2'] = params['ds']
+        
+        mod_ins = dm.model_prep(data=params['data'], ds=params['ds'], ds2=params['ds2'], lucy_out=params['lucy'],
+                                lucy_b=params['lucy_b'],
                                 lucy_mask=params['lucy_mask'], lucy_in=params['lucy_in'], lucy_it=params['lucy_it'],
                                 data_mask=params['mask'], grid_size=params['gsize'], res=params['resolution'],
                                 x_std=params['x_fwhm'], y_std=params['y_fwhm'], zrange=[params['zi'], params['zf']],
                                 xyerr=[params['xerr0'], params['xerr1'], params['yerr0'], params['yerr1']],
-                                pa=params['PAbeam'])
+                                pa=params['PAbeam'], avg=avg)
         lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise, co_rad, co_sb = mod_ins
         vrad = None
         kappa = None
@@ -127,6 +133,13 @@ def table_it(things, parfiles, models, parlabels, sig=3):
         elif 'kappa' in parlabels:
             kappa = params['kappa']
 
+        inc_fixed = np.deg2rad(67.7)  # based on fiducial model (67.68 deg)
+        vcg_in = None
+        if params['incl_gas'] == 'True':
+            vcg_in = gas_vel(params['resolution'], co_rad, co_sb, params['dist'], f_0, inc_fixed, zfixed=0.02152)
+        print(params['ds'], params['ds2'], 'hi')
+
+
         mg = dm.ModelGrid(x_loc=params['xloc'], y_loc=params['yloc'], mbh=params['mbh'], ml_ratio=params['ml_ratio'],
             inc=np.deg2rad(params['inc']), vsys=params['vsys'], theta=np.deg2rad(params['PAdisk']), vrad=vrad,
             kappa=kappa, omega=omega, f_w=params['f'], os=params['os'], enclosed_mass=params['mass'],
@@ -134,8 +147,10 @@ def table_it(things, parfiles, models, parlabels, sig=3):
             lucy_out=lucy_out, out_name=None, beam=beam, rfit=params['rfit'], zrange=[params['zi'], params['zf']],
             dist=params['dist'], input_data=input_data, sig_type=params['s_type'], menc_type=params['mtype'],
             theta_ell=np.deg2rad(params['theta_ell']), xell=params['xell'],yell=params['yell'], q_ell=params['q_ell'],
-            ds=params['ds'], reduced=True, f_0=f_0, freq_ax=freq_ax, noise=noise, bl=params['bl'], fstep=fstep,
-            xyrange=[params['xi'], params['xf'], params['yi'], params['yf']], n_params=nfree)
+            ds=params['ds'], ds2=params['ds2'], reduced=True, f_0=f_0, freq_ax=freq_ax, noise=noise, bl=params['bl'],
+            fstep=fstep, xyrange=[params['xi'], params['xf'], params['yi'], params['yf']], n_params=nfree,
+            data_mask=params['mask'], incl_gas=params['incl_gas']=='True', co_rad=co_rad, co_sb=co_sb, vcg_func=vcg_in,
+            pvd_width=(params['x_fwhm'] + params['y_fwhm']) / params['resolution'] / 2., avg=avg)
 
         mg.grids()
         mg.convolution()
@@ -287,41 +302,6 @@ grp = '/Users/jonathancohn/Documents/dyn_mod/groupmtg/'
 inpf = None
 
 
-# RHE 2 VRAD
-dictrhe2vrad = {'pkl': 'dyndyn_newpri_3_maxc10mil_n8_mask2rhevrad_1587724128.296138_end.pkl',  # 2698 mask2 rhe, vrad
-                'name': 'ugc_2698_newmasks/u2698_nest_mask2rhevrad_3sig.png',
-                'cornername': 'ugc_2698_newmasks/u2698_nest_mask2rhevrad_corner_3sig.png',
-                'inpf': 'ugc_2698/ugc_2698_newmask2_rhe_n8_vrad.txt',
-                'outpf': 'ugc_2698/ugc_2698_newmask2_rhe_n8_vrad_out.txt',
-                'mod': 'rhe baseline',
-                'extra_params': [['vrad', 'km/s']]}
-
-# RHE 2 KAPPA
-dictrhe2kappa = {'pkl': 'u2698_mask2_rhe_kappa_10000000_8_0.01_1588375516.5221143_end.pkl',  # 2698 mask2 rhe, kappa
-                 'name': 'ugc_2698_newmasks/u2698_nest_mask2rhekappa_3sig.png',
-                 'cornername': 'ugc_2698_newmasks/u2698_nest_mask2rhekappa_corner_3sig.png',
-                 'inpf': 'ugc_2698/ugc_2698_newmask2_rhe_n8_kappa.txt',
-                 'outpf': 'ugc_2698/ugc_2698_newmask2_rhe_n8_kappa_out.txt',
-                 'mod': 'rhe baseline',
-                 'extra_params': [['kappa', 'unitless']]}
-
-# RHE 2 OMEGA
-dictrhe2omega = {'pkl': 'u2698_mask2_rhe_omega_10000000_8_0.01_1588463109.9259367_end.pkl',  # 2698 mask2 rhe, omega
-                 'name': 'ugc_2698_newmasks/u2698_nest_mask2rheomega_3sig.png',
-                 'cornername': 'ugc_2698_newmasks/u2698_nest_mask2rheomega_corner_3sig.png',
-                 'inpf': 'ugc_2698/ugc_2698_newmask2_rhe_n8_omega.txt',
-                 'outpf': 'ugc_2698/ugc_2698_newmask2_rhe_n8_omega_out.txt',
-                 'mod': 'rhe baseline',
-                 'extra_params': [['kappa', 'unitless'], ['omega', 'unitless']]}
-
-# RHE BASELINE GAS
-dictrhe2gas = {'pkl': 'u2698_baseline_rhe_orig_gas_10000000_8_0.02_1588986032.6169796_end.pkl', # 2698 mask2 rhe gas
-               'name': 'ugc_2698_newmasks/u2698_nest_baseline_rhe_orig_gas_3sig.png',
-               'cornername': 'ugc_2698_newmasks/u2698_nest_baseline_rhe_orig_gas_corner_3sig.png',
-               'inpf': 'ugc_2698/ugc_2698_baseline_rhe_orig_gas.txt',
-               'outpf': 'ugc_2698/ugc_2698_baseline_rhe_orig_gas_out.txt',
-               'mod': 'rhe baseline gas', 'extra_params': None}
-
 # RHE BASELINE DIST85
 dictrhe2d85 = {'pkl': 'u2698_d85_baseline_rhe_orig_nog_10000000_8_0.02_1589829467.780973_end.pkl', # 2698 mask2 rhe d85
                'name': 'ugc_2698_newmasks/u2698_nest_d85_baseline_rhe_orig_nog_3sig.png',
@@ -401,6 +381,14 @@ dictgs71exv = {'pkl': 'u2698_gs71exv_d91_baseline_rhe_orig_nog_10000000_8_0.02_1
                'inpf': 'ugc_2698/ugc_2698_gs71exv_d91_baseline_rhe_orig_nog.txt',
                'outpf': 'ugc_2698/ugc_2698_gs71exv_d91_baseline_rhe_orig_nog_out.txt',
                'mod': 'rhe baseline (gs71 exv)', 'extra_params': None}
+
+# RHE BASELINE os1, d91 (exv)
+dictrhe2os1 = {'pkl': 'u2698_exv_os1_baseline_rhe_orig_nog_10000000_8_0.02_1594137189.4916558_tempsave.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_exv_os1_baseline_rhe_orig_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_exv_os1_baseline_rhe_orig_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_exv_os1_baseline_rhe_orig_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_exv_os1_baseline_rhe_orig_nog_out.txt',
+               'mod': 'rhe baseline (exv os1)', 'extra_params': None}
 
 # RHE BASELINE os2, d91 // Runtime:
 dictrhe2os2 = {'pkl': 'u2698_exv_os2_baseline_rhe_orig_nog_10000000_8_0.02_1593211158.390702_end.pkl',
@@ -635,8 +623,101 @@ dictd89exv = {'pkl': 'u2698_exv_d89_baseline_rhe_orig_nog_10000000_8_0.02_159355
               'outpf': 'ugc_2698/ugc_2698_exv_d89_baseline_rhe_orig_nog_out.txt',
               'mod': 'exv d89', 'extra_params': None}
 
+# EXV VRAD
+dictvradexv = {'pkl': 'u2698_exv_baseline_rhe_vrad_nog_10000000_8_0.02_1593673473.1230404_end.pkl',
+               'name': 'ugc_2698_newmasks/u2698_nest_exv_baseline_rhe_vrad_nog_3sig.png',
+               'cornername': 'ugc_2698_newmasks/u2698_nest_exv_baseline_rhe_vrad_nog_corner_3sig.png',
+               'inpf': 'ugc_2698/ugc_2698_exv_baseline_rhe_vrad_nog.txt',
+               'outpf': 'ugc_2698/ugc_2698_exv_baseline_rhe_vrad_nog_out.txt',
+               'mod': 'rhe baseline (exv vrad)',
+               'extra_params': [['vrad', 'km/s']]}
+
+# EXV KAPPA
+dictkappaexv = {'pkl': 'u2698_exv_baseline_rhe_kappa_nog_10000000_8_0.02_1593666159.3994417_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_exv_baseline_rhe_kappa_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_exv_baseline_rhe_kappa_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_exv_baseline_rhe_kappa_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_exv_baseline_rhe_kappa_nog_out.txt',
+                'mod': 'rhe baseline (exv kappa)',
+                'extra_params': [['kappa', 'unitless']]}
+
+# EXV OMEGA
+dictomegaexv = {'pkl': 'u2698_exv_baseline_rhe_omega_nog_10000000_8_0.02_1593535240.4114645_tempsave.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_exv_baseline_rhe_omega_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_exv_baseline_rhe_omega_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_exv_baseline_rhe_omega_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_exv_baseline_rhe_omega_nog_out.txt',
+                'mod': 'rhe baseline (exv omega)',
+                'extra_params': [['kappa', 'unitless'], ['omega', 'unitless']]}
+
+# EXV OMEGA EXTENDED PRIOR (omega:0-1.5?)
+dictomegapriex = {'pkl': 'u2698_priex_exv_baseline_rhe_omega_nog_10000000_8_0.02_1594135150.3725324_tempsave.pkl',
+                  'name': 'ugc_2698_newmasks/u2698_nest_priex_exv_baseline_rhe_omega_nog_3sig.png',
+                  'cornername': 'ugc_2698_newmasks/u2698_nest_priex_exv_baseline_rhe_omega_nog_corner_3sig.png',
+                  'inpf': 'ugc_2698/ugc_2698_priex_exv_baseline_rhe_omega_nog.txt',
+                  'outpf': 'ugc_2698/ugc_2698_priex_exv_baseline_rhe_omega_nog_out.txt',
+                  'mod': 'rhe baseline (priex_exv omega)',
+                  'extra_params': [['kappa', 'unitless'], ['omega', 'unitless']]}
+
+# EXV GAS
+dictgasexv = {'pkl': 'u2698_exv_baseline_rhe_orig_gas_10000000_8_0.02_1593657512.256259_end.pkl',
+              'name': 'ugc_2698_newmasks/u2698_nest_exv_baseline_rhe_orig_gas_3sig.png',
+              'cornername': 'ugc_2698_newmasks/u2698_nest_exv_baseline_rhe_orig_gas_corner_3sig.png',
+              'inpf': 'ugc_2698/ugc_2698_exv_baseline_rhe_orig_gas.txt',
+              'outpf': 'ugc_2698/ugc_2698_exv_baseline_rhe_orig_gas_out.txt',
+              'mod': 'rhe baseline (exv gas)', 'extra_params': None}
+
+# DOWNSAMPLING TESTS
+# EXV DS36
+dictds36 = {'pkl': 'u2698_exv_ds36_baseline_rhe_orig_nog_10000000_8_0.02_1594177536.569008_end.pkl',
+            'name': 'ugc_2698_newmasks/u2698_nest_exv_ds36_baseline_rhe_orig_nog_3sig.png',
+            'cornername': 'ugc_2698_newmasks/u2698_nest_exv_ds36_baseline_rhe_orig_nog_corner_3sig.png',
+            'inpf': 'ugc_2698/ugc_2698_exv_ds36_baseline_rhe_orig_nog.txt',
+            'outpf': 'ugc_2698/ugc_2698_exv_ds36_baseline_rhe_orig_nog_out.txt',
+            'mod': 'exv ds36', 'extra_params': None}
+
+# EXV DS48
+dictds48 = {'pkl': 'u2698_exv_ds48_baseline_rhe_orig_nog_10000000_8_0.02_1594185729.955073_end.pkl',
+            'name': 'ugc_2698_newmasks/u2698_nest_exv_ds48_baseline_rhe_orig_nog_3sig.png',
+            'cornername': 'ugc_2698_newmasks/u2698_nest_exv_ds48_baseline_rhe_orig_nog_corner_3sig.png',
+            'inpf': 'ugc_2698/ugc_2698_exv_ds48_baseline_rhe_orig_nog.txt',
+            'outpf': 'ugc_2698/ugc_2698_exv_ds48_baseline_rhe_orig_nog_out.txt',
+            'mod': 'exv ds48', 'extra_params': None}
+
+# EXV DS510
+dictds510 = {'pkl': 'u2698_exv_ds510_baseline_rhe_orig_nog_10000000_8_0.02_1594179537.3446014_end.pkl',
+             'name': 'ugc_2698_newmasks/u2698_nest_exv_ds510_baseline_rhe_orig_nog_3sig.png',
+             'cornername': 'ugc_2698_newmasks/u2698_nest_exv_ds510_baseline_rhe_orig_nog_corner_3sig.png',
+             'inpf': 'ugc_2698/ugc_2698_exv_ds510_baseline_rhe_orig_nog.txt',
+             'outpf': 'ugc_2698/ugc_2698_exv_ds510_baseline_rhe_orig_nog_out.txt',
+             'mod': 'exv ds510', 'extra_params': None}
+
+# EXV DS1010
+dictds1010 = {'pkl': 'u2698_exv_ds1010_baseline_rhe_orig_nog_10000000_8_0.02_1594154428.067813_tempsave.pkl',
+             'name': 'ugc_2698_newmasks/u2698_nest_exv_ds1010_baseline_rhe_orig_nog_3sig_2.png',
+             'cornername': 'ugc_2698_newmasks/u2698_nest_exv_ds1010_baseline_rhe_orig_nog_corner_3sig_2.png',
+             'inpf': 'ugc_2698/ugc_2698_exv_ds1010_baseline_rhe_orig_nog.txt',
+             'outpf': 'ugc_2698/ugc_2698_exv_ds1010_baseline_rhe_orig_nog_out.txt',
+             'mod': 'exv ds1010', 'extra_params': None}
+
+# EXV DLOGZ 0.001
+dictexvdlz0p001 = {'pkl': 'u2698_exv_dlz0.001_baseline_rhe_orig_nog_10000000_8_0.001_1594331575.7311764_end.pkl',
+                   'name': 'ugc_2698_newmasks/u2698_nest_exv_dlz0.001_baseline_rhe_orig_nog_3sig.png',
+                   'cornername': 'ugc_2698_newmasks/u2698_nest_exv_dlz0.001_baseline_rhe_orig_nog_corner_3sig.png',
+                   'inpf': 'ugc_2698/ugc_2698_exv_dlz0.001_baseline_rhe_orig_nog.txt',
+                   'outpf': 'ugc_2698/ugc_2698_exv_dlz0.001_baseline_rhe_orig_nog_out.txt',
+                   'mod': 'rhe baseline dlz0.001', 'extra_params': None}
+
+# EXV NLIVE 1000
+dictexvn1000 = {'pkl': 'u2698_exv_n1000_baseline_rhe_orig_nog_10000000_8_0.02_1594353857.219947_end.pkl',
+                'name': 'ugc_2698_newmasks/u2698_nest_exv_n1000_baseline_rhe_orig_nog_3sig.png',
+                'cornername': 'ugc_2698_newmasks/u2698_nest_exv_n1000_baseline_rhe_orig_nog_corner_3sig.png',
+                'inpf': 'ugc_2698/ugc_2698_exv_n1000_baseline_rhe_orig_nog.txt',
+                'outpf': 'ugc_2698/ugc_2698_exv_n1000_baseline_rhe_orig_nog_out.txt',
+                'mod': 'rhe baseline n1000', 'extra_params': None}
+
 # CHOOSE DICTIONARY, DEFINE LABELS
-dict = dictgs71exv
+dict = dictds48
 if 'nobh' in dict['pkl']:
     labels = np.array(['xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])
     ax_lab = np.array(['pixels', 'pixels', 'km/s', 'deg', 'deg', 'km/s', r'M$_{\odot}$/L$_{\odot}$', 'unitless'])
@@ -656,7 +737,7 @@ if dict['extra_params'] is not None:
 
 print(labels)
 
-'''  #
+#'''  #
 
 # ONLY table_it *AFTER* OUT FILE CREATED
 hd, hl, li, tx = table_it([direc + dict['pkl']], [dict['outpf']], [dict['mod']], tablabs, sig=1)
@@ -828,9 +909,14 @@ elif 'vrad' in out_name and 'rhe' in out_name:
 elif 'kappa' in out_name and 'rhe' in out_name:
     ax_lims = [[9.2, 9.5], [126.2, 127.8], [150.2, 151.8], [12.5, 21.4], [66., 71.], [17., 21.], [6447., 6462.],
                [1.61, 1.95], [0.93, 1.2], [-0.05, 0.05]]
+elif 'omega' in out_name and 'priex' in out_name:
+    ax_lims = [[8., 10.], [124., 128.], [148, 152], [0., 40.], [52.4, 89], [5., 35.], [6405, 6505],
+               [0.3, 4.], [0.5, 1.5], [-0.5, 0.5], [0., 1.4]]  # [19.13, 19.23]
 elif 'omega' in out_name and 'rhe' in out_name:
-    ax_lims = [[9.1, 9.8], [126.2, 127.8], [150.2, 151.8], [12.5, 23.], [66., 71.], [16.5, 21.], [6447., 6462.],
-               [1.52, 2.2], [0.93, 1.2], [-0.1, 0.1], [0.7, 1.]]
+    ax_lims = [[8., 10.], [124., 128.], [148, 152], [0., 40.], [52.4, 89], [5., 35.], [6405, 6505],
+               [0.3, 3.], [0.5, 1.5], [-1., 1.], [0., 1.]]  # [19.13, 19.23]
+#        [[9.1, 9.8], [126.2, 127.8], [150.2, 151.8], [12.5, 23.], [66., 71.], [16.5, 21.], [6447., 6462.],
+#               [1.52, 2.2], [0.93, 1.2], [-0.1, 0.1], [0.7, 1.]]
 elif 'mask' in out_name:
     ax_lims = [[9.3, 9.6], [126.2, 127.8], [150.2, 151.8], [7.8, 21.4], [66., 70.], [15., 23.], [6447., 6462.],
                [1.52, 1.8], [0.93, 1.2]]  # [19.13, 19.23]
@@ -838,8 +924,8 @@ elif 'expsig' in out_name:
     ax_lims = [[8., 10.], [124., 128.], [148, 152], [0., 100.], [52.4, 85], [5., 35.], [6405, 6505],
                [0.3, 3.], [0.5, 1.5], [0., 100.], [0., 100.]]  # [19.13, 19.23]
 elif 'set3' in out_name or 'set2' in out_name or 'rre' in out_name or 'ahe' in out_name or 'akin' in out_name\
-        or 'rfit' in out_name or 'jexv' in out_name:
-    ax_lims = [[8., 10.], [124., 128.], [148, 152], [0., 40.], [52.4, 85], [5., 35.], [6405, 6505],
+        or 'rfit' in out_name or 'exv' in out_name:
+    ax_lims = [[8., 10.], [124., 128.], [148, 152], [0., 40.], [52.4, 89], [5., 35.], [6405, 6505],
                [0.3, 3.], [0.5, 1.5]]  # [19.13, 19.23]
 elif 'nobh' in out_name:
     ax_lims = [[124., 128.], [148, 152], [0., 40.], [52.4, 85], [5., 35.], [6405, 6505],
