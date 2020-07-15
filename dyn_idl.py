@@ -1112,8 +1112,9 @@ class ModelGrid:
             self.convolved_cube[z, :, :] = convolution.convolve(intrinsic_cube[z, :, :], self.beam)
         print('convolution loop ' + str(time.time() - tc))
 
-        self.generate_kinemetry_input(model=False, mom=2, snr=10)#, filename='u2698_moment_vorbin_avgdat_snr10.txt')
-        print(oop)
+        # BUCKET WAS USING THIS TO GENERATE KINEMETRY INPUT
+        #self.generate_kinemetry_input(model=False, mom=2, snr=10)#, filename='u2698_moment_vorbin_avgdat_snr10.txt')
+        #print(oop)
 
 
     def vorbinning(self, snr, m1=None, cube=None, filename=None):
@@ -1276,6 +1277,16 @@ class ModelGrid:
         self.clipped_data = self.input_data[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
                                             self.xyrange[0]:self.xyrange[1]]
 
+        #self.clipped_data = self.vorbinned_cube(snr=8)
+        cube_vb = self.vorbinned_cube(snr=8)
+
+        vb_ds = rebin(cube_vb, self.ds)
+
+        for ix,iy in [[4,6],[10,8],[12,8],[7,5],[14,9],[15,10]]:
+            print(ix,iy)
+            self.line_profiles_comparevb(cube_vb, ix, iy, noise2=self.noise, show_freq=False)
+        print(oop)
+
         # self.convolved_cube *= ell_mask  # mask the convolved model cube
         # self.input_data_masked = self.input_data[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
         #                          self.xyrange[0]:self.xyrange[1]] * ell_mask  # mask the input data cube
@@ -1336,6 +1347,47 @@ class ModelGrid:
         return chi_sq  # Reduced or Not depending on reduced = True or False
 
 
+    def line_profiles_comparevb(self, cube_vb, ix, iy, noise2=None, show_freq=False):
+        # compare line profiles between regular cube and voronoi-binned cube
+        f_sys = self.f_0 / (1 + self.zred)
+        print(ix, iy)
+        data_ds = rebin(self.clipped_data, self.ds)
+        vb_ds = rebin(cube_vb, self.ds)
+
+        hdu_m = fits.open(self.data_mask)
+        data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
+        v_width = 2.99792458e5 * (1 + (6454.9 / 2.99792458e5)) * self.fstep / self.f_0  # velocity width [km/s] = c*(1+v/c)*fstep/f0
+        mask_ds = rebin(data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
+                        self.xyrange[0]:self.xyrange[1]], self.ds)
+
+        if show_freq:
+            plt.plot(self.freq_ax / 1e9, vb_ds[:, iy, ix], 'r*', label=r'Voronoi-binned')
+            plt.plot(self.freq_ax / 1e9, data_ds[:, iy, ix], 'k+', label=r'Data')
+            plt.plot(self.freq_ax / 1e9, self.noise, 'k--', label=r'Noise (std)')
+            plt.axvline(x=f_sys / 1e9, color='k', label=r'$f_{sys}$')
+            plt.xlabel(r'Frequency [GHz]')
+        else:
+            vel_ax = []
+            for v in range(len(self.freq_ax)):
+                vel_ax.append(self.c_kms * (1. - (self.freq_ax[v] / self.f_0) * (1 + self.zred)))
+            dv = vel_ax[1] - vel_ax[0]
+            #vel_ax.insert(0, vel_ax[0])
+            #plt.errorbar(vel_ax, data_ds[:, iy, ix], yerr=self.noise, color='k', marker='+', label=r'Data')
+            plt.fill_between(vel_ax, data_ds[:, iy, ix] - self.noise, data_ds[:, iy, ix] + self.noise, color='k',
+                             step='mid', alpha=0.3)
+            plt.step(vel_ax, data_ds[:, iy, ix], color='k', where='mid', label=r'Data')  # width=vel_ax[1] - vel_ax[0], alpha=0.4
+            #plt.plot(vel_ax + dv/2., data_ds[:, iy, ix], ls='steps', color='k', label=r'Data')  # width=vel_ax[1] - vel_ax[0], alpha=0.4
+            #plt.plot(vel_ax, ap_ds[:, iy, ix], color='r', marker='+', ls='none', label=r'Model')  # 'r+'
+            plt.fill_between(vel_ax, vb_ds[:, iy, ix] - noise2, vb_ds[:, iy, ix] + noise2, color='b', step='mid',
+                             alpha=0.3)
+            plt.step(vel_ax, vb_ds[:, iy, ix], color='b', where='mid', label=r'Voronoi-binned')  # width=vel_ax[1] - vel_ax[0], alpha=0.5
+            plt.axvline(x=0., color='k', ls='--', label=r'v$_{\text{sys}}$')
+            plt.xlabel(r'Line-of-sight velocity [km/s]')
+        plt.legend()
+        plt.ylabel(r'Flux Density [Jy/beam]')
+        plt.show()
+
+
     def line_profiles(self, ix, iy, show_freq=False):  # compare line profiles at the given indices ix, iy
         f_sys = self.f_0 / (1 + self.zred)
         print(ix, iy)
@@ -1344,15 +1396,14 @@ class ModelGrid:
 
         hdu_m = fits.open(self.data_mask)
         data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
-        hdu_m.close()
         v_width = 2.99792458e5 * (1 + (6454.9 / 2.99792458e5)) * self.fstep / self.f_0  # velocity width [km/s] = c*(1+v/c)*fstep/f0
-        mask_ds = rebin(data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]], self.ds)
+        mask_ds = rebin(data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
+                        self.xyrange[0]:self.xyrange[1]], self.ds)
 
         collapse_flux_v = np.zeros(shape=(len(data_ds[0]), len(data_ds[0][0])))
         for zi in range(len(data_ds)):
             collapse_flux_v += data_ds[zi] * mask_ds[zi] * v_width
             # self.clipped_data[zi] * data_mask[zi, self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]]* v_width
-        # fluxes_ds = rebin(collapse_flux_v, self.ds)[0]
         #plt.imshow(collapse_flux_v, origin='lower')
         #cbar = plt.colorbar()
         #cbar.set_label(r'Jy km s$^{-1}$ beam$^{-1}$', rotation=270, labelpad=20.)
@@ -1371,19 +1422,21 @@ class ModelGrid:
             vel_ax = []
             for v in range(len(self.freq_ax)):
                 vel_ax.append(self.c_kms * (1. - (self.freq_ax[v] / self.f_0) * (1 + self.zred)))
-            # ['#377eb8', '#ff7f00', '#4daf4a', '#f781bf', '#a65628', '#984ea3', '#999999', '#e41a1c', '#dede00']
-            # [pale blue, orange red,  green,   pale pink, red brown,  lavender, pale gray,    red, yellow green]
-            plt.errorbar(vel_ax, data_ds[:, iy, ix], yerr=self.noise, color='k', marker='+', label=r'Data')
-            plt.bar(vel_ax, data_ds[:, iy, ix], width=vel_ax[1] - vel_ax[0], color='k', alpha=0.4)
-            plt.plot(vel_ax, ap_ds[:, iy, ix], color='r', marker='+', ls='none', label=r'Model')  # 'r+'
-            plt.bar(vel_ax, ap_ds[:, iy, ix], width=vel_ax[1] - vel_ax[0], color='r', alpha=0.5)
-            #plt.plot(vel_ax, self.noise, 'k--', label=r'Noise (std)')
-            #plt.bar(vel_ax, self.noise, 'k--', label=r'Noise (std)')
+            dv = vel_ax[1] - vel_ax[0]
+            #vel_ax.insert(0, vel_ax[0])
+            #plt.errorbar(vel_ax, data_ds[:, iy, ix], yerr=self.noise, color='k', marker='+', label=r'Data')
+            plt.fill_between(vel_ax, data_ds[:, iy, ix] - self.noise, data_ds[:, iy, ix] + self.noise, color='k',
+                             step='mid', alpha=0.3)
+            plt.step(vel_ax, data_ds[:, iy, ix], color='k', where='mid', label=r'Data')  # width=vel_ax[1] - vel_ax[0], alpha=0.4
+            #plt.plot(vel_ax + dv/2., data_ds[:, iy, ix], ls='steps', color='k', label=r'Data')  # width=vel_ax[1] - vel_ax[0], alpha=0.4
+            #plt.plot(vel_ax, ap_ds[:, iy, ix], color='r', marker='+', ls='none', label=r'Model')  # 'r+'
+            plt.step(vel_ax, ap_ds[:, iy, ix], color='b', where='mid', label=r'Model')  # width=vel_ax[1] - vel_ax[0], alpha=0.5
             plt.axvline(x=0., color='k', ls='--', label=r'v$_{\text{sys}}$')
             plt.xlabel(r'Line-of-sight velocity [km/s]')
         plt.legend()
         plt.ylabel(r'Flux Density [Jy/beam]')
         plt.show()
+
 
 
     def pvd(self):
@@ -1475,6 +1528,95 @@ class ModelGrid:
         plt.title('4x4-binned weight map')
         plt.colorbar()
         plt.show()
+
+
+    def vorbinned_cube(self, snr=8):
+        """
+        Create moment map within voronoi-binned regions, based on averaging the line profiles in each voronoi bin
+
+        :param snr: target Signal-to-Noise Ratio
+
+        :return:
+        """
+        import vorbin
+        from vorbin.voronoi_2d_binning import voronoi_2d_binning
+
+        hdu_m = fits.open(self.data_mask)  # open data mask
+        data_mask = hdu_m[0].data  # the mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
+        hdu_m.close()
+
+        sig = np.zeros(shape=self.input_data[0].shape)  # estimate the 2D collapsed signal
+        noi = 0  # estimate a constant noise
+        for z in range(len(self.input_data)):
+            sig += self.input_data[z] * data_mask[z] / len(self.input_data)
+            noi += np.mean(self.input_data[z, params['yerr0']:params['yerr1'], params['xerr0']:params['xerr1']]) / \
+                   len(self.input_data)
+
+        sig = sig[self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]]
+        # print(noi)
+
+        self.clipped_data = self.input_data[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
+                                            self.xyrange[0]:self.xyrange[1]]
+
+        signal_input = []
+        noise_input = []
+        x_in = []  # used as arcsec-scale input
+        y_in = []  # used as arcsec-scale input
+        xpix = []  # just store pixel number
+        ypix = []  # just store pixel number
+        if len(sig) % 2. == 0:  # if even
+            yctr = (len(sig)) / 2.  # set the center of the axes (in pixel number)
+        else:  # elif odd
+            yctr = (len(sig) + 1.) / 2.  # +1 bc python starts counting at 0
+        if len(sig[0]) % 2 == 0.:
+            xctr = (len(sig[0])) / 2.  # set the center of the axes (in pixel number)
+        else:  # elif odd
+            xctr = (len(sig[0]) + 1.) / 2.  # +1 bc python starts counting at 0
+
+        for yy in range(len(sig)):
+            for xx in range(len(sig[0])):
+                if sig[yy, xx] != 0:  # don't include pixels that have been masked out!
+                    xpix.append(xx)
+                    ypix.append(yy)
+                    x_in.append(xx - xctr)  # pixel scale, with 0 at center
+                    y_in.append(yy - yctr)  # pixel scale, with 0 at center
+                    noise_input.append(noi)
+                    signal_input.append(sig[yy, xx])
+
+        target_snr = snr
+        signal_input = np.asarray(signal_input)
+        noise_input = np.asarray(noise_input)
+        x_in = np.asarray(x_in) * self.resolution  # convert to arcsec-scale
+        y_in = np.asarray(y_in) * self.resolution  # convert to arcsec-scale
+
+        # Perform voronoi binning! The vectors (binNum, xNode, yNode, xBar, yBar, sn, nPixels, scale) are *output*
+        binNum, xNode, yNode, xBar, yBar, sn, nPixels, scale = voronoi_2d_binning(x_in, y_in, signal_input, noise_input,
+                                                                                  target_snr, plot=1, quiet=1)
+        plt.show()
+        # print(binNum, sn, nPixels)  # len=# of pix, bin # for each pix; len=# of bins: SNR/bin; len=# of bins: # pix/bin
+
+        flat_binned_cube = np.zeros(shape=(len(self.clipped_data), max(binNum) + 1))  # flatten & bin cube as f(slice)
+        for zc in range(len(self.clipped_data)):
+            for xy in range(len(x_in)):
+                flat_binned_cube[zc, binNum[xy]] += self.clipped_data[zc, ypix[xy], xpix[xy]] / nPixels[binNum[xy]]
+
+        # convert the flattened binned cube into a vector where each slice has the same size as the x & y inputs
+        full_binned_cube = np.zeros(shape=(len(self.clipped_data), len(binNum)))
+        for zc in range(len(self.clipped_data)):
+            for xy in range(len(x_in)):
+                full_binned_cube[zc, xy] += flat_binned_cube[zc, binNum[xy]]
+
+        # convert the full binned cube back to the same size as the input cube, now with the contents voronoi binned
+        cube_vb = np.zeros(shape=self.clipped_data.shape)
+        print(full_binned_cube.shape)  # 57, 2875
+        print(flat_binned_cube.shape)  # 57, 716
+        print(self.clipped_data.shape)  # 57, 64, 84
+        print(max(xpix), max(ypix))  # 80, 59
+        for zc in range(len(self.clipped_data)):
+            for xy in range(len(x_in)):
+                cube_vb[zc, ypix[xy], xpix[xy]] = full_binned_cube[zc, xy]
+
+        return cube_vb
 
 
     def moment_0(self, abs_diff, incl_beam, norm, samescale=False):
@@ -2109,20 +2251,29 @@ if __name__ == "__main__":
     # mg.pvd()
     # mg.vorbinning()
     # filename='u2698_moment_vorbin_snr4_ac.txt'
-    mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=2, snr=4, filename=None)
+    #mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=2, snr=4, filename=None)
                  #filename='u2698_moment_vorbin_snr10_ac.txt')
     # For moment 2: SNR 5 bad, 10 good, 7 has ~1 bad pixel near center still; 8 a little rough but no more bad pixels
-    print(oop)
-    mg.moment_0(abs_diff=False, incl_beam=True, norm=False)
-    mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1)
-    mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=2)
-    mg.line_profiles(7, 5)  # decent blue
+    # print(oop)
+    # mg.moment_0(abs_diff=False, incl_beam=True, norm=False)
+    # mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1)
+    # mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=2)
+
+    mg.line_profiles(10, 8)  # center?
+    mg.line_profiles(11, 8)  # center?
+    mg.line_profiles(12, 8)  # red?
+    mg.line_profiles(9, 7)  # blue?
+    mg.line_profiles(7, 5)  # decent blue [recently using this]
+    mg.line_profiles(14, 9)  # good red [recently using this]
+    mg.line_profiles(15, 10)  # decent red [recently using this]
+
+    #mg.line_profiles(7, 5)  # decent blue
     #mg.line_profiles(4, 6)  # blue orig (not great)
     #mg.line_profiles(6, 6)  # blue okay? (meh)
     #mg.line_profiles(10, 9)  # near ctr orig (meh)
-    mg.line_profiles(14, 8)  # decent red
+    #mg.line_profiles(14, 8)  # decent red
     #mg.line_profiles(14, 9)  # good red
-    mg.line_profiles(14, 10)  # decent red
+    #mg.line_profiles(14, 10)  # decent red
     #mg.line_profiles(15, 9)  # good red
     #mg.line_profiles(15, 10)  # decent red
 
