@@ -1112,8 +1112,21 @@ class ModelGrid:
             self.convolved_cube[z, :, :] = convolution.convolve(intrinsic_cube[z, :, :], self.beam)
         print('convolution loop ' + str(time.time() - tc))
 
+        self.generate_kinemetry_input(model=False, mom=2, snr=10)#, filename='u2698_moment_vorbin_avgdat_snr10.txt')
+        print(oop)
 
-    def vorbinning(self, m1, snr, filename=None):
+
+    def vorbinning(self, snr, m1=None, cube=None, filename=None):
+        """
+
+        :param snr: target Signal-to-Noise Ratio
+        :param m1: moment map to be rebuilt on scale of voronoi-binned map (ie. avg the moment map in each bin)
+        :param cube: model cube to be rebuilt on scale of voronoi-binned map (ie. average the line profiles in each bin)
+                     and then use that voronoi-binned cube to generate the moment map later
+        :param filename: file to which to save XBIN, YBIN, moment map
+        :return:
+        """
+
         hdu_m = fits.open(self.data_mask)
         data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
         hdu_m.close()
@@ -1123,15 +1136,13 @@ class ModelGrid:
         noi = 0
         for z in range(len(self.input_data)):
             sig += self.input_data[z] * data_mask[z] / len(self.input_data)
-            noi += np.mean(self.input_data[z, 96:120, 144:168]) / len(self.input_data)
+            noi += np.mean(self.input_data[z, params['yerr0']:params['yerr1'], params['xerr0']:params['xerr1']]) /\
+                   len(self.input_data)
         import vorbin
         from vorbin.voronoi_2d_binning import voronoi_2d_binning
 
         sig = sig[self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]]
         print(noi)
-        #plt.imshow(sig, origin='lower')
-        #plt.colorbar()
-        #plt.show()
 
         signal_input = []
         noise_input = []
@@ -1169,99 +1180,91 @@ class ModelGrid:
                                                                                   target_snr, plot=1, quiet=1)
         plt.show()
         print(binNum, sn, nPixels)  # len=# of pix, bin # for each pix; len=# of bins: SNR/bin; len=# of bins: # pix/bin
-        # print(oop)
 
-        # flatten and bin the moment 1 map
-        flattened_binned_m1 = np.zeros(shape=max(binNum)+1)
-        for xy in range(len(x_in)):
-            flattened_binned_m1[binNum[xy]] += m1[ypix[xy], xpix[xy]] / nPixels[binNum[xy]]
-
-        # convert the flattened binned moment 1 map into a vector of the same size as the x & y inputs
-        full_binned_m1 = np.zeros(shape=len(binNum))
-        for xy in range(len(x_in)):
-            full_binned_m1[xy] += flattened_binned_m1[binNum[xy]]
-
-        '''  #
-        dir = '/Users/jonathancohn/Documents/dyn_mod/'
-        with open(dir+'voronoi_2d_binning_2698_output.txt', 'r') as vb:
-            for line in vb:
-                if not line.startswith('#'):
-                    cols = line.split()
-                    flattened_binned_m1[int(cols[2])] += m1[int(cols[1]), int(cols[0])] / nPixels[int(cols[2])]
-
-        full_binned_m1 = np.zeros(shape=len(binNum))
-        dir = '/Users/jonathancohn/Documents/dyn_mod/'
-        with open(dir+'voronoi_2d_binning_2698_output.txt', 'r') as vb:
-            ii = 0
-            for line in vb:
-                if not line.startswith('#'):
-                    cols = line.split()
-                    full_binned_m1[ii] += flattened_binned_m1[int(cols[2])]
-                    ii += 1
-        # '''
-
-        # '''
-        if filename is not None:
-            dir = '/Users/jonathancohn/Documents/dyn_mod/'
-            with open(dir+filename, 'w+') as vb:  # dir+'u2698_moment_vorbin_snr15.txt'
-                vb.write('# targetSN=' + str(target_snr) + '\n')
-                vb.write('#######################\n')
-                vb.write('   XBIN   YBIN   VEL   \n')
-                vb.write('#######################\n')
-                # vb.write('# x y binNum\n')
+        if cube is not None:
+            print('Averaging Voronoi binning on the cube')
+            flat_binned_cube = np.zeros(shape=(len(cube), max(binNum) + 1))  # flatten & bin the cube as func(slice)
+            for zc in range(len(cube)):
                 for xy in range(len(x_in)):
-                    vb.write(str(x_in[xy]) + ' ' + str(y_in[xy]) + ' ' + str(full_binned_m1[xy]) + '\n')
-                    # m1_vb[y_in[xy], x_in[xy]] = full_binned_m1[xy]
-                #for xy in range(len(x_in)):
-                #    vb.write(str(x_in[xy]) + ' ' + str(y_in[xy]) + ' ' + str(binNum[xy]) + ' ' + str(full_binned_m1[xy]) +
-                #             '\n')
-                #    m1_vb[y_in[xy], x_in[xy]] = full_binned_m1[xy]
+                    flat_binned_cube[zc, binNum[xy]] += cube[zc, ypix[xy], xpix[xy]] / nPixels[binNum[xy]]
+
+            # convert the flattened binned cube into a vector where each slice has the same size as the x & y inputs
+            full_binned_cube = np.zeros(shape=(len(cube), len(binNum)))
+            for zc in range(len(cube)):
+                for xy in range(len(x_in)):
+                    full_binned_cube[zc, xy] += flat_binned_cube[zc, binNum[xy]]
+
+            # convert the full binned cube back to the same size as the input cube, now with the contents voronoi binned
+            cube_vb = np.zeros(shape=cube.shape)
+            for zc in range(len(cube)):
+                for xy in range(len(x_in)):
+                    cube_vb[zc, ypix[xy], xpix[xy]] = flat_binned_cube[zc, xy]
+
+            self.convolved_cube = cube_vb
+            mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1)
+            mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=2)
+
+            return cube_vb
+
+        elif m1 is not None:
+            print('Averaging Voronoi binning on the moment map')
+            flattened_binned_m1 = np.zeros(shape=max(binNum)+1)  # flatten and bin the moment 1 map
+            for xy in range(len(x_in)):
+                flattened_binned_m1[binNum[xy]] += m1[ypix[xy], xpix[xy]] / nPixels[binNum[xy]]
+
+            # convert the flattened binned moment 1 map into a vector of the same size as the x & y inputs
+            full_binned_m1 = np.zeros(shape=len(binNum))
+            for xy in range(len(x_in)):
+                full_binned_m1[xy] += flattened_binned_m1[binNum[xy]]
+
+            '''  #
+            dir = '/Users/jonathancohn/Documents/dyn_mod/'
+            with open(dir+'voronoi_2d_binning_2698_output.txt', 'r') as vb:
+                for line in vb:
+                    if not line.startswith('#'):
+                        cols = line.split()
+                        flattened_binned_m1[int(cols[2])] += m1[int(cols[1]), int(cols[0])] / nPixels[int(cols[2])]
+    
+            full_binned_m1 = np.zeros(shape=len(binNum))
+            dir = '/Users/jonathancohn/Documents/dyn_mod/'
+            with open(dir+'voronoi_2d_binning_2698_output.txt', 'r') as vb:
+                ii = 0
+                for line in vb:
+                    if not line.startswith('#'):
+                        cols = line.split()
+                        full_binned_m1[ii] += flattened_binned_m1[int(cols[2])]
+                        ii += 1
             # '''
 
-            ###  dlogz 1.1431055564826238 thresh 0.02 nc 518024 niter 9051
-        '''
-        start
-% Compiled module: KINEMETRY_MINE.
-% Compiled module: RDFLOAT.
-% RDFLOAT: 5376 lines of data read
-start
-% Compiled module: KINEMETRY.
-% Loaded DLM: QHULL.
-% Compiled module: MPFIT.
-       Radius,      RAD,     PA,        Q,        Xcen,     Ycen,  # of ellipse elements
-  0-th radius:     0.020    18.000     0.200     0.000     0.000     9
-% TRIANGULATE: Not enough valid and unique points specified.
-% Execution halted at: KINEM_TRIGRID_IRREGULAR  524
-   /Users/jonathancohn/Data/idl/lib/krajnovic/kinemetry/kinemetry.pro
-%                      KINEMETRY        1474
-   /Users/jonathancohn/Data/idl/lib/krajnovic/kinemetry/kinemetry.pro
-%                      KINEMETRY_MINE     50
-   /Users/jonathancohn/Data/idl/lib/krajnovic/kinemetry/kinemetry_mine.pro
-%                      $MAIN$          
-IDL>  
-### NEW ERROR BELOW
-% Compiled module: KINEMETRY_MINE.
-% Compiled module: RDFLOAT.
-% RDFLOAT: 2875 lines of data read
-start
-% Compiled module: KINEMETRY.
-% Loaded DLM: QHULL.
-% Compiled module: MPFIT.
-% Variable is undefined: ERR_SOL.
-% Execution halted at: KINEMETRY        1137
-   /Users/jonathancohn/Data/idl/lib/krajnovic/kinemetry/kinemetry.pro
-%                      KINEMETRY_MINE     51
-   /Users/jonathancohn/Data/idl/lib/krajnovic/kinemetry/kinemetry_mine.pro
-%                      $MAIN$    
-        '''
-        # create the binned moment map for display
-        m1_vb = np.zeros(shape=m1.shape)
-        for xy in range(len(x_in)):
-            m1_vb[ypix[xy], xpix[xy]] = full_binned_m1[xy]
+            # '''
+            if filename is not None:
+                dir = '/Users/jonathancohn/Documents/dyn_mod/'
+                with open(dir+filename, 'w+') as vb:  # dir+'u2698_moment_vorbin_snr15.txt'
+                    vb.write('# targetSN=' + str(target_snr) + '\n')
+                    vb.write('#######################\n')
+                    vb.write('   XBIN   YBIN   VEL   \n')
+                    vb.write('#######################\n')
+                    # vb.write('# x y binNum\n')
+                    for xy in range(len(x_in)):
+                        vb.write(str(x_in[xy]) + ' ' + str(y_in[xy]) + ' ' + str(full_binned_m1[xy]) + '\n')
+                        # m1_vb[y_in[xy], x_in[xy]] = full_binned_m1[xy]
+                    #for xy in range(len(x_in)):
+                    #    vb.write(str(x_in[xy]) + ' ' + str(y_in[xy]) + ' ' + str(binNum[xy]) + ' ' + str(full_binned_m1[xy]) +
+                    #             '\n')
+                    #    m1_vb[y_in[xy], x_in[xy]] = full_binned_m1[xy]
+                # '''
 
-        plt.imshow(m1_vb, origin='lower', cmap='RdBu_r')  # plot it!
-        plt.colorbar()
-        plt.show()
+                ###  dlogz 1.1431055564826238 thresh 0.02 nc 518024 niter 9051
+            # create the binned moment map for display
+            m1_vb = np.zeros(shape=m1.shape)
+            for xy in range(len(x_in)):
+                m1_vb[ypix[xy], xpix[xy]] = full_binned_m1[xy]
+
+            plt.imshow(m1_vb, origin='lower', cmap='RdBu_r')  # plot it!
+            plt.colorbar()
+            plt.show()
+
+            return m1_vb
 
 
     def chi2(self):
@@ -1706,7 +1709,7 @@ start
             ax[2].set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
 
             plt.show()
-            self.vorbinning(m1=np.nan_to_num(d2), snr=snr, filename=filename)
+            # self.vorbinning(m1=np.nan_to_num(d2), snr=snr, filename=filename)
 
 
         elif mom == 1:
@@ -1780,7 +1783,7 @@ start
                 for j in range(len(data_mom[0])):
                     if np.isnan(data_mom[i, j]):
                         data_mom[i, j] = 0.
-            self.vorbinning(m1=data_mom, snr=snr, filename=filename)  # 4, filename='u2698_moment_vorbin_snr4_ac.txt')
+            # self.vorbinning(m1=data_mom, snr=snr, filename=filename)  # 4, filename='u2698_moment_vorbin_snr4_ac.txt')
 
             if self.kin_file is not None:
                 print(self.kin_file)
@@ -1806,6 +1809,184 @@ start
                     plt.show()
                 print('done')
                 '''
+
+            return data_mom
+
+
+    def generate_kinemetry_input(self, model=False, mom=1, snr=8, filename=None):
+        """
+        Create moment map within voronoi-binned regions, based on averaging the line profiles in each voronoi bin
+
+        :param model: True or False; if True, generating kinemetry input from model cube; else, generating from data
+        :param mom: moment, 1 or 2
+        :param snr: target Signal-to-Noise Ratio
+        :param filename: file to which to save XBIN, YBIN, moment map
+
+        :return:
+        """
+        import vorbin
+        from vorbin.voronoi_2d_binning import voronoi_2d_binning
+
+        hdu_m = fits.open(self.data_mask)  # open data mask
+        data_mask = hdu_m[0].data  # the mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
+        hdu_m.close()
+
+        sig = np.zeros(shape=self.input_data[0].shape)  # estimate the 2D collapsed signal
+        noi = 0  # estimate a constant noise
+        for z in range(len(self.input_data)):
+            sig += self.input_data[z] * data_mask[z] / len(self.input_data)
+            noi += np.mean(self.input_data[z, params['yerr0']:params['yerr1'], params['xerr0']:params['xerr1']]) / \
+                   len(self.input_data)
+
+        sig = sig[self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]]
+        # print(noi)
+
+        self.clipped_data = self.input_data[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
+                                            self.xyrange[0]:self.xyrange[1]]
+
+        signal_input = []
+        noise_input = []
+        x_in = []  # used as arcsec-scale input
+        y_in = []  # used as arcsec-scale input
+        xpix = []  # just store pixel number
+        ypix = []  # just store pixel number
+        if len(sig) % 2. == 0:  # if even
+            yctr = (len(sig)) / 2.  # set the center of the axes (in pixel number)
+        else:  # elif odd
+            yctr = (len(sig) + 1.) / 2.  # +1 bc python starts counting at 0
+        if len(sig[0]) % 2 == 0.:
+            xctr = (len(sig[0])) / 2.  # set the center of the axes (in pixel number)
+        else:  # elif odd
+            xctr = (len(sig[0]) + 1.) / 2.  # +1 bc python starts counting at 0
+
+        for yy in range(len(sig)):
+            for xx in range(len(sig[0])):
+                if sig[yy, xx] != 0:  # don't include pixels that have been masked out!
+                    xpix.append(xx)
+                    ypix.append(yy)
+                    x_in.append(xx - xctr)  # pixel scale, with 0 at center
+                    y_in.append(yy - yctr)  # pixel scale, with 0 at center
+                    noise_input.append(noi)
+                    signal_input.append(sig[yy, xx])
+
+        target_snr = snr
+        signal_input = np.asarray(signal_input)
+        noise_input = np.asarray(noise_input)
+        x_in = np.asarray(x_in) * self.resolution  # convert to arcsec-scale
+        y_in = np.asarray(y_in) * self.resolution  # convert to arcsec-scale
+
+        # Perform voronoi binning! The vectors (binNum, xNode, yNode, xBar, yBar, sn, nPixels, scale) are *output*
+        binNum, xNode, yNode, xBar, yBar, sn, nPixels, scale = voronoi_2d_binning(x_in, y_in, signal_input, noise_input,
+                                                                                  target_snr, plot=1, quiet=1)
+        plt.show()
+        # print(binNum, sn, nPixels)  # len=# of pix, bin # for each pix; len=# of bins: SNR/bin; len=# of bins: # pix/bin
+
+        flat_binned_cube = np.zeros(shape=(len(self.clipped_data), max(binNum) + 1))  # flatten & bin cube as f(slice)
+        for zc in range(len(self.clipped_data)):
+            for xy in range(len(x_in)):
+                flat_binned_cube[zc, binNum[xy]] += self.clipped_data[zc, ypix[xy], xpix[xy]] / nPixels[binNum[xy]]
+
+        # convert the flattened binned cube into a vector where each slice has the same size as the x & y inputs
+        full_binned_cube = np.zeros(shape=(len(self.clipped_data), len(binNum)))
+        for zc in range(len(self.clipped_data)):
+            for xy in range(len(x_in)):
+                full_binned_cube[zc, xy] += flat_binned_cube[zc, binNum[xy]]
+
+        # convert the full binned cube back to the same size as the input cube, now with the contents voronoi binned
+        cube_vb = np.zeros(shape=self.clipped_data.shape)
+        print(full_binned_cube.shape)  # 57, 2875
+        print(flat_binned_cube.shape)  # 57, 716
+        print(self.clipped_data.shape)  # 57, 64, 84
+        print(max(xpix), max(ypix))  # 80, 59
+        for zc in range(len(self.clipped_data)):
+            for xy in range(len(x_in)):
+                cube_vb[zc, ypix[xy], xpix[xy]] = full_binned_cube[zc, xy]
+
+        vel_ax = []  # convert freq axis to velocity axis
+        for v in range(len(self.freq_ax)):
+            vel_ax.append(self.c_kms * (1. - (self.freq_ax[v] / self.f_0) * (1 + self.zred)))
+
+        # full cube strictmask, clipped to the appropriate zrange
+        clipped_mask = data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
+                                 self.xyrange[0]:self.xyrange[1]]
+
+        # Calculate Moment 1 (model)
+        model_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+        model_denominator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+        for zi in range(len(self.convolved_cube)):
+            model_numerator += vel_ax[zi] * self.convolved_cube[zi] * clipped_mask[zi]
+            model_denominator += self.convolved_cube[zi] * clipped_mask[zi]
+        model_mom = model_numerator / model_denominator
+
+        # Calculate Moment 1 (data)
+        data_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+        data_denominator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+        for zi in range(len(self.convolved_cube)):
+            data_numerator += vel_ax[zi] * self.clipped_data[zi] * clipped_mask[zi]
+            data_denominator += self.clipped_data[zi] * clipped_mask[zi]
+        data_mom = data_numerator / data_denominator
+
+        if mom == 2:  # Calculate Moment 2 (model, then data)
+            m2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            m2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            for zi in range(len(self.convolved_cube)):
+                m2_num += (vel_ax[zi] - model_mom)**2 * self.convolved_cube[zi] * clipped_mask[zi]
+                m2_den += self.convolved_cube[zi] * clipped_mask[zi]
+            m2 = np.sqrt(m2_num / m2_den)
+
+            d2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            d2_n2 = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            d2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            for zi in range(len(self.convolved_cube)):
+                d2_n2 += self.clipped_data[zi] * (vel_ax[zi] - data_mom)**2 * clipped_mask[zi] # * mask2d
+                d2_num += (vel_ax[zi] - data_mom)**2 * self.clipped_data[zi] * clipped_mask[zi] # * mask2d
+                d2_den += self.clipped_data[zi] * clipped_mask[zi] # * mask2d
+            d2_num[d2_num < 0] = 0.  # BUCKET ADDING TO GET RID OF NANs
+            d2 = np.sqrt(d2_num / d2_den) # * d1  # BUCKET: no need for MASKING using d1?
+            d2 = np.nan_to_num(d2)
+            #print(np.argwhere(np.isnan(d2)))
+            data_mom = d2  # replace moment 1 with moment 2 (data)
+            model_mom = m2  # replace moment 1 with moment 2 (model)
+
+        if model:  # are we generating kinemetry for the model moment map?
+            moment = model_mom
+        else:  # or are we generating kinemetry for the data moment map?
+            moment = data_mom
+
+        flattened_binned_m1 = np.zeros(shape=max(binNum) + 1)  # flatten and bin the selected moment map
+        for xy in range(len(x_in)):
+            flattened_binned_m1[binNum[xy]] += moment[ypix[xy], xpix[xy]] / nPixels[binNum[xy]]
+
+        # convert the flattened binned moment map into a vector of the same size as the x & y inputs
+        full_binned_m1 = np.zeros(shape=len(binNum))
+        for xy in range(len(x_in)):
+            full_binned_m1[xy] += flattened_binned_m1[binNum[xy]]
+
+        if filename is not None:
+            dir = '/Users/jonathancohn/Documents/dyn_mod/'
+            with open(dir + filename, 'w+') as vb:  # dir+'u2698_moment_vorbin_snr15.txt'
+                vb.write('# targetSN=' + str(target_snr) + '\n')
+                vb.write('#######################\n')
+                vb.write('   XBIN   YBIN   VEL   \n')
+                vb.write('#######################\n')
+                for xy in range(len(x_in)):
+                    vb.write(str(x_in[xy]) + ' ' + str(y_in[xy]) + ' ' + str(full_binned_m1[xy]) + '\n')
+
+        m1_vb = np.zeros(shape=moment.shape)  # create the binned moment map for display
+        for xy in range(len(x_in)):
+            m1_vb[ypix[xy], xpix[xy]] = full_binned_m1[xy]
+
+        vmax = np.nanmax([m1_vb, -m1_vb])
+        vmin = np.nanmin([m1_vb, -m1_vb])
+        cmap = 'RdBu_r'
+        if mom == 2:
+            vmax = np.nanmax(m1_vb)
+            vmin = np.nanmin(m1_vb)
+            cmap = 'plasma'
+        plt.imshow(m1_vb, origin='lower', cmap=cmap, vmax=vmax, vmin=vmin)
+        plt.colorbar()
+        plt.show()  # plot it!
+
 
     def kin_pa(self):
 
@@ -1924,10 +2105,12 @@ if __name__ == "__main__":
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()
+    # x_fwhm=0.197045, y_fwhm=0.103544 -> geometric mean = sqrt(0.197045*0.103544) = 0.142838
     # mg.pvd()
     # mg.vorbinning()
     # filename='u2698_moment_vorbin_snr4_ac.txt'
-    mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1, snr=10, filename='u2698_moment_vorbin_snr10_ac.txt')
+    mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=2, snr=4, filename=None)
+                 #filename='u2698_moment_vorbin_snr10_ac.txt')
     # For moment 2: SNR 5 bad, 10 good, 7 has ~1 bad pixel near center still; 8 a little rough but no more bad pixels
     print(oop)
     mg.moment_0(abs_diff=False, incl_beam=True, norm=False)

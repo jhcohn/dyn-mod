@@ -33,7 +33,7 @@ rcParams.update({'ytick.minor.width': '1.0'})
 rcParams.update({'font.size': 15})
 
 result = []
-with open('groupmtg/kinemetry_out_vorbin_snr4.txt', 'r') as f:
+with open('groupmtg/kinemetry_out_vorbin_avgdat_snr10.txt', 'r') as f:
     for line in f:
         if not line.startswith('#'):
             cols = line.split()
@@ -69,7 +69,6 @@ for j in range(len(result)):
     elif 11 * interval <= j < 12 * interval:
         erk51.append(result[j])
 
-
 plt.errorbar(rad, pa, yerr=er_pa, fmt='ko')
 plt.xlabel('Radius [arcsec]')
 plt.ylabel('Position Angle [deg]')
@@ -80,5 +79,13 @@ plt.xlabel('Radius [arcsec]')
 plt.ylabel('q')
 plt.show()
 
+plt.errorbar(rad, k1, yerr=erk1, fmt='ko')
+plt.xlabel('Radius [arcsec]')
+plt.ylabel(r'k$_1$ [km/s]')
+plt.show()
 
+plt.errorbar(rad, k51, yerr=erk51, fmt='bo')
+plt.xlabel('Radius [arcsec]')
+plt.ylabel(r'k$_5$/k$_1$')
+plt.show()
 
