@@ -89,7 +89,7 @@ def par_dicts(parfile, q=False):
 
 def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it=None, data=None, data_mask=None,
                grid_size=None, res=1., x_std=1., y_std=1., pa=0., ds=4, ds2=4, zrange=None, xyerr=None, theta_ell=0,
-               q_ell=0, xell=0, yell=0):
+               q_ell=0, xell=0, yell=0, avg=True):
     """
 
     :param lucy_out: output from running lucy on data cube and beam PSF; if it doesn't exist, create it!
@@ -112,6 +112,7 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
     :param q_ell: axis ratio q of the annuli for the gas mass, same as for the ellipse fitting region [unitless]
     :param xell: x center of elliptical annuli for the gas mass, same as for the ellipse fitting region [pixels]
     :param yell: y center of elliptical annuli for the gas mass, same as for the ellipse fitting region [pixels]
+    :param avg: averaging vs summing within the rebin() function
 
     :return: lucy mask, lucy output, synthesized beam, flux map, frequency axis, f_0, freq step, input data cube
     """
@@ -166,33 +167,19 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
     hdu.close()
 
     # ESTIMATE NOISE (RMS) IN ORIGINAL DATA CUBE [z, y, x]
-    cut_y = len(input_data[0]) % ds2
-    cut_x = len(input_data[0][0]) % ds
-    if cut_x == 0:
-        cut_x = -len(input_data[0][0])
-    if cut_y == 0:
-        cut_y = -len(input_data[0])
-    noise_ds = rebin(input_data[:, :-cut_y, :-cut_x], ds2, ds)  # down-sample noise to the same pixel as scale chi^2
-    #plt.imshow(noise_ds[30], origin='lower')
-    #plt.colorbar()
-    #plt.show()
-    #print(oop)
+    cut_y = len(input_data[0]) % ds2  # is the cube y-dimension divisible by ds2? If not, cut remainder from cube edge
+    cut_x = len(input_data[0][0]) % ds  # is the cube x-dimension divisible by ds2? If not, cut remainder from cube edge
+    if cut_x == 0:  # if there is no remainder:
+        cut_x = -len(input_data[0][0])  # don't want to cut anything below
+    if cut_y == 0:  # if there is no remainder:
+        cut_y = -len(input_data[0])  # don't want to cut anything below
+    noise_ds = rebin(input_data[:, :-cut_y, :-cut_x], ds2, ds, avg=avg)  # down-sample noise to the chi^2 pixel scale
+
     noise = []  # For large N, Variance ~= std^2
     for z in range(zrange[0], zrange[1]):  # for each relevant freq slice, calculte std (aka rms) ~variance
         noise.append(np.std(noise_ds[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
 
-    #old_noise = np.asarray([0.0047938414, 0.0057121925, 0.005666403, 0.00455698, 0.0051469607, 0.004841708, 0.007227508, 0.0055102557, 0.004624235, 0.0056849183, 0.0062672924, 0.0041691866, 0.004935608, 0.005534195, 0.0041076047, 0.0049384222, 0.004482359, 0.005310159, 0.0043843645, 0.0049279328, 0.004954323, 0.005978033, 0.0055042678, 0.0050382675, 0.004220744, 0.0055228053, 0.005443151, 0.004432064, 0.00511151, 0.006386146, 0.0048364927, 0.0045861364, 0.004503367, 0.0059076953, 0.0041700765, 0.004106136, 0.004087357, 0.00428376, 0.0048605967, 0.005542805, 0.0042076586, 0.005303044, 0.0044478285, 0.0045871977, 0.0052732597, 0.003614018, 0.0045240363, 0.0044748993, 0.005597469, 0.004323797, 0.0040780245, 0.0045947754, 0.0055068964, 0.005745958, 0.005798084, 0.004495402, 0.004907751])
-    #old_noise /= 16
-    #noise = np.asarray(noise)
-    #noise /= (ds*ds2)
-    #plt.plot(freq_ax[zrange[0]:zrange[1]] / 1e9, np.asarray(noise), 'k+', label='ds=' + str(ds) + 'x' + str(ds2))
-    #plt.plot(freq_ax[zrange[0]:zrange[1]] / 1e9, old_noise, 'ro', label='ds=4x4')
-    #plt.ylabel('Noise per binned pixel')
-    #plt.legend()
-    #plt.show()
-    #print(oop)
-
-    # CALCULATE VELOCITY WIDTH  # vsys = 6454.9 estimated based on various test runs; see Week of 2020-05-04 on wiki
+    # CALCULATE VELOCITY WIDTH  # vsys = 6454.9 estimated from various test runs; see eg. Week of 2020-05-04 on wiki
     v_width = 2.99792458e5 * (1 + (6454.9 / 2.99792458e5)) * fstep / f_0  # velocity width [km/s] = c*(1+v/c)*fstep/f0
 
     # CONSTRUCT THE FLUX MAP IN UNITS Jy km/s beam^-1
@@ -206,7 +193,7 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
     co_surf, co_errs = annuli_sb(collapsed_fluxes_vel, semi_major, theta_ell, q_ell, xell, yell)  # CO [Jy km/s beam^-1]
     co_ell_sb = np.asarray(co_surf)  # put the output list of mean CO surface brightnesses in an array
     co_ell_rad = (2. * semi_major[1:] + q_ell * semi_major[1:]) / 3.  # mean_ellipse_radius = (2a + b)/3
-    # semi_major[1:] because 1 less annulus than ellipse
+    # semi_major[1:] because there is 1 less annulus than there are ellipses
 
     return lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise, co_ell_sb, co_ell_rad
 
@@ -339,29 +326,35 @@ def blockshaped(arr, nrow, ncol):
     return arr.reshape(h // nrow, nrow, -1, ncol).swapaxes(1, 2).reshape(-1, nrow, ncol)
 
 
-def rebin(data, nr, nc):
+def rebin(data, nr, nc, avg=True):
     """
     Rebin data or model cube (or one slice of a cube) in blocks of n x n pixels
 
     :param data: input data cube, model cube, or slice of a cube, e.g. a 2Darray
     :param nr: size of pixel binning, rows (e.g. nr=4, nc=4 rebins the date in blocks of 4x4 pixels)
     :param nc: size of pixel binning, columns
+    :param avg: if True, return the mean within each rebinnined pixel, rather than the sum. If False, return the sum.
     :return: rebinned cube or slice
     """
 
-    rebinned = []
-    if len(data.shape) == 2:
-        subarrays = blockshaped(data, nr, nc)  # bin the data in groups of nxn (4x4) pixels
-        # each pixel in the new, rebinned data cube is the mean of each 4x4 set of original pixels
-        reshaped = nr*nc * np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data) / nr),
-                                                                                 int(len(data[0]) / nc)))
-        rebinned.append(reshaped)
+    if avg:
+        nn = 1.
     else:
-        for z in range(len(data)):  # for each slice
-            subarrays = blockshaped(data[z, :, :], nr, nc)  # bin the data as above
-            reshaped = nr*nc * np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data[0]) / nr),
-                                                                                     int(len(data[0][0]) / nc)))
-            rebinned.append(reshaped)
+        nn = nr * nc
+
+    rebinned = []
+    if len(data.shape) == 2:  # bin data in groups of nr x nc pixels
+        subarrays = blockshaped(data, nr, nc)  # subarrays.shape = len(data)*len(data[0]) / (nr*nc)
+        # each pixel in the new, rebinned data cube is the mean of each nr x nc set of original pixels
+        reshaped = nn * np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data) / nr),
+                                                                               int(len(data[0]) / nc)))
+        rebinned.append(reshaped)  # reshaped.shape = (len(data) / nr, len(data[0]) / nc)
+    else:
+        for z in range(len(data)):  # bin each slice of the data in groups of nr x nc pixels
+            subarrays = blockshaped(data[z, :, :], nr, nc)  # subarrays.shape = len(data[0])*len(data[0][0]) / (nr*nc)
+            reshaped = nn * np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data[0]) / nr),
+                                                                                   int(len(data[0][0]) / nc)))
+            rebinned.append(reshaped)  # reshaped.shape = (len(data[0]) / nr, len(data[0][0]) / nc)
 
     return np.asarray(rebinned)
 
@@ -521,7 +514,7 @@ class ModelGrid:
                  out_name=None, beam=None, rfit=1., q_ell=1., theta_ell=0., xell=360., yell=350., bl=False,
                  enclosed_mass=None, menc_type=0, ml_ratio=1., sig_type='flat', sig_params=None, f_w=1., noise=None,
                  ds=None, ds2=None, zrange=None, xyrange=None, reduced=False, freq_ax=None, f_0=0., fstep=0., opt=True,
-                 quiet=False, n_params=8, data_mask=None, f_he=1.36, r21=0.7, alpha_co10=3.1, incl_gas=False,
+                 quiet=False, n_params=8, data_mask=None, avg=True, f_he=1.36, r21=0.7, alpha_co10=3.1, incl_gas=False,
                  co_rad=None, co_sb=None, z_fixed=0.02152, pvd_width=None, vcg_func=None):
         # Astronomical Constants:
         self.c = 2.99792458 * 10 ** 8  # [m / s]
@@ -581,6 +574,7 @@ class ModelGrid:
         self.opt = opt  # frequency axis velocity convention; opt=True -> optical; opt=False -> radio
         self.quiet = quiet  # if quiet=True, suppress printing out stuff!
         self.n_params = n_params  # number of free parameters being fit, as counted from the param file in par_dicts()
+        self.avg = avg  # averaging vs summing within the rebin() function
         self.co_rad = co_rad  # mean elliptical radii of annuli used in calculation of co_sb [pix]
         self.co_sb = co_sb  # mean CO surface brightness in elliptical annuli [Jy km/s beam^-1]
         self.f_he = f_he  # additional fraction of gas that is helium (f_he = 1 + helium mass fraction)
@@ -640,7 +634,7 @@ class ModelGrid:
 
         # RESCALE subpix_deconvolved, z_ax, freq_ax TO CONTAIN ONLY THE SUB-CUBE REGION WHERE EMISSION ACTUALLY EXISTS
         subpix_deconvolved = subpix_deconvolved[self.os * self.xyrange[2]:self.os * self.xyrange[3],
-                             self.os * self.xyrange[0]:self.os * self.xyrange[1]]  # stored: y,x
+                                                self.os * self.xyrange[0]:self.os * self.xyrange[1]]  # stored: y,x
         self.z_ax = z_ax[self.zrange[0]:self.zrange[1]]
         self.freq_ax = self.freq_ax[self.zrange[0]:self.zrange[1]]
 
@@ -700,9 +694,9 @@ class ModelGrid:
         # CALCULATE KEPLERIAN VELOCITY DUE TO ENCLOSED STELLAR MASS
         vg = 0  # default to ignoring the gas mass!
         if self.incl_gas:  # If incl_mass, overwrite vg with v_circ,gas estimate, then add it in quadrature to velocity!
-            vg = self.vcg_func(R)
             t_gas = time.time()  # Adds ~5s for nr=200, ~13s for nr=500
-            
+            vg = self.vcg_func(R)
+
             if not self.quiet:
                 print(time.time() - t_gas, ' seconds spent in gas calculation')
 
@@ -809,10 +803,10 @@ class ModelGrid:
                                                   (2 * self.delta_freq_obs ** 2))
 
         # RE-SAMPLE BACK TO CORRECT PIXEL SCALE (take avg of sxs sub-pixels for real alma pixel) --> intrinsic data cube
-        if self.os == 1:
-            intrinsic_cube = cube_model
-        else:  # intrinsic_cube = block_reduce(cube_model, self.os, np.mean)
-            intrinsic_cube = rebin(cube_model, self.os, self.os)
+        #if self.os == 1:
+        #    intrinsic_cube = cube_model
+        #else:  # intrinsic_cube = block_reduce(cube_model, self.os, np.mean)
+        intrinsic_cube = rebin(cube_model, self.os, self.os, avg=False)  # this must use avg=False
 
         tc = time.time()
         # CONVERT INTRINSIC TO OBSERVED (convolve each slice of intrinsic_cube with ALMA beam --> observed data cube)
@@ -836,31 +830,78 @@ class ModelGrid:
         #                          self.xyrange[0]:self.xyrange[1]] * ell_mask  # mask the input data cube
 
         # REBIN THE ELLIPSE MASK BY THE DOWN-SAMPLING FACTOR
-        self.ell_ds = rebin(self.ell_mask, self.ds2, self.ds)[0]  # rebin the mask by the down-sampling factor
-        #plt.imshow(self.ell_ds, origin='lower')
-        #plt.colorbar()
-        #plt.show()
-        #self.ell_ds[self.ell_ds < 0.5] = 0.  # if averaging instead of summing
-        self.ell_ds[self.ell_ds < self.ds * self.ds2 / 2.] = 0.  # pixels < 50% "inside" the ellipse are masked (i.e.=0)
+        self.ell_ds = rebin(self.ell_mask, self.ds2, self.ds, avg=self.avg)[0]  # rebin mask by the downsampling factor
+        fig = plt.figure()
+        ax = plt.gca()
+        plt.imshow(self.ell_ds, origin='lower')
+        plt.colorbar()
+        from matplotlib import patches
+        e1 = patches.Ellipse((self.xell / self.ds, self.yell / self.ds2), 2 * self.rfit / self.resolution,
+                             2 * self.rfit / self.resolution * self.q_ell, angle=np.rad2deg(self.theta_ell),
+                             linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
+        print(e1)
+        e1.width /= self.ds
+        e1.height /= self.ds
+        #e1.x /= self.ds
+        #e1.y /= self.ds2
+        ax.add_patch(e1)
+        plt.plot(self.xell / self.ds, self.yell / self.ds, 'w*')
+        #plt.plot(self.xell, self.yell, 'w*')
+        plt.show()
+
+        #print(oop)
+        if self.avg:  # if averaging instead of summing in rebin()
+            self.ell_ds[self.ell_ds < 0.5] = 0.  # pixels < 50% "inside" the ellipse are masked
+        else:  # if summing instead of averaging in rebin()
+            self.ell_ds[self.ell_ds < self.ds * self.ds2 / 2.] = 0.  # pixels < 50% "inside" the ellipse are masked
         self.ell_ds = np.nan_to_num(self.ell_ds / np.abs(self.ell_ds))  # set all points in ellipse = 1, convert nan->0
 
         # REBIN THE DATA AND MODEL BY THE DOWN-SAMPLING FACTOR: compare data and model in binned groups of dsxds pix
-        data_ds = rebin(self.clipped_data, self.ds2, self.ds)
-        ap_ds = rebin(self.convolved_cube, self.ds2, self.ds)
+        data_ds = rebin(self.clipped_data, self.ds2, self.ds, avg=self.avg)
+        ap_ds = rebin(self.convolved_cube, self.ds2, self.ds, avg=self.avg)
+
+        print(data_ds.shape)
+        print(self.convolved_cube.shape)
+        #print(oops)
+        ell_2 = ellipse_fitting(data_ds, self.rfit, self.xell / self.ds, self.yell / self.ds2,
+                                self.resolution * self.ds, self.theta_ell, self.q_ell)  # create ellipse mask
+        fig = plt.figure()
+        ax = plt.gca()
+        plt.imshow(ell_2, origin='lower')
+        plt.colorbar()
+        #plt.show()
+        from matplotlib import patches
+        e1 = patches.Ellipse((self.xell / self.ds, self.yell / self.ds2), 2 * self.rfit / self.resolution / self.ds,
+                             2 * self.rfit / self.resolution * self.q_ell / self.ds2, angle=np.rad2deg(self.theta_ell),
+                             linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
+        print(e1)
+        #e1.width /= self.ds
+        #e1.height /= self.ds
+        #e1.x /= self.ds
+        #e1.y /= self.ds2
+        ax.add_patch(e1)
+        plt.plot(self.xell / self.ds, self.yell / self.ds, 'w*')
+        #plt.plot(self.xell, self.yell, 'w*')
+        plt.show()
 
         # APPLY THE ELLIPTICAL MASK TO MODEL CUBE & INPUT DATA
         data_ds *= self.ell_ds
         ap_ds *= self.ell_ds
         n_pts = np.sum(self.ell_ds) * len(self.z_ax)  # total number of pixels compared in chi^2 calculation!
+        data_2 = data_ds * ell_2  # BUCKET
+        ap_2 = ap_ds * ell_2  # BUCKET
+        n_2 = np.sum(ell_2) * len(self.z_ax)  # BUCKET
 
         chi_sq = 0.  # initialize chi^2
         cs = []  # initialize chi^2 per slice
+        chi_2 = 0.  # BUCKET
 
         z_ind = 0  # the actual index for the model-data comparison cubes
         for z in range(self.zrange[0], self.zrange[1]):  # for each relevant freq slice (ignore slices with only noise)
             chi_sq += np.sum((ap_ds[z_ind] - data_ds[z_ind])**2 / self.noise[z_ind]**2)  # calculate chisq!
             cs.append(np.sum((ap_ds[z_ind] - data_ds[z_ind])**2 / self.noise[z_ind]**2))  # chisq per slice
             # np.std(x) = sqrt(mean(abs(x - x.mean())**2))
+            chi_2 += np.sum((ap_2[z_ind] - data_2[z_ind])**2 / self.noise[z_ind]**2)  # BUCKET
 
             z_ind += 1  # the actual index for the model-data comparison cubes
 
@@ -870,9 +911,13 @@ class ModelGrid:
 
         if self.reduced:  # CALCULATE REDUCED CHI^2
             chi_sq /= (n_pts - self.n_params)  # convert to reduced chi^2; else just return full chi^2
+            chi_2 /= (n_2 - self.n_params)  # BUCKET
             if not self.quiet:
                 print(r'Reduced chi^2=', chi_sq)
                 print(n_pts - self.n_params)
+                print(r'OR reduced chi^2 = ', chi_2)  # BUCKET
+                print(n_2 - self.n_params)  # BUCKET
+                print(oop)
 
         if n_pts == 0.:  # PROBLEM WARNING
             print(self.resolution, self.xell, self.yell, self.theta_ell, self.q_ell, self.rfit)
@@ -885,23 +930,53 @@ class ModelGrid:
     def line_profiles(self, ix, iy, show_freq=False):  # compare line profiles at the given indices ix, iy
         f_sys = self.f_0 / (1 + self.zred)
         print(ix, iy)
-        data_ds = rebin(self.clipped_data, self.ds2, self.ds)
-        ap_ds = rebin(self.convolved_cube, self.ds2, self.ds)
+        data_ds = rebin(self.clipped_data, self.ds2, self.ds, avg=self.avg)
+        ap_ds = rebin(self.convolved_cube, self.ds2, self.ds, avg=self.avg)
 
         hdu_m = fits.open(self.data_mask)
         data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
         v_width = 2.99792458e5 * (1 + (6454.9 / 2.99792458e5)) * self.fstep / self.f_0  # velocity width [km/s] = c*(1+v/c)*fstep/f0
-        mask_ds = rebin(data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]], self.ds2, self.ds)
+        mask_ds = rebin(data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
+                        self.xyrange[0]:self.xyrange[1]], self.ds2, self.ds, avg=self.avg)
 
         collapse_flux_v = np.zeros(shape=(len(data_ds[0]), len(data_ds[0][0])))
         for zi in range(len(data_ds)):
             collapse_flux_v += data_ds[zi] * mask_ds[zi] * v_width
             # self.clipped_data[zi] * data_mask[zi, self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]]* v_width
-        #plt.imshow(collapse_flux_v, origin='lower')
-        #cbar = plt.colorbar()
-        #cbar.set_label(r'Jy km s$^{-1}$ beam$^{-1}$', rotation=270, labelpad=20.)
-        #plt.plot(ix, iy, 'w*')
+
+        #plt.imshow(self.weight, origin='lower')
         #plt.show()
+        fig = plt.figure()
+        ax = plt.gca()
+        plt.imshow(self.ell_ds, origin='lower')
+        plt.colorbar()
+        from matplotlib import patches
+        e1 = patches.Ellipse((self.xell / self.ds, self.yell / self.ds), 2 * self.rfit / (self.resolution * self.ds), 2 * self.rfit / (self.resolution * self.ds) * self.q_ell,
+                             angle=np.rad2deg(self.theta_ell),
+                             linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
+        print(e1)
+        ax.add_patch(e1)
+        plt.plot(self.xell / self.ds, self.yell / self.ds, 'w*')
+        #plt.title(r'q = ' + str(self.q_ell) + r', PA = ' + str(params['theta_ell']) + ' deg, rfit = ' + str(params['rfit'])
+        #          + ' arcsec')
+        plt.show()
+        #print(oop)
+
+
+        plt.imshow(collapse_flux_v * self.ell_ds, origin='lower')
+        cbar = plt.colorbar()
+        cbar.set_label(r'Jy km s$^{-1}$ beam$^{-1}$', rotation=270, labelpad=20.)
+        ax = plt.gca()
+        from matplotlib import patches
+        print(2 * self.rfit / (self.resolution * self.ds))
+        print(2 * self.rfit / (self.resolution * self.ds2) * self.q_ell)
+        print(self.xell, self.yell)
+
+        e1 = patches.Ellipse((self.xell / self.ds, self.yell / self.ds2), 2 * self.rfit / (self.resolution * self.ds), 2 * self.rfit / (self.resolution * self.ds2) * self.q_ell,
+                             angle=np.rad2deg(self.theta_ell), linewidth=2, edgecolor='w', fill=False)
+        ax.add_patch(e1)
+        plt.plot(10.7125, 8.225, 'w*')  # ix, iy, 'w*'
+        plt.show()
         #plt.imshow(ap_ds[20], origin='lower')
         #plt.show()
         #print(oop)
@@ -1352,6 +1427,9 @@ if __name__ == "__main__":
     if 'ds2' not in params:
         params['ds2'] = params['ds']
 
+    # DECIDE HERE WHETHER TO AVG IN THE REBIN() FUNCTION (avging=True) OR SUM (avging=False)
+    avging = False
+
     # CREATE THINGS THAT ONLY NEED TO BE CALCULATED ONCE (collapse fluxes, lucy, noise)
     mod_ins = model_prep(data=params['data'], ds=params['ds'], ds2=params['ds2'], lucy_out=params['lucy'],
                          lucy_mask=params['lucy_mask'],
@@ -1359,7 +1437,7 @@ if __name__ == "__main__":
                          data_mask=params['mask'], grid_size=params['gsize'], res=params['resolution'],
                          x_std=params['x_fwhm'], y_std=params['y_fwhm'], pa=params['PAbeam'],
                          xyerr=[params['xerr0'], params['xerr1'], params['yerr0'], params['yerr1']],
-                         zrange=[params['zi'], params['zf']], q_ell=params['q_ell'],
+                         zrange=[params['zi'], params['zf']], avg=avging, q_ell=params['q_ell'],
                          theta_ell=np.deg2rad(params['theta_ell']), xell=params['xell'], yell=params['yell'])
 
     lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise, co_ell_sb, co_ell_rad = mod_ins
@@ -1396,7 +1474,7 @@ if __name__ == "__main__":
                    theta_ell=np.deg2rad(params['theta_ell']), xell=params['xell'], yell=params['yell'], fstep=fstep,
                    f_0=f_0, bl=params['bl'], xyrange=[params['xi'], params['xf'], params['yi'], params['yf']],
                    n_params=n_free, data_mask=params['mask'], incl_gas=params['incl_gas']=='True', vrad=params['vrad'],
-                   kappa=params['kappa'], omega=params['omega'], co_rad=co_ell_rad, co_sb=co_ell_sb,
+                   kappa=params['kappa'], omega=params['omega'], co_rad=co_ell_rad, co_sb=co_ell_sb, avg=avging,
                    pvd_width=(params['x_fwhm']+params['y_fwhm'])/params['resolution']/2., vcg_func=vcg_in)
 
     mg.grids()
@@ -1406,15 +1484,32 @@ if __name__ == "__main__":
     #mg.moment_0(abs_diff=False, incl_beam=True, norm=False)
     #mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1)
     #mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=2)
-    mg.line_profiles(7, 5)  # decent blue [was using this]
+
+    mg.line_profiles(13, 8)
+    mg.line_profiles(9, 7)
+    mg.line_profiles(9, 8)
+    mg.line_profiles(8, 8)
+    mg.line_profiles(13, 9)
+    print(oop)
+
+    mg.line_profiles(10, 8)  # center?
+    mg.line_profiles(11, 8)  # center?
+    mg.line_profiles(12, 8)  # red?
+    mg.line_profiles(9, 7)  # blue?
+    #mg.line_profiles(14, 8)  # decent red [was using this]
+    #mg.line_profiles(14, 10)  # decent red [was using this]
+    #mg.line_profiles(15, 9)  # good red
+
+    # Good examples
+    #mg.line_profiles(7, 5)  # decent blue [recently using this]
+    #mg.line_profiles(14, 9)  # good red [recently using this]
+    #mg.line_profiles(15, 10)  # decent red [recently using this]
+
+    # meh examples
     #mg.line_profiles(4, 6)  # blue orig (not great)
     #mg.line_profiles(6, 6)  # blue okay? (meh)
     #mg.line_profiles(10, 9)  # near ctr orig (meh)
-    #mg.line_profiles(14, 8)  # decent red [was using this]
-    mg.line_profiles(14, 9)  # good red
-    #mg.line_profiles(14, 10)  # decent red [was using this]
-    #mg.line_profiles(15, 9)  # good red
-    mg.line_profiles(15, 10)  # decent red
+    #mg.line_profiles(13, 8)  # red [not bad]
 
     '''  #
     mg.line_profiles(8, 8)
