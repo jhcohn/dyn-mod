@@ -1117,7 +1117,7 @@ class ModelGrid:
         #print(oop)
 
 
-    def vorbinning(self, snr, m1=None, cube=None, filename=None):
+    def vorbinning(self, snr, m1=None, cube=None, filename=None, cbar_lab=None, cmap='RdBu_r'):
         """
 
         :param snr: target Signal-to-Noise Ratio
@@ -1125,8 +1125,24 @@ class ModelGrid:
         :param cube: model cube to be rebuilt on scale of voronoi-binned map (ie. average the line profiles in each bin)
                      and then use that voronoi-binned cube to generate the moment map later
         :param filename: file to which to save XBIN, YBIN, moment map
+        :param cbar_lab: colorbar label (Jy km/s beam^-1 for Moment 0, km/s for Moment 1 and Moment 2)
+        :param extent: array, extent=[left, right, bottom, top] in data coordinates
         :return:
         """
+
+        # RESCALE (x_loc, y_loc) AND (xell, yell) PIXEL VALUES TO CORRESPOND TO SUB-CUBE PIXEL LOCATIONS!
+        x_locvb = self.x_loc - self.xyrange[0]  # x_loc - xi
+        y_locvb = self.y_loc - self.xyrange[2]  # y_loc - yi
+
+        # SET UP OBSERVATION AXES: initialize x,y axes at 0., with lengths = sub_cube.shape
+        y_obs_acvb = np.asarray([0.] * len(m1))
+        x_obs_acvb = np.asarray([0.] * len(m1[0]))
+
+        # Define coordinates to be 0,0 at center of the observed axes (find the central pixel number along each axis)
+        for i in range(len(x_obs_acvb)):
+            x_obs_acvb[i] = self.resolution * (i - x_locvb)  # (arcsec/pix) * N_pix = arcsec
+        for i in range(len(y_obs_acvb)):
+            y_obs_acvb[i] = self.resolution * (i - y_locvb)
 
         hdu_m = fits.open(self.data_mask)
         data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
@@ -1261,8 +1277,12 @@ class ModelGrid:
             for xy in range(len(x_in)):
                 m1_vb[ypix[xy], xpix[xy]] = full_binned_m1[xy]
 
-            plt.imshow(m1_vb, origin='lower', cmap='RdBu_r')  # plot it!
-            plt.colorbar()
+            plt.imshow(m1_vb, origin='lower', cmap=cmap, extent=[x_obs_acvb[0], x_obs_acvb[-1], y_obs_acvb[0],
+                                                                 y_obs_acvb[-1]])  # plot it!
+            cbar = plt.colorbar()
+            cbar.set_label(cbar_lab, rotation=270., labelpad=20.)
+            plt.xlabel('x [arcsec]')
+            plt.ylabel('y [arcsec]')
             plt.show()
 
             return m1_vb
@@ -1278,14 +1298,14 @@ class ModelGrid:
                                             self.xyrange[0]:self.xyrange[1]]
 
         #self.clipped_data = self.vorbinned_cube(snr=8)
-        cube_vb = self.vorbinned_cube(snr=8)
+        #cube_vb = self.vorbinned_cube(snr=8)
 
-        vb_ds = rebin(cube_vb, self.ds)
+        #vb_ds = rebin(cube_vb, self.ds)
 
-        for ix,iy in [[4,6],[10,8],[12,8],[7,5],[14,9],[15,10]]:
-            print(ix,iy)
-            self.line_profiles_comparevb(cube_vb, ix, iy, noise2=self.noise, show_freq=False)
-        print(oop)
+        #for ix,iy in [[4,6],[10,8],[12,8],[7,5],[14,9],[15,10]]:
+        #    print(ix,iy)
+        #    self.line_profiles_comparevb(cube_vb, ix, iy, noise2=self.noise, show_freq=False)
+        #print(oop)
 
         # self.convolved_cube *= ell_mask  # mask the convolved model cube
         # self.input_data_masked = self.input_data[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
@@ -1619,7 +1639,7 @@ class ModelGrid:
         return cube_vb
 
 
-    def moment_0(self, abs_diff, incl_beam, norm, samescale=False):
+    def moment_0(self, abs_diff, incl_beam, norm, samescale=False, snr=10):
         """
         Create 0th moment map
 
@@ -1718,6 +1738,10 @@ class ModelGrid:
         ax[2].set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
 
         plt.show()
+
+        self.vorbinning(m1=data_masked_m0, snr=snr, filename=None, cbar_lab=r'Jy km/s beam$^{-1}$', cmap='viridis')
+        self.vorbinning(m1=model_masked_m0, snr=snr, filename=None, cbar_lab=r'Jy km/s beam$^{-1}$', cmap='viridis')
+        self.vorbinning(m1=diff, snr=snr, filename=None, cbar_lab=r'Jy km/s beam$^{-1}$', cmap='viridis')
 
 
     def moment_12(self, abs_diff, incl_beam, norm, mom, samescale=False, snr=5, filename=None):
@@ -1818,6 +1842,7 @@ class ModelGrid:
             cbar2 = fig.colorbar(im1, ax=ax[1], pad=0.02)
             cbar2.set_label(cbartitle2, rotation=270, labelpad=20.)
 
+            d2 = np.nan_to_num(d2)
             diff = m2 - (d2 - subtr)
             title2 = 'Moment 2 residual (model-data)'
             titleabs2 = 'Moment 2 residual abs(model-data)'
@@ -1851,7 +1876,9 @@ class ModelGrid:
             ax[2].set_ylabel(r'y [pixels]', fontsize=20)  # y [arcsec]
 
             plt.show()
-            # self.vorbinning(m1=np.nan_to_num(d2), snr=snr, filename=filename)
+            self.vorbinning(m1=np.nan_to_num(d2), snr=snr, filename=None, cbar_lab='km/s', cmap='viridis')
+            self.vorbinning(m1=m2, snr=snr, filename=None, cbar_lab='km/s', cmap='viridis')
+            self.vorbinning(m1=diff, snr=snr, filename=None, cbar_lab='km/s', cmap='viridis')
 
 
         elif mom == 1:
@@ -1926,6 +1953,10 @@ class ModelGrid:
                     if np.isnan(data_mom[i, j]):
                         data_mom[i, j] = 0.
             # self.vorbinning(m1=data_mom, snr=snr, filename=filename)  # 4, filename='u2698_moment_vorbin_snr4_ac.txt')
+            self.vorbinning(m1=data_mom, snr=snr, filename=None, cbar_lab='km/s', cmap='RdBu_r')
+            self.vorbinning(m1=model_mom, snr=snr, filename=None, cbar_lab='km/s', cmap='RdBu_r')
+            self.vorbinning(m1=diff, snr=snr, filename=None, cbar_lab='km/s', cmap='viridis')
+            #print(oop)
 
             if self.kin_file is not None:
                 print(self.kin_file)
@@ -2251,10 +2282,12 @@ if __name__ == "__main__":
     # mg.pvd()
     # mg.vorbinning()
     # filename='u2698_moment_vorbin_snr4_ac.txt'
-    #mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=2, snr=4, filename=None)
+    mg.moment_0(abs_diff=False, incl_beam=False, norm=False, samescale=False, snr=10)
+    mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1, snr=10, filename=None)
+    mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=2, snr=10, filename=None)
                  #filename='u2698_moment_vorbin_snr10_ac.txt')
     # For moment 2: SNR 5 bad, 10 good, 7 has ~1 bad pixel near center still; 8 a little rough but no more bad pixels
-    # print(oop)
+    print(oop)
     # mg.moment_0(abs_diff=False, incl_beam=True, norm=False)
     # mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1)
     # mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=2)
