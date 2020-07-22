@@ -997,51 +997,13 @@ class ModelGrid:
             collapse_flux_v += data_ds[zi] * mask_ds[zi] * v_width
             # self.clipped_data[zi] * data_mask[zi, self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]]* v_width
 
-        '''  #
-        #plt.imshow(self.weight, origin='lower')
-        #plt.show()
-        fig = plt.figure()
-        ax = plt.gca()
-        plt.imshow(self.ell_ds, origin='lower')
-        plt.colorbar()
-        from matplotlib import patches
-        e1 = patches.Ellipse((self.xell / self.ds, self.yell / self.ds), 2 * self.rfit / (self.resolution * self.ds), 2 * self.rfit / (self.resolution * self.ds) * self.q_ell,
-                             angle=np.rad2deg(self.theta_ell),
-                             linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
-        print(e1)
-        ax.add_patch(e1)
-        plt.plot(self.xell / self.ds, self.yell / self.ds, 'w*')
-        #plt.title(r'q = ' + str(self.q_ell) + r', PA = ' + str(params['theta_ell']) + ' deg, rfit = ' + str(params['rfit'])
-        #          + ' arcsec')
-        plt.show()
-        #print(oop)
-        # '''  #
-
-        '''  #
-        plt.imshow(collapse_flux_v * self.ell_ds, origin='lower')
-        cbar = plt.colorbar()
-        cbar.set_label(r'Jy km s$^{-1}$ beam$^{-1}$', rotation=270, labelpad=20.)
-        ax = plt.gca()
-        from matplotlib import patches
-        print(2 * self.rfit / (self.resolution * self.ds))
-        print(2 * self.rfit / (self.resolution * self.ds2) * self.q_ell)
-        print(self.xell, self.yell)
-
-        e1 = patches.Ellipse((self.xell / self.ds, self.yell / self.ds2), 2 * self.rfit / (self.resolution * self.ds), 2 * self.rfit / (self.resolution * self.ds2) * self.q_ell,
-                             angle=np.rad2deg(self.theta_ell), linewidth=2, edgecolor='w', fill=False)
-        ax.add_patch(e1)
-        plt.plot(10.7125, 8.225, 'w*')  # ix, iy, 'w*'
-        plt.show()
-        #plt.imshow(ap_ds[20], origin='lower')
-        #plt.show()
-        #print(oop)
-        # '''  #
         if show_freq:
             plt.plot(self.freq_ax / 1e9, ap_ds[:, iy, ix], 'r*', label=r'Model')
             plt.plot(self.freq_ax / 1e9, data_ds[:, iy, ix], 'k+', label=r'Data')
             plt.plot(self.freq_ax / 1e9, self.noise, 'k--', label=r'Noise (std)')
             plt.axvline(x=f_sys / 1e9, color='k', label=r'$f_{sys}$')
             plt.xlabel(r'Frequency [GHz]')
+            plt.show()
         else:
             vel_ax = []
             for v in range(len(self.freq_ax)):
@@ -1049,17 +1011,28 @@ class ModelGrid:
             dv = vel_ax[1] - vel_ax[0]
             #vel_ax.insert(0, vel_ax[0])
             #plt.errorbar(vel_ax, data_ds[:, iy, ix], yerr=self.noise, color='k', marker='+', label=r'Data')
-            plt.fill_between(vel_ax, data_ds[:, iy, ix] - self.noise, data_ds[:, iy, ix] + self.noise, color='k',
-                             step='mid', alpha=0.3)
-            plt.step(vel_ax, data_ds[:, iy, ix], color='k', where='mid', label=r'Data')  # width=vel_ax[1] - vel_ax[0], alpha=0.4
-            #plt.plot(vel_ax + dv/2., data_ds[:, iy, ix], ls='steps', color='k', label=r'Data')  # width=vel_ax[1] - vel_ax[0], alpha=0.4
-            #plt.plot(vel_ax, ap_ds[:, iy, ix], color='r', marker='+', ls='none', label=r'Model')  # 'r+'
-            plt.step(vel_ax, ap_ds[:, iy, ix], color='b', where='mid', label=r'Model')  # width=vel_ax[1] - vel_ax[0], alpha=0.5
-            plt.axvline(x=0., color='k', ls='--', label=r'v$_{\text{sys}}$')
-            plt.xlabel(r'Line-of-sight velocity [km/s]')
-        plt.legend()
-        plt.ylabel(r'Flux Density [Jy/beam]')
-        plt.show()
+
+            print(len(ix))
+            fig, ax = plt.subplots(len(ix), 1, figsize=(6, 12), sharex=True)
+            plt.subplots_adjust(hspace=0.)
+
+            for ii in range(len(ix)):
+                dlabel = None
+                mlabel = None
+                if ii == 0:
+                    dlabel = r'Data'
+                    mlabel = r'Model'
+                ax[ii].fill_between(vel_ax, data_ds[:, iy[ii], ix[ii]] - self.noise,
+                                    data_ds[:, iy[ii], ix[ii]] + self.noise, color='k', step='mid', alpha=0.3)
+                ax[ii].fill_between(vel_ax, data_ds[:, iy[ii], ix[ii]] - self.noise,
+                                    data_ds[:, iy[ii], ix[ii]] + self.noise, color='k', step='mid', alpha=0.3)
+                ax[ii].step(vel_ax, data_ds[:, iy[ii], ix[ii]], color='k', where='mid', label=dlabel)
+                ax[ii].step(vel_ax, ap_ds[:, iy[ii], ix[ii]], color='b', where='mid', label=mlabel)
+                ax[ii].axvline(x=0., color='k', ls='--', label=r'v$_{\text{sys}}$')
+            ax[-1].set_xlabel(r'Line-of-sight velocity [km/s]')
+            ax[1].set_ylabel(r'Flux Density [Jy/beam]')
+            ax[0].legend()
+            plt.show()
 
 
     def pvd(self):
@@ -2054,9 +2027,12 @@ if __name__ == "__main__":
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()
+    xs = [7, 14, 15]
+    ys = [5, 9, 10]
+    mg.line_profiles(xs, ys)
     #mg.vor_moms(incl_beam=True, snr=10)
-    mg.vor_moms(incl_beam=False, snr=10)
-    mg.pvd()
+    #mg.vor_moms(incl_beam=False, snr=10)
+    #mg.pvd()
     print(oop)
     #mg.moment_0(abs_diff=False, incl_beam=True, norm=False)
     #mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1)
