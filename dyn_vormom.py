@@ -981,6 +981,20 @@ class ModelGrid:
 
 
     def line_profiles(self, ix, iy, show_freq=False):  # compare line profiles at the given indices ix, iy
+        # RESCALE (x_loc, y_loc) AND (xell, yell) PIXEL VALUES TO CORRESPOND TO SUB-CUBE PIXEL LOCATIONS!
+        x_locvb = (self.x_loc - self.xyrange[0]) / self.ds  # x_loc - xi
+        y_locvb = (self.y_loc - self.xyrange[2]) / self.ds2  # y_loc - yi
+
+        # SET UP OBSERVATION AXES: initialize x,y axes at 0., with lengths = sub_cube.shape
+        y_obs_acvb = np.asarray([0.] * len(self.ell_ds))
+        x_obs_acvb = np.asarray([0.] * len(self.ell_ds[0]))
+
+        # Define coordinates to be 0,0 at center of the observed axes (find the central pixel number along each axis)
+        for i in range(len(x_obs_acvb)):
+            x_obs_acvb[i] = self.resolution * (i - x_locvb) / self.ds  # (arcsec/pix) * N_pix = arcsec
+        for i in range(len(y_obs_acvb)):
+            y_obs_acvb[i] = self.resolution * (i - y_locvb) / self.ds2
+
         f_sys = self.f_0 / (1 + self.zred)
         print(ix, iy)
         data_ds = rebin(self.clipped_data, self.ds2, self.ds, avg=self.avg)
@@ -988,6 +1002,7 @@ class ModelGrid:
 
         hdu_m = fits.open(self.data_mask)
         data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
+        hdu_m.close()
         v_width = 2.99792458e5 * (1 + (6454.9 / 2.99792458e5)) * self.fstep / self.f_0  # velocity width [km/s] = c*(1+v/c)*fstep/f0
         mask_ds = rebin(data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
                         self.xyrange[0]:self.xyrange[1]], self.ds2, self.ds, avg=self.avg)
@@ -1008,30 +1023,31 @@ class ModelGrid:
             vel_ax = []
             for v in range(len(self.freq_ax)):
                 vel_ax.append(self.c_kms * (1. - (self.freq_ax[v] / self.f_0) * (1 + self.zred)))
-            dv = vel_ax[1] - vel_ax[0]
-            #vel_ax.insert(0, vel_ax[0])
-            #plt.errorbar(vel_ax, data_ds[:, iy, ix], yerr=self.noise, color='k', marker='+', label=r'Data')
 
-            print(len(ix))
             fig, ax = plt.subplots(len(ix), 1, figsize=(6, 12), sharex=True)
             plt.subplots_adjust(hspace=0.)
 
             for ii in range(len(ix)):
+                xp = round(x_obs_acvb[ix[ii]], 3)
+                yp = round(y_obs_acvb[iy[ii]], 3)
                 dlabel = None
                 mlabel = None
                 if ii == 0:
                     dlabel = r'Data'
                     mlabel = r'Model'
-                ax[ii].fill_between(vel_ax, data_ds[:, iy[ii], ix[ii]] - self.noise,
-                                    data_ds[:, iy[ii], ix[ii]] + self.noise, color='k', step='mid', alpha=0.3)
-                ax[ii].fill_between(vel_ax, data_ds[:, iy[ii], ix[ii]] - self.noise,
-                                    data_ds[:, iy[ii], ix[ii]] + self.noise, color='k', step='mid', alpha=0.3)
-                ax[ii].step(vel_ax, data_ds[:, iy[ii], ix[ii]], color='k', where='mid', label=dlabel)
-                ax[ii].step(vel_ax, ap_ds[:, iy[ii], ix[ii]], color='b', where='mid', label=mlabel)
-                ax[ii].axvline(x=0., color='k', ls='--', label=r'v$_{\text{sys}}$')
+                norm = np.amax(data_ds[:, iy[ii], ix[ii]])
+                ax[ii].fill_between(vel_ax, (data_ds[:, iy[ii], ix[ii]] - self.noise) / norm,
+                                    (data_ds[:, iy[ii], ix[ii]] + self.noise) / norm, color='k', step='mid', alpha=0.3)
+                #ax[ii].fill_between(vel_ax, data_ds[:, iy[ii], ix[ii]] - self.noise,
+                #                    data_ds[:, iy[ii], ix[ii]] + self.noise, color='k', step='mid', alpha=0.2)
+                ax[ii].step(vel_ax, data_ds[:, iy[ii], ix[ii]] / norm, color='k', where='mid', label=dlabel)
+                ax[ii].step(vel_ax, ap_ds[:, iy[ii], ix[ii]] / norm, color='b', where='mid', label=mlabel)
+                # ax[ii].axvline(x=0., color='k', ls='--', label=r'v$_{\text{sys}}$')
+                ax[ii].text(-200, 0.9, r'x=' + str(xp) + r'", y=' + str(yp) + r'"')
             ax[-1].set_xlabel(r'Line-of-sight velocity [km/s]')
-            ax[1].set_ylabel(r'Flux Density [Jy/beam]')
-            ax[0].legend()
+            # ax[1].set_ylabel(r'Flux Density [arbitrary]')  # [Jy/beam]
+            ax[0].legend(loc='upper right')
+            fig.text(0.04, 0.5, r'Flux Density [arbitrary]', va='center', rotation='vertical')
             plt.show()
 
 
@@ -2027,9 +2043,18 @@ if __name__ == "__main__":
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()
+    # LP at 16,11 is great!
     xs = [7, 14, 15]
     ys = [5, 9, 10]
-    mg.line_profiles(xs, ys)
+    xs2 = [9, 8, 13, 13]
+    ys2 = [7, 8, 8, 9]
+    xs3 = [4, 10, 12]
+    ys3 = [6, 8, 8]
+    xtest = [4, 7, 9, 14, 16, 13, 16]  # ok, good, meh, good, great, okay, okay
+    ytest = [6, 5, 7, 9, 11, 11, 8]
+    xtalk = [4, 7, 13, 16]
+    ytalk = [6, 5, 11, 11]
+    mg.line_profiles(xtalk, ytalk)
     #mg.vor_moms(incl_beam=True, snr=10)
     #mg.vor_moms(incl_beam=False, snr=10)
     #mg.pvd()
