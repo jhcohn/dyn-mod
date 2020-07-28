@@ -11,15 +11,23 @@ polygon = Polygon([(0, 0), (0, 1), (1, 1), (1, 0)])
 print(polygon.contains(point))
 #from matplotlib.nxutils import points_inside_poly
 
+gal = 'pgc'  # ugc, pgc, ngc
+
+ngc = '/Users/jonathancohn/Documents/dyn_mod/ngc_384/'
+ngcfold = ngc + 'maskslices1/'  # first attempt
+
+pgc = '/Users/jonathancohn/Documents/dyn_mod/pgc_11179/'
+pgcfold = pgc + 'maskslices1/'  # first attempt
 
 ugc = '/Users/jonathancohn/Documents/dyn_mod/ugc_2698/'
 slicefold = ugc + 'maskslices/'  # first attempt
 slicefold2 = ugc + 'maskslices2/'  # baseline
 slicefoldlax = ugc + 'masksliceslax/'
 slicefoldstrict = ugc + 'maskslicesstrict/'
+slicefoldext = ugc + 'maskslicesext/'
 
 
-# ''' #
+''' #
 # PLOT FLUX MAP / SAVE TO FITS FILE
 hdu = fits.open(ugc + 'UGC2698_C4_CO21_bri_20.3kms.pbcor_copy.fits')
 data = hdu[0].data
@@ -181,15 +189,36 @@ print(oop)
 # '''  #
 
 
-# NEW 20.3kms cube is 300x300 pixels
-nx = 300
-ny = 300
+# set cube size
+if gal == 'ugc':
+    # NEW 20.3kms cube is 300x300 pixels
+    nx = 300
+    ny = 300
+    cube = ugc + 'UGC2698_C4_CO21_bri_20.3kms.pbcor_copy.fits'
+
+elif gal == 'ngc':
+    nx = 400
+    ny = 400
+    cube = ngc + 'NGC384_C4_CO21_bri_20kms.pbcor.fits'
+    maskloc = ngc + 'NGC384_C4_CO21_bri_20kms_jonathan_casaimviewhand_strictmask.fits'
+    zi = 42
+    zf = 77
+    slicefold = ngcfold
+
+elif gal == 'pgc':
+    nx = 320
+    ny = 320
+    cube = pgc + 'PGC11179_C4_CO21_bri_MS_20kms.pbcor.fits'
+    maskloc = pgc + 'PGC11179_C4_CO21_bri_20kms_jonathan_casaimviewhand_strictmask.fits'
+    zi = 9
+    zf = 52
+    slicefold = pgcfold
 
 x, y = np.meshgrid(np.arange(nx), np.arange(ny))
 x, y = x.flatten(), y.flatten()
 gridpoints = np.vstack((x,y)).T
 
-hdu = fits.open(ugc + 'UGC2698_C4_CO21_bri_20.3kms.pbcor_copy.fits')
+hdu = fits.open(cube)
 data = hdu[0].data[0]
 hdu.close()
 print(np.shape(data))
@@ -197,45 +226,121 @@ print(np.shape(data))
 mask = np.zeros(shape=(len(data), nx, ny))
 
 
-for z in range(len(data)):  # 29, 77 [48] (23:71 [48])
-    if 29 <= z <= 77:
-        print(z)
-        # zi = z - 29
-        with open(slicefold + 'slice' + str(z) + 'casa.reg', 'r') as slice:
+if gal == 'ugc':
+    for z in range(len(data)):  # 29, 77 [48] (23:71 [48])
+        # BUCKET ADDING THE BELOW FOR EXTENDING VELOCITY
+        if 22 <= z < 29:
+            with open(slicefoldext + 'slice28andlowercasa.reg', 'r') as slice:
 
-            for line in slice:
-                if line.startswith('polygon'):
-                    print(line)
-                    line = line[8:-2]  # cut out "polygon(" and ")"
-                    cols = [float(p)-1 for p in line.split(',')]  # turn into list of floats
-                    corners = []  # pair up the floats as x,y vertices!
-                    for i in range(len(cols)):
-                        if i%2 == 0:
-                            corners.append((cols[i+1], cols[i]))
-                        else:
-                            pass
-                    print(corners)
+                for line in slice:
+                    if line.startswith('polygon'):
+                        print(line)
+                        line = line[8:-2]  # cut out "polygon(" and ")"
+                        cols = [float(p) - 1 for p in line.split(',')]  # turn into list of floats
+                        corners = []  # pair up the floats as x,y vertices!
+                        for i in range(len(cols)):
+                            if i % 2 == 0:
+                                corners.append((cols[i + 1], cols[i]))
+                            else:
+                                pass
+                        print(corners)
 
-                    polygon = Polygon(corners)  # create polygon
+                        polygon = Polygon(corners)  # create polygon
 
-                    for x in range(len(mask[0])):
-                        for y in range(len(mask[0][0])):
-                            mask[z,x,y] = polygon.contains(Point(x,y))
+                        for x in range(len(mask[0])):
+                            for y in range(len(mask[0][0])):
+                                mask[z, x, y] = polygon.contains(Point(x, y))
+        if 78 <= z < 85:
+            with open(slicefoldext + 'slice78pluscasa.reg', 'r') as slice:
+
+                for line in slice:
+                    if line.startswith('polygon'):
+                        print(line)
+                        line = line[8:-2]  # cut out "polygon(" and ")"
+                        cols = [float(p) - 1 for p in line.split(',')]  # turn into list of floats
+                        corners = []  # pair up the floats as x,y vertices!
+                        for i in range(len(cols)):
+                            if i % 2 == 0:
+                                corners.append((cols[i + 1], cols[i]))
+                            else:
+                                pass
+                        print(corners)
+
+                        polygon = Polygon(corners)  # create polygon
+
+                        for x in range(len(mask[0])):
+                            for y in range(len(mask[0][0])):
+                                mask[z, x, y] = polygon.contains(Point(x, y))
+        # BUCKET ADDING THE ABOVE FOR EXTENDING VELOCITY. CUT EVERYTHING BETWEEN THESE MESSAGES FOR REGULAR STRICTMASKS
+        if 29 <= z <= 77:
+            print(z)
+            # zi = z - 29
+            with open(slicefold2 + 'slice' + str(z) + 'casa.reg', 'r') as slice:
+
+                for line in slice:
+                    if line.startswith('polygon'):
+                        print(line)
+                        line = line[8:-2]  # cut out "polygon(" and ")"
+                        cols = [float(p) - 1 for p in line.split(',')]  # turn into list of floats
+                        corners = []  # pair up the floats as x,y vertices!
+                        for i in range(len(cols)):
+                            if i % 2 == 0:
+                                corners.append((cols[i + 1], cols[i]))
+                            else:
+                                pass
+                        print(corners)
+
+                        polygon = Polygon(corners)  # create polygon
+
+                        for x in range(len(mask[0])):
+                            for y in range(len(mask[0][0])):
+                                mask[z, x, y] = polygon.contains(Point(x, y))
+
 
                     #print(gridpoints)
                     #print(polygon.contains(gridpoints))
 
 
-    # By inspection, data[0][i] == slice i on casa
-    '''  #
-    # Yay! currently good!
-    plt.imshow(data[0][z] * 1e3, origin='lower')
-    plt.colorbar()
-    plt.show()
-    plt.imshow(mask[:,:,zi] * data[0][z] * 1e3, origin='lower')
-    plt.colorbar()
-    plt.show()
-    # '''  #
+        # By inspection, data[0][i] == slice i on casa
+        '''  #
+        # Yay! currently good!
+        plt.imshow(data[0][z] * 1e3, origin='lower')
+        plt.colorbar()
+        plt.show()
+        plt.imshow(mask[:,:,zi] * data[0][z] * 1e3, origin='lower')
+        plt.colorbar()
+        plt.show()
+        # '''  #
+
+else:
+    for z in range(len(data)):  # 29, 77 [48] (23:71 [48])
+        if zi <= z <= zf:
+            print(z)
+            # zi = z - 29
+            with open(slicefold + 'slice' + str(z) + '.reg', 'r') as slice:
+
+                for line in slice:
+                    if line.startswith('polygon'):
+                        print(line)
+                        line = line[8:-2]  # cut out "polygon(" and ")"
+                        cols = [float(p) - 1 for p in line.split(',')]  # turn into list of floats
+                        corners = []  # pair up the floats as x,y vertices!
+                        for i in range(len(cols)):
+                            if i % 2 == 0:
+                                corners.append((cols[i + 1], cols[i]))
+                            else:
+                                pass
+                        print(corners)
+
+                        polygon = Polygon(corners)  # create polygon
+
+                        for x in range(len(mask[0])):
+                            for y in range(len(mask[0][0])):
+                                mask[z, x, y] = polygon.contains(Point(x, y))
+
+
+                    #print(gridpoints)
+                    #print(polygon.contains(gridpoints))
 
 '''  #
 for j in range(len(mask)):
@@ -248,4 +353,6 @@ fmask = ugc + 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmask.fi
 fmask2 = ugc + 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmask2.fits'
 fmasklax = ugc + 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmasklax.fits'
 fmaskstrict = ugc + 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmaskstrict.fits'
-fits.writeto(fmask, mask)
+extmask2582 = ugc + 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmaskext2582.fits'
+extmask2285 = ugc + 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmaskext2285.fits'
+fits.writeto(maskloc, mask)
