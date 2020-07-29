@@ -1357,13 +1357,14 @@ class ModelGrid:
         return xpix, ypix, binNum, x_in, nPixels
 
 
-    def vor_moms(self, incl_beam, snr=10):
+    def vor_moms(self, incl_beam, snr=10, just_data=True):
         """
         Calculate moment maps, average them within voronoi bins
         # using equations from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
 
         :param incl_beam: True or False; if True, show absolute value of the residual in moment 0 data panel
         :param snr: voronoi binning target signal-to-noise ratio
+        :param just_data: if True, plot just the moments of the data (don't include model and residual)
         :return:
         """
         # OPEN STRICTMASK
@@ -1410,7 +1411,6 @@ class ModelGrid:
 
         # AVERAGE EACH MAP WITHING THE VORONOI BIN
         xpix, ypix, binNum, x_in, nPixels = self.just_the_bins(snr=snr)
-
 
         # CALCULATE NUMERATOR AND DENOMINATOR USED IN MOMENT 1 & 2, FOR MODEL THEN FOR DATA
         model_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
@@ -1495,89 +1495,124 @@ class ModelGrid:
 
         extent = [x_obs_acvb[0], x_obs_acvb[-1], y_obs_acvb[0], y_obs_acvb[-1]]  # left right bottom top
 
-        # START PLOTTING
-        fig, ax = plt.subplots(3, 3, figsize=(12,8))
-        plt.subplots_adjust(hspace=0.02, wspace=0.02)
+        if just_data:
+            fig, ax = plt.subplots(3, 1, figsize=(6, 18))  # rows, cols, figsize=(width, height)
+            plt.subplots_adjust(hspace=0.02, wspace=0.02)
 
-        # PLOT MOMENT 0
-        imd0 = ax[0][0].imshow(d0, vmin=min0, vmax=max0, origin='lower', extent=extent, cmap=cmap_0)
-        cbard0 = fig.colorbar(imd0, ax=ax[0][0], pad=0.02)
-        #cbard0.set_label(cbar_0, rotation=270, labelpad=20.)
+            # PLOT MOMENT 0
+            imd0 = ax[0].imshow(d0, vmin=min0, vmax=max0, origin='lower', extent=extent, cmap=cmap_0)
+            cbard0 = fig.colorbar(imd0, ax=ax[0], pad=0.02)
+            cbard0.set_label(cbar_0, rotation=270, labelpad=20.)
 
-        imm0 = ax[0][1].imshow(m0, vmin=min0, vmax=max0, origin='lower', extent=extent, cmap=cmap_0)
-        cbarm0 = fig.colorbar(imm0, ax=ax[0][1], pad=0.02)
-        #cbarm0.set_label(cbar_0, rotation=270, labelpad=20.)
+            ax[0].set_xticklabels([])
+            # ax[0].set_yticklabels([])
+            ax[0].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
 
-        imr0 = ax[0][2].imshow(r0, origin='lower', vmin=np.nanmin(r0), vmax=np.nanmax(r0), extent=extent, cmap=cmap_0)
-        cbar2r0 = fig.colorbar(imr0, ax=ax[0][2], pad=0.02)
-        cbar2r0.set_label(cbar_0, rotation=270, labelpad=20.)
+            # PLOT MOMENT 1
+            imd1 = ax[1].imshow(d1, vmin=min1, vmax=max1, origin='lower', extent=extent, cmap=cmap_dm1)
+            cbard1 = fig.colorbar(imd1, ax=ax[1], pad=0.02)
+            cbard1.set_label(cbar_1, rotation=270, labelpad=20.)
 
-        ax[0][0].set_xticklabels([])
-        #ax[0][0].set_yticklabels([])
-        ax[0][1].set_xticklabels([])
-        ax[0][1].set_yticklabels([])
-        ax[0][2].set_xticklabels([])
-        ax[0][2].set_yticklabels([])
-        #ax[0][0].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
-        ax[0][0].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
-        #ax[0][1].set_xlabel(r'x [arcsec]', fontsize=20)  # y [arcsec]
-        #ax[0][1].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
-        #ax[0][2].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
-        #ax[0][2].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+            ax[1].set_xticklabels([])
+            # ax[1].set_yticklabels([])
+            ax[1].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+
+            # PLOT MOMENT 2
+            imd2 = ax[2].imshow(d2, vmin=min2, vmax=max2, origin='lower', extent=extent, cmap=cmap_2)
+            cbard2 = fig.colorbar(imd2, ax=ax[2], pad=0.02)
+            cbard2.set_label(cbar_2, rotation=270, labelpad=20.)
+
+            #ax[2].set_xticklabels([])
+            #ax[2].set_yticklabels([])
+            ax[2].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
+            ax[2].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+
+            plt.show()
+
+        else:
+            # START PLOTTING
+            fig, ax = plt.subplots(3, 3, figsize=(12,8))
+            plt.subplots_adjust(hspace=0.02, wspace=0.02)
+
+            # PLOT MOMENT 0
+            imd0 = ax[0][0].imshow(d0, vmin=min0, vmax=max0, origin='lower', extent=extent, cmap=cmap_0)
+            cbard0 = fig.colorbar(imd0, ax=ax[0][0], pad=0.02)
+            #cbard0.set_label(cbar_0, rotation=270, labelpad=20.)
+
+            imm0 = ax[0][1].imshow(m0, vmin=min0, vmax=max0, origin='lower', extent=extent, cmap=cmap_0)
+            cbarm0 = fig.colorbar(imm0, ax=ax[0][1], pad=0.02)
+            #cbarm0.set_label(cbar_0, rotation=270, labelpad=20.)
+
+            imr0 = ax[0][2].imshow(r0, origin='lower', vmin=np.nanmin(r0), vmax=np.nanmax(r0), extent=extent, cmap=cmap_0)
+            cbar2r0 = fig.colorbar(imr0, ax=ax[0][2], pad=0.02)
+            cbar2r0.set_label(cbar_0, rotation=270, labelpad=20.)
+
+            ax[0][0].set_xticklabels([])
+            #ax[0][0].set_yticklabels([])
+            ax[0][1].set_xticklabels([])
+            ax[0][1].set_yticklabels([])
+            ax[0][2].set_xticklabels([])
+            ax[0][2].set_yticklabels([])
+            #ax[0][0].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
+            ax[0][0].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+            #ax[0][1].set_xlabel(r'x [arcsec]', fontsize=20)  # y [arcsec]
+            #ax[0][1].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+            #ax[0][2].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
+            #ax[0][2].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
 
 
-        # PLOT MOMENT 1
-        imd1 = ax[1][0].imshow(d1, vmin=min1, vmax=max1, origin='lower', extent=extent, cmap=cmap_dm1)
-        cbard1 = fig.colorbar(imd1, ax=ax[1][0], pad=0.02)
-        #cbard1.set_label(cbar_1, rotation=270, labelpad=20.)
+            # PLOT MOMENT 1
+            imd1 = ax[1][0].imshow(d1, vmin=min1, vmax=max1, origin='lower', extent=extent, cmap=cmap_dm1)
+            cbard1 = fig.colorbar(imd1, ax=ax[1][0], pad=0.02)
+            #cbard1.set_label(cbar_1, rotation=270, labelpad=20.)
 
-        imm1 = ax[1][1].imshow(m1, vmin=min1, vmax=max1, origin='lower', extent=extent, cmap=cmap_dm1)
-        cbarm1 = fig.colorbar(imm1, ax=ax[1][1], pad=0.02)
-        #cbarm1.set_label(cbar_1, rotation=270, labelpad=20.)
+            imm1 = ax[1][1].imshow(m1, vmin=min1, vmax=max1, origin='lower', extent=extent, cmap=cmap_dm1)
+            cbarm1 = fig.colorbar(imm1, ax=ax[1][1], pad=0.02)
+            #cbarm1.set_label(cbar_1, rotation=270, labelpad=20.)
 
-        imr1 = ax[1][2].imshow(r1, origin='lower', vmin=np.nanmin(r1), vmax=np.nanmax(r1), extent=extent, cmap=cmap_r1)
-        cbarr1 = fig.colorbar(imr1, ax=ax[1][2], pad=0.02)
-        cbarr1.set_label(cbar_1, rotation=270, labelpad=20.)
+            imr1 = ax[1][2].imshow(r1, origin='lower', vmin=np.nanmin(r1), vmax=np.nanmax(r1), extent=extent, cmap=cmap_r1)
+            cbarr1 = fig.colorbar(imr1, ax=ax[1][2], pad=0.02)
+            cbarr1.set_label(cbar_1, rotation=270, labelpad=20.)
 
-        ax[1][0].set_xticklabels([])
-        #ax[1][0].set_yticklabels([])
-        ax[1][1].set_xticklabels([])
-        ax[1][1].set_yticklabels([])
-        ax[1][2].set_xticklabels([])
-        ax[1][2].set_yticklabels([])
-        #ax[1][0].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
-        ax[1][0].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
-        #ax[1][1].set_xlabel(r'x [arcsec]', fontsize=20)  # y [arcsec]
-        #ax[1][1].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
-        #ax[1][2].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
-        #ax[1][2].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+            ax[1][0].set_xticklabels([])
+            #ax[1][0].set_yticklabels([])
+            ax[1][1].set_xticklabels([])
+            ax[1][1].set_yticklabels([])
+            ax[1][2].set_xticklabels([])
+            ax[1][2].set_yticklabels([])
+            #ax[1][0].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
+            ax[1][0].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+            #ax[1][1].set_xlabel(r'x [arcsec]', fontsize=20)  # y [arcsec]
+            #ax[1][1].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+            #ax[1][2].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
+            #ax[1][2].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
 
 
-        # PLOT MOMENT 2
-        imd2 = ax[2][0].imshow(d2, vmin=min2, vmax=max2, origin='lower', extent=extent, cmap=cmap_2)
-        cbard2 = fig.colorbar(imd2, ax=ax[2][0], pad=0.02)
-        #cbard2.set_label(cbar_2, rotation=270, labelpad=20.)
+            # PLOT MOMENT 2
+            imd2 = ax[2][0].imshow(d2, vmin=min2, vmax=max2, origin='lower', extent=extent, cmap=cmap_2)
+            cbard2 = fig.colorbar(imd2, ax=ax[2][0], pad=0.02)
+            #cbard2.set_label(cbar_2, rotation=270, labelpad=20.)
 
-        imm2 = ax[2][1].imshow(m2, vmin=min2, vmax=max2, origin='lower', extent=extent, cmap=cmap_2)
-        cbarm2 = fig.colorbar(imm2, ax=ax[2][1], pad=0.02)
-        #cbarm2.set_label(cbar_2, rotation=270, labelpad=20.)
+            imm2 = ax[2][1].imshow(m2, vmin=min2, vmax=max2, origin='lower', extent=extent, cmap=cmap_2)
+            cbarm2 = fig.colorbar(imm2, ax=ax[2][1], pad=0.02)
+            #cbarm2.set_label(cbar_2, rotation=270, labelpad=20.)
 
-        imr2 = ax[2][2].imshow(r2, origin='lower', vmin=np.nanmin(r2), vmax=np.nanmax(r2), extent=extent, cmap=cmap_2)
-        cbarr2 = fig.colorbar(imr2, ax=ax[2][2], pad=0.02)
-        cbarr2.set_label(cbar_2, rotation=270, labelpad=20.)
+            imr2 = ax[2][2].imshow(r2, origin='lower', vmin=np.nanmin(r2), vmax=np.nanmax(r2), extent=extent, cmap=cmap_2)
+            cbarr2 = fig.colorbar(imr2, ax=ax[2][2], pad=0.02)
+            cbarr2.set_label(cbar_2, rotation=270, labelpad=20.)
 
-        #ax[2][1].set_xticklabels([])
-        ax[2][1].set_yticklabels([])
-        #ax[2][2].set_xticklabels([])
-        ax[2][2].set_yticklabels([])
-        ax[2][0].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
-        ax[2][0].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
-        ax[2][1].set_xlabel(r'x [arcsec]', fontsize=20)  # y [arcsec]
-        #ax[2][1].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
-        ax[2][2].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
-        #ax[2][2].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+            #ax[2][1].set_xticklabels([])
+            ax[2][1].set_yticklabels([])
+            #ax[2][2].set_xticklabels([])
+            ax[2][2].set_yticklabels([])
+            ax[2][0].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
+            ax[2][0].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+            ax[2][1].set_xlabel(r'x [arcsec]', fontsize=20)  # y [arcsec]
+            #ax[2][1].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+            ax[2][2].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
+            #ax[2][2].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
 
-        plt.show()
+            plt.show()
 
 
 
@@ -2022,7 +2057,10 @@ if __name__ == "__main__":
     inc_fixed = np.deg2rad(67.7)  # based on fiducial model (67.68 deg)
     vcg_in = None
     if params['incl_gas'] == 'True':
-        vcg_in = gas_vel(params['resolution'], co_ell_rad, co_ell_sb, params['dist'], f_0, inc_fixed, zfixed=0.02152)
+        zfix_u2698 = 0.02152
+        zfix_p11179 = 0.0224706  # https://califaserv.caha.es/CALIFA_WEB/public_html/?q=content/califa-explorer-v01&califaid=9007
+        zfix_n384 = 0.01412
+        vcg_in = gas_vel(params['resolution'], co_ell_rad, co_ell_sb, params['dist'], f_0, inc_fixed, zfixed=zfix_u2698)
 
     out = params['outname']
     t0m = time.time()
@@ -2043,6 +2081,10 @@ if __name__ == "__main__":
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()
+    mg.vor_moms(incl_beam=True, snr=10)
+    mg.vor_moms(incl_beam=False, snr=10)
+    mg.pvd()
+    print(oop)
     # LP at 16,11 is great!
     xs = [7, 14, 15]
     ys = [5, 9, 10]

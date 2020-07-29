@@ -343,13 +343,13 @@ def rebin(data, nr, nc, avg=True):
         nn = nr * nc
 
     rebinned = []
-    if len(data.shape) == 2:  # bin data in groups of nr x nc pixels
+    if len(data.shape) == 2:  # if binning a 2D array: bin data in groups of nr x nc pixels
         subarrays = blockshaped(data, nr, nc)  # subarrays.shape = len(data)*len(data[0]) / (nr*nc)
         # each pixel in the new, rebinned data cube is the mean of each nr x nc set of original pixels
         reshaped = nn * np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data) / nr),
                                                                                int(len(data[0]) / nc)))
         rebinned.append(reshaped)  # reshaped.shape = (len(data) / nr, len(data[0]) / nc)
-    else:
+    else:  # if binning a 3D array
         for z in range(len(data)):  # bin each slice of the data in groups of nr x nc pixels
             subarrays = blockshaped(data[z, :, :], nr, nc)  # subarrays.shape = len(data[0])*len(data[0][0]) / (nr*nc)
             reshaped = nn * np.mean(np.mean(subarrays, axis=-1), axis=-1).reshape((int(len(data[0]) / nr),
@@ -831,6 +831,7 @@ class ModelGrid:
 
         # REBIN THE ELLIPSE MASK BY THE DOWN-SAMPLING FACTOR
         self.ell_ds = rebin(self.ell_mask, self.ds2, self.ds, avg=self.avg)[0]  # rebin mask by the downsampling factor
+        '''  #
         fig = plt.figure()
         ax = plt.gca()
         plt.imshow(self.ell_ds, origin='lower')
@@ -848,13 +849,34 @@ class ModelGrid:
         plt.plot(self.xell / self.ds, self.yell / self.ds, 'w*')
         #plt.plot(self.xell, self.yell, 'w*')
         plt.show()
-
         #print(oop)
+        # '''  #
+
         if self.avg:  # if averaging instead of summing in rebin()
             self.ell_ds[self.ell_ds < 0.5] = 0.  # pixels < 50% "inside" the ellipse are masked
         else:  # if summing instead of averaging in rebin()
             self.ell_ds[self.ell_ds < self.ds * self.ds2 / 2.] = 0.  # pixels < 50% "inside" the ellipse are masked
         self.ell_ds = np.nan_to_num(self.ell_ds / np.abs(self.ell_ds))  # set all points in ellipse = 1, convert nan->0
+
+        '''  #
+        fig = plt.figure()
+        ax = plt.gca()
+        plt.imshow(self.ell_ds, origin='lower')
+        plt.colorbar()
+        from matplotlib import patches
+        e1 = patches.Ellipse((self.xell / self.ds, self.yell / self.ds2), 2 * self.rfit / self.resolution,
+                             2 * self.rfit / self.resolution * self.q_ell, angle=np.rad2deg(self.theta_ell),
+                             linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
+        print(e1)
+        e1.width /= self.ds
+        e1.height /= self.ds
+        #e1.x /= self.ds
+        #e1.y /= self.ds2
+        ax.add_patch(e1)
+        plt.plot(self.xell / self.ds, self.yell / self.ds, 'w*')
+        #plt.plot(self.xell, self.yell, 'w*')
+        plt.show()
+        # '''  #
 
         # REBIN THE DATA AND MODEL BY THE DOWN-SAMPLING FACTOR: compare data and model in binned groups of dsxds pix
         data_ds = rebin(self.clipped_data, self.ds2, self.ds, avg=self.avg)
@@ -865,6 +887,7 @@ class ModelGrid:
         #print(oops)
         ell_2 = ellipse_fitting(data_ds, self.rfit, self.xell / self.ds, self.yell / self.ds2,
                                 self.resolution * self.ds, self.theta_ell, self.q_ell)  # create ellipse mask
+        '''  #
         fig = plt.figure()
         ax = plt.gca()
         plt.imshow(ell_2, origin='lower')
@@ -880,9 +903,11 @@ class ModelGrid:
         #e1.x /= self.ds
         #e1.y /= self.ds2
         ax.add_patch(e1)
+        print('ell2')
         plt.plot(self.xell / self.ds, self.yell / self.ds, 'w*')
         #plt.plot(self.xell, self.yell, 'w*')
         plt.show()
+        # '''  #
 
         # APPLY THE ELLIPTICAL MASK TO MODEL CUBE & INPUT DATA
         data_ds *= self.ell_ds
@@ -917,7 +942,6 @@ class ModelGrid:
                 print(n_pts - self.n_params)
                 print(r'OR reduced chi^2 = ', chi_2)  # BUCKET
                 print(n_2 - self.n_params)  # BUCKET
-                print(oop)
 
         if n_pts == 0.:  # PROBLEM WARNING
             print(self.resolution, self.xell, self.yell, self.theta_ell, self.q_ell, self.rfit)
@@ -944,6 +968,7 @@ class ModelGrid:
             collapse_flux_v += data_ds[zi] * mask_ds[zi] * v_width
             # self.clipped_data[zi] * data_mask[zi, self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]]* v_width
 
+        '''  #
         #plt.imshow(self.weight, origin='lower')
         #plt.show()
         fig = plt.figure()
@@ -961,8 +986,9 @@ class ModelGrid:
         #          + ' arcsec')
         plt.show()
         #print(oop)
+        # '''  #
 
-
+        '''  #
         plt.imshow(collapse_flux_v * self.ell_ds, origin='lower')
         cbar = plt.colorbar()
         cbar.set_label(r'Jy km s$^{-1}$ beam$^{-1}$', rotation=270, labelpad=20.)
@@ -980,6 +1006,7 @@ class ModelGrid:
         #plt.imshow(ap_ds[20], origin='lower')
         #plt.show()
         #print(oop)
+        # '''  #
         if show_freq:
             plt.plot(self.freq_ax / 1e9, ap_ds[:, iy, ix], 'r*', label=r'Model')
             plt.plot(self.freq_ax / 1e9, data_ds[:, iy, ix], 'k+', label=r'Data')
@@ -1012,22 +1039,29 @@ class ModelGrid:
         from pvextractor import extract_pv_slice
         print(len(self.clipped_data[0]), len(self.clipped_data[0][0]), len(self.clipped_data))
         # path1 = path.Path([(0, 0), (len(self.clipped_data[0]), len(self.clipped_data[0][0]))], width=self.pvd_width)
-        path1 = path.Path([(self.xyrange[0], self.xyrange[2]), (self.xyrange[1], self.xyrange[3])], width=self.pvd_width)
+
+        xc = self.x_loc - self.xyrange[0]  # x_loc - xi
+        yc = self.y_loc - self.xyrange[2]  # y_loc - yi
+        extend = 40
+        x0 = xc - extend * np.cos(np.deg2rad(self.theta))
+        xf = xc + extend * np.cos(np.deg2rad(self.theta))
+        y0 = yc - extend * np.sin(np.deg2rad(self.theta))
+        yf = yc + extend * np.sin(np.deg2rad(self.theta))
+
+        # path1 = path.Path([(self.xyrange[0], self.xyrange[2]), (self.xyrange[1], self.xyrange[3])], width=self.pvd_width)
+        path1 = path.Path([(x0, y0), (xf, yf)], width=self.pvd_width)
         # [(x0,y0), (x1,y1)]
         print(self.input_data.shape)
-        pvd_dat, slice = extract_pv_slice(self.input_data[self.zrange[0]:self.zrange[1]], path1)
+        # pvd_dat, slice = extract_pv_slice(self.input_data[self.zrange[0]:self.zrange[1]], path1)
+        pvd_dat, slice = extract_pv_slice(self.clipped_data, path1)
         print(self.convolved_cube.shape)
-        path2 = path.Path([(0, 0), (self.xyrange[1] - self.xyrange[0], self.xyrange[3] - self.xyrange[2])], width=self.pvd_width)
-        pvd_dat2, slice2 = extract_pv_slice(self.convolved_cube, path2)
+        # path2 = path.Path([(0, 0), (self.xyrange[1] - self.xyrange[0], self.xyrange[3] - self.xyrange[2])], width=self.pvd_width)
+        pvd_dat2, slice2 = extract_pv_slice(self.convolved_cube, path1)  # path2
         print(slice)
 
         vel_ax = []
         for v in range(len(self.freq_ax)):
             vel_ax.append(self.c_kms * (1. - (self.freq_ax[v] / self.f_0) * (1 + self.zred)))
-
-        fig, ax = plt.subplots(3, 1, sharex=True)
-        plt.subplots_adjust(hspace=0.02)
-        print(slice.shape)
 
         x_rad = np.zeros(shape=len(slice[0]))
         if len(slice[0]) % 2. == 0:  # if even
@@ -1039,30 +1073,32 @@ class ModelGrid:
             for i in range(len(slice[0])):
                 x_rad[i] = self.resolution * ((i + 1) - xr_c)
 
+        fig, ax = plt.subplots(3, 1, sharex=True, figsize=(6, 12))
+        plt.subplots_adjust(hspace=0.02)
+
         #from mpl_toolkits.axes_grid1 import make_axes_locatable
         #divider1 = make_axes_locatable(ax[0])
-        print(x_rad, len(x_rad))
-        print(vel_ax)
         # CONVERT FROM Jy/beam TO mJy/beam
         slice *= 1e3
         slice2 *= 1e3
         vmin = np.amin([slice, slice2])
         vmax = np.amax([slice, slice2])
-        p1 = ax[0].pcolormesh(x_rad, vel_ax, slice, vmin=vmin, vmax=vmax)  # x_rad[0], x_rad[-1]
-        fig.colorbar(p1, ax=ax[0], ticks=[-0.5, 0, 0.5, 1, 1.5], pad=0.02)
+        p1 = ax[0].pcolormesh(x_rad, vel_ax, slice, vmin=vmin, vmax=vmax, cmap='Greys')  # x_rad[0], x_rad[-1]
+        fig.colorbar(p1, ax=ax[0], pad=0.02)  # ticks=[-0.5, 0, 0.5, 1, 1.5],
         #ax[0].imshow(slice, origin='lower', extent=[x_rad[0], x_rad[-1], vel_ax[0], vel_ax[-1]])  # x_rad[0], x_rad[-1]
         #cax1 = divider1.append_axes('right', size='5%', pad=0.05)
         #fig.colorbar(im1, cax=cax1, orientation='vertical')
 
-        p2 = ax[1].pcolormesh(x_rad, vel_ax, slice2, vmin=vmin, vmax=vmax)  # x_rad[0], x_rad[-1]
-        cb2 = fig.colorbar(p2, ax=ax[1], ticks=[-0.5, 0, 0.5, 1, 1.5], pad=0.02)
+        p2 = ax[1].pcolormesh(x_rad, vel_ax, slice2, vmin=vmin, vmax=vmax, cmap='Greys')  # x_rad[0], x_rad[-1]
+        cb2 = fig.colorbar(p2, ax=ax[1], pad=0.02)  # ticks=[-0.5, 0, 0.5, 1, 1.5],
         cb2.set_label(r'mJy beam$^{-1}$', rotation=270, labelpad=20.)
         #ax[1].imshow(slice2, origin='lower', extent=[x_rad[0], x_rad[-1], vel_ax[0], vel_ax[-1]])
         #ax[1].colorbar()
 
         # p3 = ax[2].pcolormesh(x_rad, vel_ax, slice - slice2, vmin=np.amin([vmin, slice - slice2]), vmax=vmax)
-        p3 = ax[2].pcolormesh(x_rad, vel_ax, slice - slice2, vmin=np.amin(slice - slice2), vmax=np.amax(slice - slice2))
-        fig.colorbar(p3, ax=ax[2], ticks=[-1., -0.5, 0, 0.5, 1], pad=0.02)
+        p3 = ax[2].pcolormesh(x_rad, vel_ax, slice - slice2, vmin=np.amin(slice - slice2), vmax=np.amax(slice - slice2),
+                              cmap='Greys')
+        fig.colorbar(p3, ax=ax[2], pad=0.02)  # ticks=[-1., -0.5, 0, 0.5, 1],
         #ax[2].imshow(slice - slice2, origin='lower', extent=[x_rad[0], x_rad[-1], vel_ax[0], vel_ax[-1]])
         #ax[2].colorbar()
 
@@ -1475,12 +1511,14 @@ if __name__ == "__main__":
                    f_0=f_0, bl=params['bl'], xyrange=[params['xi'], params['xf'], params['yi'], params['yf']],
                    n_params=n_free, data_mask=params['mask'], incl_gas=params['incl_gas']=='True', vrad=params['vrad'],
                    kappa=params['kappa'], omega=params['omega'], co_rad=co_ell_rad, co_sb=co_ell_sb, avg=avging,
-                   pvd_width=(params['x_fwhm']+params['y_fwhm'])/params['resolution']/2., vcg_func=vcg_in)
+                   pvd_width=(params['x_fwhm']*params['y_fwhm'])/params['resolution']/2., vcg_func=vcg_in)
 
+    # x_fwhm=0.197045, y_fwhm=0.103544 -> geometric mean = sqrt(0.197045*0.103544) = 0.142838; regular mean = 0.1502945
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()
-    #mg.pvd()
+    mg.pvd()
+    print(oop)
     #mg.moment_0(abs_diff=False, incl_beam=True, norm=False)
     #mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1)
     #mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=2)

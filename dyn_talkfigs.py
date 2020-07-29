@@ -918,8 +918,8 @@ class ModelGrid:
         print('convolution loop ' + str(time.time() - tc))
 
         ''' # SHOW 3 SLICES OF THE DATA (OR INTRINSIC, OR CONVOLVED) CUBE!
-        # cube = self.input_data  # self.input_data # self.convolved_cube # intrinsic_cube
-        cube = intrinsic_cube
+        cube = self.input_data  # self.input_data # self.convolved_cube # intrinsic_cube
+        # cube = intrinsic_cube
         full_xac = np.zeros(shape=len(cube[0]))  # len(64)
         full_yac = np.zeros(shape=len(cube[0][0]))  # len(84)
         for i in range(len(full_xac)):
@@ -930,27 +930,30 @@ class ModelGrid:
         midf = midz - self.zrange[0]
         # extent = [full_xac[0], full_xac[-1], full_yac[0], full_yac[-1]]
         extent = [full_yac[0], full_yac[-1], full_xac[0], full_xac[-1]]
-        fig = plt.figure(figsize=(8,6))  # if cube == self.input_data: figsize(6,6) else: figsize(8,6)
-        # fig = plt.figure(figsize=(6,6))  # if cube == self.input_data: figsize(6,6) else: figsize(8,6)
-        # plt.imshow(cube[midz], origin='lower', extent=extent)  # if cube == self.input_data: [midz]. else: [midf]
+        fig = plt.figure(figsize=(6, 6))  # if cube == self.input_data: figsize(6,6) else: figsize(8,6)
+        vmax = np.amax([cube[midf], cube[-6], cube[6]])
+        #vmin = np.amin([cube[midf], cube[-6], cube[6]])
+        vmin=None
+        # fig = plt.figure(figsize=(8,6))  # if cube == self.input_data: figsize(6,6) else: figsize(8,6)
+        plt.imshow(cube[midz+1], origin='lower', extent=extent, vmax=vmax, vmin=vmin)  # if cube == self.input_data: [midz]. else: [midf]
+        plt.text(full_xac[10], full_yac[-15], str(round(self.freq_ax[midf-1] / 1e9, 2)) + r' GHz', color='w', fontsize=16)
+        #plt.imshow(cube[midf], origin='lower', extent=extent)  # if cube == self.input_data: [midz]. else: [midf]
         #plt.text(full_xac[10], full_yac[-15], str(round(self.freq_ax[midf] / 1e9, 2)) + r' GHz', color='w', fontsize=16)
-        plt.imshow(cube[midf], origin='lower', extent=extent)  # if cube == self.input_data: [midz]. else: [midf]
-        plt.text(full_xac[10], full_yac[-15], str(round(self.freq_ax[midf] / 1e9, 2)) + r' GHz', color='w', fontsize=16)
         plt.xlabel(r'x [arcsec]')
         plt.ylabel(r'y [arcsec]')
         plt.show()
-        fig = plt.figure(figsize=(8,6))  # if cube == self.input_data: figsize(6,6) else: figsize(8,6)
-        # fig = plt.figure(figsize=(6,6))  # if cube == self.input_data: figsize(6,6) else: figsize(8,6)
-        # plt.imshow(self.input_data[self.zrange[1]-6], origin='lower', extent=extent)
-        plt.imshow(cube[-6], origin='lower', extent=extent)
+        # fig = plt.figure(figsize=(8,6))  # if cube == self.input_data: figsize(6,6) else: figsize(8,6)
+        fig = plt.figure(figsize=(6,6))  # if cube == self.input_data: figsize(6,6) else: figsize(8,6)
+        plt.imshow(self.input_data[self.zrange[1]-6], origin='lower', extent=extent, vmax=vmax, vmin=vmin)
+        #plt.imshow(cube[-6], origin='lower', extent=extent)
         plt.text(full_xac[10], full_yac[-15], str(round(self.freq_ax[-6] / 1e9, 2)) + r' GHz', color='w', fontsize=16)
         plt.xlabel(r'x [arcsec]')
         plt.ylabel(r'y [arcsec]')
         plt.show()
-        fig = plt.figure(figsize=(8,6))  # if cube == self.input_data: figsize(6,6) else: figsize(8,6)
-        # fig = plt.figure(figsize=(6,6))  # if cube == self.input_data: figsize(6,6) else: figsize(8,6)
-        # plt.imshow(self.input_data[self.zrange[0]+6], origin='lower', extent=extent)
-        plt.imshow(cube[6], origin='lower', extent=extent)
+        #fig = plt.figure(figsize=(8,6))  # if cube == self.input_data: figsize(6,6) else: figsize(8,6)
+        # plt.imshow(cube[6], origin='lower', extent=extent)
+        fig = plt.figure(figsize=(6,6))  # if cube == self.input_data: figsize(6,6) else: figsize(8,6)
+        plt.imshow(self.input_data[self.zrange[0]+6], origin='lower', extent=extent, vmax=vmax, vmin=vmin)
         plt.text(full_xac[10], full_yac[-15], str(round(self.freq_ax[6] / 1e9, 2)) + r' GHz', color='w', fontsize=16)
         plt.xlabel(r'x [arcsec]')
         plt.ylabel(r'y [arcsec]')

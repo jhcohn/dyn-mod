@@ -770,25 +770,138 @@ class ModelGrid:
         # path1 = path.Path([(0, 0), (len(self.clipped_data[0]), len(self.clipped_data[0][0]))], width=self.pvd_width)
         # UGC 2698: 85, 134 -> 159, 167
         # NGC 384: 167, 146 -> 245, 231
-        # PGC 11179: 125, 93 -> 189, 223
+        # PGC 11179: 125, 93 -> 189, 223 ;; tan(PA) = 6.93951925: 176, 224 -> 134, 93
+        # UGC 2698: kin PA = 105.5 deg (-90 -> PA = 15.5 deg, +/-3.1 deg)
+        # NGC 384: kin PA = 136.6 deg (-90 -> PA = 46.6 deg, +/-3.1 deg). [Velocity offset 23.168526412879885 -> DONE]
+        # PGC 11179: kin PA = 155.2 deg (-90 -> PA = 65.2 deg, +/-3.1 deg). [Velocity offset -27.5180526058145 -> DONE]
         #path1 = path.Path([(self.xyrange[0], self.xyrange[2]), (self.xyrange[1], self.xyrange[3])], width=self.pvd_width)
         # path1 = path.Path([(85, 134), (159, 167)], width=self.pvd_width)  # UGC 2698!!
         # path1 = path.Path([(167, 146), (245, 231)], width=self.pvd_width)  # NGC 384!!
-        path1 = path.Path([(125, 93), (189, 223)], width=self.pvd_width)  # PGC 11179!!
+        # path1 = path.Path([(125, 93), (189, 223)], width=self.pvd_width)  # PGC 11179!!
+        # (108.0, 61.9), (184.6+20*np.cos(np.deg2rad(65.2)), 228.7+20*np.sin(np.deg2rad(65.2)))  # PGC 11179 casa extend
+        # (125.8, 113.9), (273.2+X*np.cos(np.deg2rad(43.1)), 252.0+X*np.sin(np.deg2rad(43.1)))  # NGC 384 casa extend
+        # path1 = path.Path([(108.0, 61.9), (184.6+20*np.cos(np.deg2rad(65.2)), 228.7+20*np.sin(np.deg2rad(65.2)))],  # PGC 11179!!
+        #path1 = path.Path([(125.8, 113.9), (273.2, 252.0)],  # NGC 384!!
+        #                  width=self.pvd_width)
         # [(x0,y0), (x1,y1)]
-        print(self.input_data.shape)
-        pvd_dat, slice = extract_pv_slice(self.input_data[self.zrange[0]:self.zrange[1]], path1)
-        print(slice)
+
+        hdu_m = fits.open(self.data_mask)
+        data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
+        hdu_m.close()
 
         vel_ax = []
         for v in range(len(self.freq_ax)):
             vel_ax.append(self.c_kms * (1. - (self.freq_ax[v] / self.f_0) * (1 + self.zred)))
+        velwidth = self.c_kms * (1 + self.zred) * self.fstep / self.f_0
 
-        fig, ax = plt.subplots(1, 1, figsize=(12,5))
+        # '''  # FOR UGC 2698 AND ANYTHING ELSE WITH MODELED ESTIMATES
+        self.clipped_data = self.input_data[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
+                                            self.xyrange[0]:self.xyrange[1]]
+        xc = self.x_loc - self.xyrange[0]  # x_loc - xi
+        yc = self.y_loc - self.xyrange[2]  # y_loc - yi
+        extend = 40
+        x0 = xc - extend * np.cos(np.deg2rad(self.theta))
+        xf = xc + extend * np.cos(np.deg2rad(self.theta))
+        y0 = yc - extend * np.sin(np.deg2rad(self.theta))
+        yf = yc + extend * np.sin(np.deg2rad(self.theta))
+
+        path1 = path.Path([(x0, y0), (xf, yf)], width=self.pvd_width)
+        vel_ax = vel_ax[self.zrange[0]:self.zrange[1]]
+        # '''  #
+
+        '''  # SIMPLE DATA SUM
+        simplesum = np.zeros(shape=self.input_data[0].shape)
+        for z in range(len(self.input_data)):
+            simplesum += self.input_data[z]
+
+        x_rad = np.zeros(shape=len(self.input_data[0]))
+        y_rad = np.zeros(shape=len(self.input_data[0][0]))
+        if len(x_rad) % 2. == 0:  # if even
+            xr_c = (len(x_rad)) / 2.  # set the center of the axes (in pixel number)
+            for i in range(len(x_rad)):
+                x_rad[i] = self.resolution * (i - xr_c) # (arcsec/pix) * N_pix = arcsec
+        else:  # elif odd
+            xr_c = (len(x_rad) + 1.) / 2.  # +1 bc python starts counting at 0
+            for i in range(len(x_rad)):
+                x_rad[i] = self.resolution * ((i + 1) - xr_c)
+        if len(y_rad) % 2. == 0:  # if even
+            yr_c = (len(y_rad)) / 2.  # set the center of the axes (in pixel number)
+            for i in range(len(y_rad)):
+                y_rad[i] = self.resolution * (i - yr_c) # (arcsec/pix) * N_pix = arcsec
+        else:  # elif odd
+            yr_c = (len(y_rad) + 1.) / 2.  # +1 bc python starts counting at 0
+            for i in range(len(y_rad)):
+                y_rad[i] = self.resolution * ((i + 1) - yr_c)
+
+        ext = [x_rad[0], x_rad[-1], y_rad[0], y_rad[-1]]
+        plt.imshow(simplesum * 1e3, origin='lower', extent=ext, cmap='Blues_r')
+        cb = plt.colorbar()
+        cb.set_label(r'mJy beam$^{-1}$', rotation=270, labelpad=20.)
+        plt.xlabel('x [arcsec]')
+        plt.ylabel('y [arcsec]')
+        plt.show()
+        print(oop)
+        # '''
+
+        '''  # DOUBLE HORNED PROFILE
+        coll_mask = np.zeros(shape=data_mask[0].shape)
+        for z in range(len(data_mask)):
+            coll_mask += data_mask[z]
+
+        flux_per_vel = []
+        for z in range(len(self.input_data)):
+            flux_per_vel.append(np.sum(self.input_data[z] * coll_mask))  # data_mask[z])) # * 1e3))
+
+        #flux_per_vel = np.asarray(flux_per_vel) * (2 * np.pi * params['x_fwhm'] * params['y_fwhm'] / 2.355 ** 2)
+        if len(flux_per_vel) != len(vel_ax):
+            vel_ax = vel_ax[:-1]
+
+        plt.step(vel_ax, flux_per_vel, where='mid', color='k')
+        plt.xlabel(r'velocity channel [km/s]')
+        plt.ylabel('flux [Jy/beam]')  # /beam
+        plt.show()
+        print(oop)
+        # '''  #
+
+        print(self.input_data.shape)
+        # pvd_dat, slice = extract_pv_slice(self.input_data, path1)  # self.input_data * data_mask
+        # FOR NGC 384, USE CLIPPED DATA, VEL AX
+        #vel_ax = vel_ax[self.zrange[0]:self.zrange[1]]
+        #pvd_dat, slice = extract_pv_slice(self.input_data[self.zrange[0]:self.zrange[1]], path1)  # self.input_data * data_mask
+        #print(slice)
+
+        '''  # TRY ROTATING
+        from scipy import ndimage
+        simplesum = np.zeros(shape=self.input_data[0].shape)
+        for z in range(len(self.input_data)):
+            simplesum += self.input_data[z] * data_mask[z] * velwidth
+
+        plt.imshow(simplesum, origin='lower')
+        plt.colorbar()
+        plt.show()
+        cuberot = ndimage.rotate(self.input_data, axes=(1,2), angle=70.2-90.)  # axes=(1,2) (first axis is freq)
+        # IT WORKS
+        #for z in range(6, 40):
+        #    plt.imshow(cuberot[z], origin='lower')
+        #    plt.axvline(x=193, color='w')
+        #    plt.axvline(x=203, color='w')
+        #    #plt.colorbar()
+        #    plt.pause(0.5)
+        #print(oop)
+        path1 = path.Path([(198.0, 0.), (198, len(self.input_data[0][0]))], width=self.pvd_width)  # PGC 11179!!
+        pvd_dat, slice = extract_pv_slice(cuberot, path1)
+        # '''  #
+
+        pvd_dat, slice = extract_pv_slice(self.clipped_data, path1)  # self.input_data * data_mask
+        #pvd_dat, slice = extract_pv_slice(self.input_data, path1)  # self.input_data * data_mask
+
+        fig, ax = plt.subplots(1, 1, figsize=(8,6))
         plt.subplots_adjust(hspace=0.02)
-        print(slice.shape)
+        print(slice.shape)  # 50, 144 ;; N384: 124, 183
+        print(len(slice[0]))
 
         x_rad = np.zeros(shape=len(slice[0]))
+        print(len(x_rad), 'hi')
         if len(slice[0]) % 2. == 0:  # if even
             xr_c = (len(slice[0])) / 2.  # set the center of the axes (in pixel number)
             for i in range(len(slice[0])):
@@ -800,19 +913,21 @@ class ModelGrid:
 
         #from mpl_toolkits.axes_grid1 import make_axes_locatable
         #divider1 = make_axes_locatable(ax[0])
-        print(x_rad, len(x_rad))
-        print(vel_ax)
+        print(len(x_rad), len(vel_ax))  # 144, 66 ;; N384: 183, 43
+        #print(x_rad)
+        #print(vel_ax)
         # CONVERT FROM Jy/beam TO mJy/beam
         slice *= 1e3
         vmin = np.amin(slice)
         vmax = np.amax(slice)
-        p1 = ax.pcolormesh(x_rad, vel_ax, slice, vmin=vmin, vmax=vmax)  # x_rad[0], x_rad[-1]
+        p1 = ax.pcolormesh(x_rad, vel_ax, slice, vmin=vmin, vmax=vmax, cmap='Greys')  # x_rad[0], x_rad[-1]
         cb = fig.colorbar(p1, ax=ax, pad=0.02)  # ticks=[-0.5, 0, 0.5, 1, 1.5],
         cb.set_label(r'mJy beam$^{-1}$', rotation=270, labelpad=20.)
         ax.set_ylabel('Velocity [km/s]')
         plt.xlabel('Distance [arcsec]')
         #plt.colorbar()
         plt.show()
+        print(oop)
 
 
     def output_cube(self):  # if outputting actual cube itself
@@ -1049,6 +1164,59 @@ class ModelGrid:
         # plt.show()
         print(binNum, sn, nPixels)  # len=# of pix, bin # for each pix; len=# of bins: SNR/bin; len=# of bins: # pix/bin
 
+        '''  # ATTEMPT PA fit (pafit)
+        print('Averaging Voronoi binning on the moment map')
+        from pafit import fit_kinematic_pa as fkpa
+        vel_ax = []
+        for v in range(len(self.freq_ax)):
+            vel_ax.append(self.c_kms * (1. - (self.freq_ax[v] / self.f_0) * (1 + self.zred)))
+
+        # CALCULATE NUMERATOR AND DENOMINATOR USED IN MOMENT 1 & 2, JUST FOR DATA
+        full_numerator = np.zeros(shape=(len(self.input_data[0]), len(self.input_data[0][0])))
+        full_denominator = np.zeros(shape=(len(self.input_data[0]), len(self.input_data[0][0])))
+        for zi in range(len(self.input_data)):
+            full_numerator += vel_ax[zi] * self.input_data[zi] * data_mask[zi]
+            full_denominator += self.input_data[zi] * data_mask[zi]
+        m1full = full_numerator / full_denominator
+
+        m1full = np.nan_to_num(m1full)
+        m1full[np.abs(m1full) > 1e3] = 0
+
+        m1full = m1full[self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]]
+
+        plt.imshow(m1full, origin='lower')
+        plt.colorbar()
+        plt.show()
+
+        flattened_binned_m1 = np.zeros(shape=max(binNum) + 1)  # flatten and bin the moment 1 map
+        for xy in range(len(x_in)):
+            flattened_binned_m1[binNum[xy]] += m1full[ypix[xy], xpix[xy]] / nPixels[binNum[xy]]
+
+        # convert the flattened binned moment 1 map into a vector of the same size as the x & y inputs
+        full_binned_m1 = np.zeros(shape=len(binNum))
+        for xy in range(len(x_in)):
+            full_binned_m1[xy] += flattened_binned_m1[binNum[xy]]
+
+        print(full_binned_m1)
+
+        m1_vb = np.zeros(shape=m1full.shape)
+        for xy in range(len(x_in)):
+            m1_vb[ypix[xy], xpix[xy]] = full_binned_m1[xy]
+
+        plt.imshow(m1_vb, origin='lower')
+        plt.colorbar()
+        plt.show()
+
+        plt.clf()
+        ang, ang_err, v_syst = fkpa.fit_kinematic_pa(x_in, y_in, full_binned_m1, debug=True, nsteps=30)
+        print(ang, ang_err, v_syst)
+        plt.show()
+        # UGC 2698: kin PA = 105.5 deg (-90 -> PA = 15.5 deg, +/-3.1 deg)
+        # NGC 384: kin PA = 136.6 deg (-90 -> PA = 46.6 deg, +/-3.1 deg). [Velocity offset 23.168526412879885 -> DONE]
+        # PGC 11179: kin PA = 155.2 deg (-90 -> PA = 65.2 deg, +/-3.1 deg). [Velocity offset -27.5180526058145 -> DONE]
+        print(oop)
+        # '''  #
+
         return xpix, ypix, binNum, x_in, nPixels
 
 
@@ -1068,18 +1236,51 @@ class ModelGrid:
         hdu_m.close()
 
         # CREATE VELOCITY AXIS FROM FREQUENCY AXIS
+        velwidth = self.c_kms * (1 + self.zred) * self.fstep / self.f_0
         self.freq_ax = self.freq_ax[self.zrange[0]:self.zrange[1]]
         vel_ax = []
-        velwidth = self.c_kms * (1 + self.zred) * self.fstep / self.f_0
         for v in range(len(self.freq_ax)):
             vel_ax.append(self.c_kms * (1. - (self.freq_ax[v] / self.f_0) * (1 + self.zred)))
 
+        # CLIP THE DATA
         self.clipped_data = self.input_data[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
                                             self.xyrange[0]:self.xyrange[1]]
 
         # full cube strictmask, clipped to the appropriate zrange
         clipped_mask = data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
                                  self.xyrange[0]:self.xyrange[1]]
+
+        '''  #
+        # USED FOR FINDING ROUGH PA
+        self.clipped_data = self.input_data[self.zrange[0]:self.zrange[1]]#, self.xyrange[2]:self.xyrange[3],
+                                            #self.xyrange[0]:self.xyrange[1]]
+
+        # full cube strictmask, clipped to the appropriate zrange
+        clipped_mask = data_mask[self.zrange[0]:self.zrange[1]]#, self.xyrange[2]:self.xyrange[3],
+                                 #self.xyrange[0]:self.xyrange[1]]
+
+        collapsed_dat = np.zeros(shape=self.clipped_data[0].shape)
+        for z in range(len(vel_ax)):
+            collapsed_dat += self.clipped_data[z] * clipped_mask[z] * abs(velwidth)
+
+        collapsed_dat *= 1e3
+        collapsed_dat += np.random.random((len(self.clipped_data[0]), len(self.clipped_data[0][0]))) *100
+
+        # The geometric parameters below were obtained using my FIND_GALAXY program
+        #import mge_fit_mine as mgemy
+        import sys
+        sys.path.insert(0, '/Users/jonathancohn/Documents/mge/')
+        from find_galaxy import find_galaxy
+        f = find_galaxy(collapsed_dat, binning=1, fraction=0.01, level=None, nblob=1, plot=True, quiet=False)
+        plt.show()
+        plt.clf()
+        ang1 = f.theta
+        xc1 = f.xmed
+        yc1 = f.ymed
+        eps = f.eps
+        print(ang1, xc1, yc1, eps)
+        print(oop)
+        # '''  #
 
         # CALCULATE MOMENT 0 JUST FOR DATA
         data_masked_m0 = np.zeros(shape=self.clipped_data[0].shape)
@@ -1645,16 +1846,16 @@ if __name__ == "__main__":
                    f_0=f_0, bl=params['bl'], xyrange=[params['xi'], params['xf'], params['yi'], params['yf']],
                    n_params=n_free, data_mask=params['mask'], incl_gas=params['incl_gas']=='True', vrad=params['vrad'],
                    kappa=params['kappa'], omega=params['omega'], co_rad=None, co_sb=None, avg=avging,
-                   pvd_width=(params['x_fwhm']*params['y_fwhm'])/params['resolution']/2., vcg_func=None)
+                   pvd_width=params['x_fwhm'] / params['resolution'], vcg_func=None)
 
     # x_fwhm=0.197045, y_fwhm=0.103544 -> geometric mean = sqrt(0.197045*0.103544) = 0.142838; regular mean = 0.1502945
     #mg.grids()
     #mg.convolution()
     #chi_sq = mg.chi2()
     #mg.vor_moms(incl_beam=True, snr=10)
-    mg.vor_moms(incl_beam=False, snr=10)
     mg.pvd()
-    print(oop)
+    mg.vor_moms(incl_beam=False, snr=10)
+#    mg.just_the_bins(snr=10)
     print(oop)
     # LP at 16,11 is great!
     xs = [7, 14, 15]
