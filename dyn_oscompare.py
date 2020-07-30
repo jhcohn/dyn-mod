@@ -34,25 +34,27 @@ direc = '/Users/jonathancohn/Documents/dyn_mod/nest_out/'
 grp = '/Users/jonathancohn/Documents/dyn_mod/groupmtg/'
 
 
-os_to_compare = ['u2698_os2_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590693577.7494018_end.pkl',
-                 'u2698_os3_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590692584.260687_end.pkl',
-                 'u2698_os4_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590692888.5767071_end.pkl',
-                 'u2698_os6_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590699379.3008854_end.pkl',
-                 'u2698_os8_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590701499.9093819_end.pkl',
-                 'u2698_os10_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590705487.6493137_end.pkl',
-                 'u2698_os12_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590715106.442782_end.pkl',
-                 'u2698_os14_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590729076.410538_end.pkl',
-                 'u2698_os16_d91_baseline_rhe_orig_nog_10000000_8_0.02_1590732620.6191862_end.pkl']
+os_to_compare = ['u2698_exv_os1_baseline_rhe_orig_nog_10000000_8_0.02_1594865056.9097123_end.pkl',
+                 'u2698_exv_os2_baseline_rhe_orig_nog_10000000_8_0.02_1593211158.390702_end.pkl',
+                 'u2698_exv_os3_baseline_rhe_orig_nog_10000000_8_0.02_1593216852.5147808_end.pkl',
+                 'u2698_exv_os4_baseline_rhe_orig_nog_10000000_8_0.02_1593211776.966962_end.pkl',
+                 'u2698_exv_os6_baseline_rhe_orig_nog_10000000_8_0.02_1593218525.8919191_end.pkl',
+                 'u2698_exv_os8_baseline_rhe_orig_nog_10000000_8_0.02_1593227152.5059612_end.pkl',
+                 'u2698_exv_os10_baseline_rhe_orig_nog_10000000_8_0.02_1593239740.6758_end.pkl',
+                 'u2698_exv_os12_baseline_rhe_orig_nog_10000000_8_0.02_1593265549.3681285_end.pkl',
+                 'u2698_exv_os14_baseline_rhe_orig_nog_10000000_8_0.02_1593261183.7849855_end.pkl',
+                 'u2698_exv_os16_baseline_rhe_orig_nog_10000000_8_0.02_1593336953.3834007_end.pkl']
 
-os_parfiles = ['ugc_2698/ugc_2698_os2_d91_baseline_rhe_orig_nog_out.txt',
-               'ugc_2698/ugc_2698_os3_d91_baseline_rhe_orig_nog_out.txt',
-               'ugc_2698/ugc_2698_os4_d91_baseline_rhe_orig_nog_out.txt',
-               'ugc_2698/ugc_2698_os6_d91_baseline_rhe_orig_nog_out.txt',
-               'ugc_2698/ugc_2698_os8_d91_baseline_rhe_orig_nog_out.txt',
-               'ugc_2698/ugc_2698_os10_d91_baseline_rhe_orig_nog_out.txt',
-               'ugc_2698/ugc_2698_os12_d91_baseline_rhe_orig_nog_out.txt',
-               'ugc_2698/ugc_2698_os14_d91_baseline_rhe_orig_nog_out.txt',
-               'ugc_2698/ugc_2698_os16_d91_baseline_rhe_orig_nog_out.txt']
+os_parfiles = ['ugc_2698/ugc_2698_exv_os1_baseline_rhe_orig_nog_out.txt',
+               'ugc_2698/ugc_2698_exv_os2_baseline_rhe_orig_nog_out.txt',
+               'ugc_2698/ugc_2698_exv_os3_baseline_rhe_orig_nog_out.txt',
+               'ugc_2698/ugc_2698_exv_os4_baseline_rhe_orig_nog_out.txt',
+               'ugc_2698/ugc_2698_exv_os6_baseline_rhe_orig_nog_out.txt',
+               'ugc_2698/ugc_2698_exv_os8_baseline_rhe_orig_nog_out.txt',
+               'ugc_2698/ugc_2698_exv_os10_baseline_rhe_orig_nog_out.txt',
+               'ugc_2698/ugc_2698_exv_os12_baseline_rhe_orig_nog_out.txt',
+               'ugc_2698/ugc_2698_exv_os14_baseline_rhe_orig_nog_out.txt',
+               'ugc_2698/ugc_2698_exv_os16_baseline_rhe_orig_nog_out.txt']
 
 chisq_array = np.zeros(shape=(len(os_to_compare)))
 mbh_array = np.zeros(shape=(len(os_to_compare), 3))
@@ -93,8 +95,8 @@ for osf in range(len(os_to_compare)):
         lucy_out=lucy_out, out_name=None, beam=beam, rfit=params['rfit'], zrange=[params['zi'], params['zf']],
         dist=params['dist'], input_data=input_data, sig_type=params['s_type'], menc_type=params['mtype'],
         theta_ell=np.deg2rad(params['theta_ell']), xell=params['xell'],yell=params['yell'], q_ell=params['q_ell'],
-        ds=params['ds'], reduced=False, f_0=f_0, freq_ax=freq_ax, noise=noise, bl=params['bl'], fstep=fstep,
-        xyrange=[params['xi'], params['xf'], params['yi'], params['yf']], n_params=nfree)
+        ds=params['ds'], ds2=params['ds'], reduced=False, f_0=f_0, freq_ax=freq_ax, noise=noise, bl=params['bl'],
+        fstep=fstep, xyrange=[params['xi'], params['xf'], params['yi'], params['yf']], n_params=nfree)
 
     mg.grids()
     mg.convolution()
