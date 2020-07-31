@@ -18,6 +18,156 @@ import mge_vcirc_mine as mvm  # import mge_vcirc code
 from scipy.interpolate import UnivariateSpline as unsp
 
 
+def mge_sum(mge, pc_per_ac):
+    """
+
+    :param mge: MGE file, containing columns: j [component number], I [Lsol,H/pc^2], sigma[arcsec], q[unitless]
+    :param pc_per_ac: parsec per arcsec scaling
+    :return: the total luminosity from integrating the MGE
+    """
+
+    intensities = []
+    sigmas = []
+    qs = []
+    with open(mge, 'r') as mfile:
+        for line in mfile:
+            if not line.startswith('#'):
+                cols = line.split()
+                intensities.append(float(cols[1]))  # cols[0] = component number, cols[1] = intensity[Lsol,H/pc^2]
+                sigmas.append(float(cols[2]))  # cols[2] = sigma[arcsec]
+                qs.append(float(cols[3]))  # cols[3] = qObs[unitless]
+
+    sum = 0
+    for i in range(len(intensities)):
+        # volume under 2D gaussian function = 2 pi A sigma_x sigma_y
+        sum += 2 * np.pi * intensities[i] * qs[i] * (pc_per_ac * sigmas[i]) ** 2  # convert sigma to pc
+    print(sum)  # Lsol,H
+
+    return sum
+
+
+def mbh_relations(mbh, mbh_err, lum_k=None, mass_k=None, sigma=None, xerr=None, incl_past=True):
+    """
+
+    :param mbh: array of black hole mass measurements
+    :param mbh_err: array of uncertainties on the black hole mass measurements [[low_0, hi_0], [low_1, high_1], ...]
+    :param lum_k: if showing M-L, array (same length as mbh) of luminosities
+    :param mass_k: if showing M-M, array (same length as mbh) of stellar masses
+    :param sigma: if showing M-sigma, array (same length as mbh) of sigmas
+    :param xerr: error on lum_k, mass_k, or sigma
+    :param incl_past: if True, include other CEGs on the plot
+    :return:
+    """
+    if lum_k is not None:
+        fig = plt.figure(figsize=(8,6))
+        lum_x = np.logspace(7., 13.)
+        kormendy_and_ho = 0.542e9 * (lum_x / 1e11) ** 1.21
+        kah_up = 0.611e9 * (lum_x / 1e11) ** 1.21  # 1.30
+        kah_down = 0.481e9 * (lum_x / 1e11) ** 1.21  # 1.12
+
+        plt.plot(lum_x, kormendy_and_ho, 'k-', label='Kormendy \& Ho (2013)')
+        # plt.fill_between(lum_x, kah_up, kah_down, color='k', alpha=0.3)
+        #plt.fill_between(lum_x, kormendy_and_ho * 10**(0.4*(-0.31)), kormendy_and_ho * 10**(0.4*(0.31)),
+        #                 color='k', alpha=0.3)
+        plt.fill_between(lum_x, kah_up + kormendy_and_ho * 10**(0.4*(-0.31)), kah_down - kormendy_and_ho*(10**(0.4*0.31)-1),
+                         color='k', alpha=0.2)  # include relations + intrinsic scatter
+        # PAGE 54-55 https://arxiv.org/pdf/1304.7762.pdf:
+        # -2.5log10(L2/L1) = m2 - m1 -> 10^[(m1-m2)/2.5] = L2/L1 -> L2 = L1*10^[0.4(m1-m2)] ->
+        # -> L1 - L2 = L1(1 - 10^[0.4(m1-m2)]) -> L2 - L1 = delta L = L1 (10^[0.4(-delta mag)] - 1)
+        # LK = LH * 10^(0.4(LH - LK))
+
+        if incl_past:
+            plt.errorbar(7.7e10, 4.9e9, xerr=2.8e10, yerr=1.6e9, fmt='rs')  # NGC 1277
+            plt.text(1.2e11, 5.5e9, 'N1277', color='r')
+            plt.errorbar(4.6e10, 3e9, xerr=[[2.7e10], [2.7e10]], yerr=[[1.1e9], [1e9]], fmt='rs')  # N1271
+            plt.text(1.3e10, 3.2e9, 'N1271', color='r')
+            plt.errorbar(9.6e10, 4.9e9, xerr=[[7.9e10], [4.6e10]], yerr=1.7e9, fmt='rs')  # MARK 1216
+            plt.text(2.75e10, 5.5e9, 'M1216', color='r')
+
+        for item in range(len(mbh)):
+            plt.errorbar(lum_k[item], mbh[item], yerr=[[mbh_err[item][0]], [mbh_err[item][1]]], fmt='bD')
+            plt.text(9.5e10, 2.3e9, 'U2698', color='b')
+            # , assuming an H-K color of 0.2 (Vazdekis et al. 1996) and a K-band solar absolute magnitude of 3.29.
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.xlabel(r'log$_{10}$L$_{\rm{K,bul}}$ [L$_{\odot}$]')
+        plt.ylabel(r'M$_{\rm{BH}}$ [M$_{\odot}$]')
+        plt.legend()
+        plt.xlim(1e8, 2e12)
+        plt.ylim(1e6, 2.5e10)
+        plt.show()
+
+
+    elif sigma is not None:
+        fig, ax = plt.subplots(1, figsize=(8, 6))
+        sig_x = np.logspace(1.7, 2.7)  # ~50 - ~500 km/s
+        kormendy_and_ho = 0.309e9 * (sig_x / 200) ** 4.38
+        kah_up = 0.346e9 * (sig_x / 200) ** 4.38  # 4.67
+        kah_down = 0.276e9 * (sig_x / 200) ** 4.38  # 4.09
+
+        saglia = 10**(5.246 * np.log10(sig_x) - 3.77)  # log MBH = a * log sigma + ZP
+        saglia_up = 10**((5.246+0.274) * np.log10(sig_x) - 3.77+0.631)  # log MBH = (a+da) * log sigma + ZP + dZP (0.631)
+        saglia_down = 10**((5.246-0.274) * np.log10(sig_x) - 3.77-0.631)  # log MBH = (a-da) * log sigma + ZP - dZP
+        # da = 0.274, dZP = 0.631, rms = 0.459
+
+        plt.plot(sig_x, kormendy_and_ho, 'k-', label='Kormendy \& Ho (2013)')
+        # plt.fill_between(lum_x, kah_up, kah_down, color='k', alpha=0.3)
+        #plt.fill_between(lum_x, kormendy_and_ho * 10**(0.4*(-0.31)), kormendy_and_ho * 10**(0.4*(0.31)),
+        #                 color='k', alpha=0.3)
+        plt.fill_between(sig_x, kah_up*(1 + 0.28), kah_down*(1 - 0.28), color='k', alpha=0.2)  # relations + intrinsic scatter
+        plt.fill_between(sig_x, saglia_up*(1+0.459), saglia_down*(1-0.459), color='g', alpha=0.2)  # relations + intrinsic scatter
+        plt.plot(sig_x, saglia, 'g--', label='Saglia et al. (2016)')
+        # relations and scatter from pg54-55 https://arxiv.org/pdf/1304.7762.pdf
+
+        if incl_past:
+            plt.errorbar(333, 4.9e9, xerr=0., yerr=1.6e9, fmt='rs')  # NGC 1277  # BUCKET TO DO: van den Bosch+12 for error on sigma
+            plt.text(320, 7e9, 'N1277', color='r')
+            plt.errorbar(276, 3e9, xerr=[[4], [73]], yerr=[[1.1e9], [1e9]], fmt='rs')  # N1271
+            plt.text(220, 3.2e9, 'N1271', color='r')
+            plt.errorbar(308, 4.9e9, xerr=[[6], [16]], yerr=1.7e9, fmt='rs')  # MARK 1216
+            plt.text(245, 5.5e9, 'M1216', color='r')
+
+        for item in range(len(mbh)):
+            plt.errorbar(sigma[item], mbh[item], yerr=[[mbh_err[item][0]], [mbh_err[item][1]]], xerr=xerr, fmt='bD')
+            plt.text(310, 1.5e9, 'U2698', color='b')
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.xlabel(r'$\sigma$ [km/s]')
+        plt.ylabel(r'M$_{\rm{BH}}$ [M$_{\odot}$]')
+        plt.legend()
+        plt.xlim(50, 500)
+        plt.ylim(1e6, 2.5e10)
+        plt.show()
+
+    elif mass_k is not None:
+        fig = plt.figure(figsize=(8,6))
+        mass_x = np.logspace(8, 12.7)
+        # TO DO: correct relations for mass!
+        kormendy_and_ho = 0.542e9 * (mass_x / 1e11) ** 1.21
+        kah_up = 0.611e9 * (mass_x / 1e11) ** 1.21  # 1.30
+        kah_down = 0.481e9 * (mass_x / 1e11) ** 1.21  # 1.12
+
+        if incl_past:
+            plt.errorbar(1.6e11, 4.9e9, xerr=2.8e10, yerr=1.6e9, fmt='rs')  # NGC 1277  # TO DO: correct error
+            plt.text(1.2e11, 8e9, 'N1277', color='r')
+            plt.errorbar(1.0e11, 3e9, xerr=[[2.7e10], [2.7e10]], yerr=[[1.1e9], [1e9]], fmt='rs')  # N1271  # TO DO: correct error
+            plt.text(1.3e10, 3.2e9, 'N1271', color='r')
+            plt.errorbar(1.1e11, 4.9e9, xerr=[[0.9e11], [0.5e11]], yerr=1.7e9, fmt='rs')  # MARK 1216
+            plt.text(3e10, 5.5e9, 'M1216', color='r')
+
+        for item in range(len(mbh)):
+            plt.errorbar(lum_k[item], mbh[item], yerr=[[mbh_err[item][0]], [mbh_err[item][1]]], fmt='bD')
+            plt.text(8.5e10, 2.3e9, 'U2698', color='b')  # TO DO UPDATE
+            # , assuming an H-K color of 0.2 (Vazdekis et al. 1996) and a K-band solar absolute magnitude of 3.29.
+        plt.yscale('log')
+        plt.xlabel(r'M$_{\rm{bulge}}$ [M$_{\odot}$]')
+        plt.ylabel(r'M$_{\rm{BH}}$ [M$_{\odot}$]')
+        import matplotlib.ticker as mticker
+        plt.xlim(50, 500)
+        plt.ylim(1e6, 2.5e10)
+        plt.show()
+
+
 def integral22(rad, dda):
 
     int22 = integrate.quad(integrand22, 0, rad, args=(rad, dda))[0]
@@ -611,6 +761,19 @@ class ModelGrid:
 
     def grids(self):
         t_grid = time.time()
+
+        '''  #
+        lum_H = 10**11.3348
+        LKcorr = lum_H * 10 ** (0.4 * 0.2)
+        #mbh_relations([10 ** 9.39], [[0.7e9, 0.7e9]], lum_k=[LKcorr])
+        mbh_relations([10 ** 9.39], [[0.7e9, 0.7e9]], sigma=[304], xerr=[[6], [6]])
+        print(oop)
+        # def mbh_relations(mbh, mbh_err, lum_k=None, mass_k=None, sigma=None, incl_past=True):
+        Ltot = mge_sum(self.enclosed_mass, self.pc_per_ac)
+        print(self.mbh, np.log10(self.mbh))
+        print(Ltot, np.log10(Ltot))
+        print(oop)
+        '''  #
 
         # SUBPIXELS (reshape deconvolved flux map [lucy_out] sxs subpixels, so subpix has flux=(real pixel flux)/s**2)
         if not self.quiet:
