@@ -1407,7 +1407,7 @@ class ModelGrid:
             subtr = beam_overlay
 
         # CALCULATE RESIDUAL
-        residual_m0 = model_masked_m0 - (data_masked_m0 - subtr)
+        residual_m0 = (data_masked_m0 - subtr) - model_masked_m0
 
         # AVERAGE EACH MAP WITHING THE VORONOI BIN
         xpix, ypix, binNum, x_in, nPixels = self.just_the_bins(snr=snr)
@@ -1448,7 +1448,7 @@ class ModelGrid:
         d2_num[d2_num < 0] = 0.  # BUCKET ADDING TO GET RID OF NANs
         data_m2 = np.sqrt(d2_num / d2_den)  # * d1  # BUCKET: no need for MASKING using d1?
         data_m2 = np.nan_to_num(data_m2)
-        residual_m2 = model_m2 - data_m2
+        residual_m2 = data_m2 - model_m2
 
         # AVERAGE EACH MOMENT MAP WITHIN THE VORONOI BINS
         d0 = map_averaging(data_masked_m0, xpix, ypix, binNum, x_in, nPixels)
@@ -1460,7 +1460,7 @@ class ModelGrid:
         max0 = np.amax([np.nanmax(m0), np.nanmax(d0)])
 
         data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
-        residual_m1 = model_m1 - (data_m1 - subtr)  # calculate residual
+        residual_m1 = (data_m1 - subtr) - model_m1  # calculate residual
         d1 = map_averaging(data_m1, xpix, ypix, binNum, x_in, nPixels)
         m1 = map_averaging(model_m1, xpix, ypix, binNum, x_in, nPixels)
         r1 = map_averaging(residual_m1, xpix, ypix, binNum, x_in, nPixels)
@@ -2081,8 +2081,8 @@ if __name__ == "__main__":
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()
-    mg.vor_moms(incl_beam=True, snr=10)
-    mg.vor_moms(incl_beam=False, snr=10)
+    # mg.vor_moms(incl_beam=True, snr=10, just_data=False)
+    mg.vor_moms(incl_beam=False, snr=10, just_data=False)
     mg.pvd()
     print(oop)
     # LP at 16,11 is great!

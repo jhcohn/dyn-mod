@@ -99,6 +99,19 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
     # COLLAPSE THE DATA CUBE
     fluxes, freq_ax, f_0, input_data, fstep = get_fluxes(data, data_mask, write_name=lucy_in)
 
+    # ESTIMATE NOISE (RMS) IN ORIGINAL DATA CUBE [z, y, x]
+    cut_y = len(input_data[0]) % ds2  # is the cube y-dimension divisible by ds2? If not, cut remainder from cube edge
+    cut_x = len(input_data[0][0]) % ds  # is the cube x-dimension divisible by ds2? If not, cut remainder from cube edge
+    if cut_x == 0:  # if there is no remainder:
+        cut_x = -len(input_data[0][0])  # don't want to cut anything below
+    if cut_y == 0:  # if there is no remainder:
+        cut_y = -len(input_data[0])  # don't want to cut anything below
+    noise_ds = rebin(input_data[:, :-cut_y, :-cut_x], ds2, ds, avg=avg)  # down-sample noise to the chi^2 pixel scale
+
+    noise = []  # For large N, Variance ~= std^2
+    for z in range(zrange[0], zrange[1]):  # for each relevant freq slice, calculte std (aka rms) ~variance
+        noise.append(np.std(noise_ds[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
+
     # CALCULATE VELOCITY WIDTH  # vsys = 6454.9 estimated from various test runs; see eg. Week of 2020-05-04 on wiki
     v_width = 2.99792458e5 * (1 + (6454.9 / 2.99792458e5)) * fstep / f_0  # velocity width [km/s] = c*(1+v/c)*fstep/f0
 
@@ -108,7 +121,7 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
         collapsed_fluxes_vel += input_data[zi] * fullmask[zi] * v_width
     # collapsed_fluxes_vel[collapsed_fluxes_vel < 0] = 0.  # ignore negative values? probably not?
 
-    return fluxes, freq_ax, f_0, fstep, input_data
+    return fluxes, freq_ax, f_0, fstep, input_data, noise
 
 
 def get_sig(r=None, sig0=1., r0=1., mu=1., sig1=0.):
@@ -696,20 +709,21 @@ class ModelGrid:
         x_locvb = (self.x_loc - self.xyrange[0]) / self.ds  # x_loc - xi
         y_locvb = (self.y_loc - self.xyrange[2]) / self.ds2  # y_loc - yi
 
+        self.clipped_data = self.input_data[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
+                                            self.xyrange[0]:self.xyrange[1]]
         # SET UP OBSERVATION AXES: initialize x,y axes at 0., with lengths = sub_cube.shape
-        y_obs_acvb = np.asarray([0.] * len(self.ell_ds))
-        x_obs_acvb = np.asarray([0.] * len(self.ell_ds[0]))
+        y_obs_acvb = np.asarray([0.] * len(self.clipped_data[0]))
+        x_obs_acvb = np.asarray([0.] * len(self.clipped_data[0][0]))
 
         # Define coordinates to be 0,0 at center of the observed axes (find the central pixel number along each axis)
         for i in range(len(x_obs_acvb)):
-            x_obs_acvb[i] = self.resolution * (i - x_locvb) / self.ds  # (arcsec/pix) * N_pix = arcsec
+            x_obs_acvb[i] = self.resolution * (i - x_locvb) * self.ds  # (arcsec/pix) * N_pix = arcsec
         for i in range(len(y_obs_acvb)):
-            y_obs_acvb[i] = self.resolution * (i - y_locvb) / self.ds2
+            y_obs_acvb[i] = self.resolution * (i - y_locvb) * self.ds2
 
         f_sys = self.f_0 / (1 + self.zred)
         print(ix, iy)
         data_ds = rebin(self.clipped_data, self.ds2, self.ds, avg=self.avg)
-        ap_ds = rebin(self.convolved_cube, self.ds2, self.ds, avg=self.avg)
 
         hdu_m = fits.open(self.data_mask)
         data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
@@ -724,7 +738,6 @@ class ModelGrid:
             # self.clipped_data[zi] * data_mask[zi, self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]]* v_width
 
         if show_freq:
-            plt.plot(self.freq_ax / 1e9, ap_ds[:, iy, ix], 'r*', label=r'Model')
             plt.plot(self.freq_ax / 1e9, data_ds[:, iy, ix], 'k+', label=r'Data')
             plt.plot(self.freq_ax / 1e9, self.noise, 'k--', label=r'Noise (std)')
             plt.axvline(x=f_sys / 1e9, color='k', label=r'$f_{sys}$')
@@ -734,6 +747,7 @@ class ModelGrid:
             vel_ax = []
             for v in range(len(self.freq_ax)):
                 vel_ax.append(self.c_kms * (1. - (self.freq_ax[v] / self.f_0) * (1 + self.zred)))
+            vel_ax = vel_ax[self.zrange[0]:self.zrange[1]]
 
             fig, ax = plt.subplots(len(ix), 1, figsize=(6, 12), sharex=True)
             plt.subplots_adjust(hspace=0.)
@@ -742,17 +756,14 @@ class ModelGrid:
                 xp = round(x_obs_acvb[ix[ii]], 3)
                 yp = round(y_obs_acvb[iy[ii]], 3)
                 dlabel = None
-                mlabel = None
                 if ii == 0:
                     dlabel = r'Data'
-                    mlabel = r'Model'
                 norm = np.amax(data_ds[:, iy[ii], ix[ii]])
                 ax[ii].fill_between(vel_ax, (data_ds[:, iy[ii], ix[ii]] - self.noise) / norm,
                                     (data_ds[:, iy[ii], ix[ii]] + self.noise) / norm, color='k', step='mid', alpha=0.3)
                 #ax[ii].fill_between(vel_ax, data_ds[:, iy[ii], ix[ii]] - self.noise,
                 #                    data_ds[:, iy[ii], ix[ii]] + self.noise, color='k', step='mid', alpha=0.2)
                 ax[ii].step(vel_ax, data_ds[:, iy[ii], ix[ii]] / norm, color='k', where='mid', label=dlabel)
-                ax[ii].step(vel_ax, ap_ds[:, iy[ii], ix[ii]] / norm, color='b', where='mid', label=mlabel)
                 # ax[ii].axvline(x=0., color='k', ls='--', label=r'v$_{\text{sys}}$')
                 ax[ii].text(-200, 0.9, r'x=' + str(xp) + r'", y=' + str(yp) + r'"')
             ax[-1].set_xlabel(r'Line-of-sight velocity [km/s]')
@@ -917,7 +928,7 @@ class ModelGrid:
         #print(x_rad)
         #print(vel_ax)
         # CONVERT FROM Jy/beam TO mJy/beam
-        slice *= 1e3
+        slice *= 1e3 * self.pvd_width
         vmin = np.amin(slice)
         vmax = np.amax(slice)
         p1 = ax.pcolormesh(x_rad, vel_ax, slice, vmin=vmin, vmax=vmax, cmap='Greys')  # x_rad[0], x_rad[-1]
@@ -1816,7 +1827,7 @@ if __name__ == "__main__":
                          zrange=[params['zi'], params['zf']], avg=avging, q_ell=params['q_ell'],
                          theta_ell=np.deg2rad(params['theta_ell']), xell=params['xell'], yell=params['yell'])
 
-    fluxes, freq_ax, f_0, fstep, input_data = mod_ins
+    fluxes, freq_ax, f_0, fstep, input_data, noise = mod_ins
 
     hduin = fits.open(params['lucy_in'])
     l_in = hduin[0].data
@@ -1841,7 +1852,7 @@ if __name__ == "__main__":
                    beam=None, rfit=params['rfit'], enclosed_mass=params['mass'], ml_ratio=params['ml_ratio'],
                    sig_type=params['s_type'], zrange=[params['zi'], params['zf']], menc_type=params['mtype'],
                    sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], f_w=params['f'],
-                   ds=params['ds'], ds2=params['ds2'], noise=None, reduced=True, freq_ax=freq_ax, q_ell=params['q_ell'],
+                   ds=params['ds'], ds2=params['ds2'], noise=noise, reduced=True, freq_ax=freq_ax, q_ell=params['q_ell'],
                    theta_ell=np.deg2rad(params['theta_ell']), xell=params['xell'], yell=params['yell'], fstep=fstep,
                    f_0=f_0, bl=params['bl'], xyrange=[params['xi'], params['xf'], params['yi'], params['yf']],
                    n_params=n_free, data_mask=params['mask'], incl_gas=params['incl_gas']=='True', vrad=params['vrad'],
@@ -1854,7 +1865,7 @@ if __name__ == "__main__":
     #chi_sq = mg.chi2()
     #mg.vor_moms(incl_beam=True, snr=10)
     mg.pvd()
-    mg.vor_moms(incl_beam=False, snr=10)
+    #mg.vor_moms(incl_beam=False, snr=10)
 #    mg.just_the_bins(snr=10)
     print(oop)
     # LP at 16,11 is great!

@@ -832,6 +832,20 @@ class ModelGrid:
             # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
             vel = np.sqrt(self.G_pc * m_R / R + vg**2)  # Keplerian velocity vel at each point in the disk
 
+        '''  # CALCULATE VCIRC(R) DUE TO DIFFERENT COMPONENTS
+        rads_ac = np.logspace(-2, 0.5)
+        rads_pc = rads_ac * self.pc_per_ac
+        plt.plot(rads_ac, v_c_r(rads_ac), 'r:', label=r'v$_{\rm{circ}}$(stars)')
+        plt.plot(rads_ac, np.sqrt(self.G_pc * self.mbh / rads_pc), 'k--', label=r'v$_{\rm{circ}}$(black hole)')
+        plt.plot(rads_ac, np.sqrt((self.G_pc * self.mbh / rads_pc) + v_c_r(rads_ac) ** 2), 'b-',
+                 label=r'v$_{\rm{circ}}$(total)')
+        plt.legend()
+        plt.xlabel(r'radius [arcsec]')
+        plt.ylabel(r'v$_{\rm{circ}}$ [km/s]')
+        plt.show()
+        print(oop)
+        # '''  #
+
         # CALCULATE LINE-OF-SIGHT VELOCITY AT EACH POINT (x_disk, y_disk) IN THE DISK (km/s)
         alpha = abs(np.arctan(y_disk / (np.cos(self.inc) * x_disk)))  # measure alpha from +x (minor ax) to +y (maj ax)
         sign = x_disk / abs(x_disk)  # (+x now back to redshifted side, so don't need extra minus sign back in front!)
@@ -878,6 +892,23 @@ class ModelGrid:
         sigma_grid = np.zeros(shape=R.shape) + sigma  # make sigma (whether already R-shaped or constant) R-shaped
         self.delta_freq_obs = (self.f_0 / (1 + self.zred)) * (sigma_grid / self.c_kms)  # convert sigma to delta_f
 
+        '''  #
+        # PLOT THE FREQUENCY MAP
+        fig, ax = plt.subplots(1, figsize=(8,6))
+        extent = [x_obs_ac[0], x_obs_ac[-1], y_obs_ac[0], y_obs_ac[-1]]
+        im = ax.imshow(self.freq_obs/1e9, origin='lower', extent=extent, vmax=np.max(self.freq_obs/1e9),
+                       vmin=np.amin(self.freq_obs/1e9))
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+        divider = make_axes_locatable(ax)  # set colorbar same size as plot
+        cax = divider.append_axes("right", size="5%", pad=0.05)  # set colorbar same size as plot
+        cbar = plt.colorbar(im, cax=cax)
+        cbar.set_label(r'$\nu_{\rm{obs}}$ [GHz]')
+        ax.set_xlabel(r'x [arcsec]')
+        ax.set_ylabel(r'y [arcsec]')
+        plt.show()
+        print(oop)
+        # '''  #
+
         # WEIGHTS FOR LINE PROFILES: apply weights to gaussian velocity profiles for each subpixel
         self.weight = subpix_deconvolved  # [Jy/beam Hz]
 
@@ -918,7 +949,7 @@ class ModelGrid:
         print('convolution loop ' + str(time.time() - tc))
 
         ''' # SHOW 3 SLICES OF THE DATA (OR INTRINSIC, OR CONVOLVED) CUBE!
-        cube = self.input_data  # self.input_data # self.convolved_cube # intrinsic_cube
+        cube = self.convolved_cube  # self.input_data # self.convolved_cube # intrinsic_cube
         # cube = intrinsic_cube
         full_xac = np.zeros(shape=len(cube[0]))  # len(64)
         full_yac = np.zeros(shape=len(cube[0][0]))  # len(84)
@@ -935,25 +966,25 @@ class ModelGrid:
         #vmin = np.amin([cube[midf], cube[-6], cube[6]])
         vmin=None
         # fig = plt.figure(figsize=(8,6))  # if cube == self.input_data: figsize(6,6) else: figsize(8,6)
-        plt.imshow(cube[midz+1], origin='lower', extent=extent, vmax=vmax, vmin=vmin)  # if cube == self.input_data: [midz]. else: [midf]
+        #plt.imshow(cube[midz+1], origin='lower', extent=extent, vmax=vmax, vmin=vmin)  # if cube == self.input_data: [midz]. else: [midf]
         plt.text(full_xac[10], full_yac[-15], str(round(self.freq_ax[midf-1] / 1e9, 2)) + r' GHz', color='w', fontsize=16)
-        #plt.imshow(cube[midf], origin='lower', extent=extent)  # if cube == self.input_data: [midz]. else: [midf]
+        plt.imshow(cube[midf], origin='lower', extent=extent)  # if cube == self.input_data: [midz]. else: [midf]
         #plt.text(full_xac[10], full_yac[-15], str(round(self.freq_ax[midf] / 1e9, 2)) + r' GHz', color='w', fontsize=16)
         plt.xlabel(r'x [arcsec]')
         plt.ylabel(r'y [arcsec]')
         plt.show()
         # fig = plt.figure(figsize=(8,6))  # if cube == self.input_data: figsize(6,6) else: figsize(8,6)
         fig = plt.figure(figsize=(6,6))  # if cube == self.input_data: figsize(6,6) else: figsize(8,6)
-        plt.imshow(self.input_data[self.zrange[1]-6], origin='lower', extent=extent, vmax=vmax, vmin=vmin)
-        #plt.imshow(cube[-6], origin='lower', extent=extent)
+        # plt.imshow(self.input_data[self.zrange[1]-6], origin='lower', extent=extent, vmax=vmax, vmin=vmin)  # if cube == self.input_data
+        plt.imshow(cube[-6], origin='lower', extent=extent, vmax=vmax, vmin=vmin)  # else: this line
         plt.text(full_xac[10], full_yac[-15], str(round(self.freq_ax[-6] / 1e9, 2)) + r' GHz', color='w', fontsize=16)
         plt.xlabel(r'x [arcsec]')
         plt.ylabel(r'y [arcsec]')
         plt.show()
         #fig = plt.figure(figsize=(8,6))  # if cube == self.input_data: figsize(6,6) else: figsize(8,6)
-        # plt.imshow(cube[6], origin='lower', extent=extent)
         fig = plt.figure(figsize=(6,6))  # if cube == self.input_data: figsize(6,6) else: figsize(8,6)
-        plt.imshow(self.input_data[self.zrange[0]+6], origin='lower', extent=extent, vmax=vmax, vmin=vmin)
+        # plt.imshow(self.input_data[self.zrange[0]+6], origin='lower', extent=extent, vmax=vmax, vmin=vmin)  # if cube == self.input_data
+        plt.imshow(cube[6], origin='lower', extent=extent, vmax=vmax, vmin=vmin)  # else: this
         plt.text(full_xac[10], full_yac[-15], str(round(self.freq_ax[6] / 1e9, 2)) + r' GHz', color='w', fontsize=16)
         plt.xlabel(r'x [arcsec]')
         plt.ylabel(r'y [arcsec]')
@@ -1033,26 +1064,60 @@ class ModelGrid:
         #print(oops)
         ell_2 = ellipse_fitting(data_ds, self.rfit, self.xell / self.ds, self.yell / self.ds2,
                                 self.resolution * self.ds, self.theta_ell, self.q_ell)  # create ellipse mask
-        '''  #
-        fig = plt.figure()
+        '''  # PLOT ELLIPSES ON DOWN-SAMPLED FLUX MAP
+        fig = plt.figure(figsize=(8,6))
         ax = plt.gca()
-        plt.imshow(ell_2, origin='lower')
-        plt.colorbar()
+        hdu_m = fits.open(self.data_mask)
+        data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
+        hdu_m.close()
+        v_width = 2.99792458e5 * (1 + (6454.9 / 2.99792458e5)) * self.fstep / self.f_0  # velocity width [km/s] = c*(1+v/c)*fstep/f0
+        mask_ds = rebin(data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
+                        self.xyrange[0]:self.xyrange[1]], self.ds2, self.ds, avg=self.avg)
+
+        collapse_flux_v = np.zeros(shape=(len(data_ds[0]), len(data_ds[0][0])))
+        for zi in range(len(data_ds)):
+            collapse_flux_v += data_ds[zi] * mask_ds[zi] * v_width
+        # SET UP OBSERVATION AXES: initialize x,y axes at 0., with lengths = sub_cube.shape
+        x_locvb = (self.x_loc - self.xyrange[0]) / self.ds  # x_loc - xi
+        y_locvb = (self.y_loc - self.xyrange[2]) / self.ds2  # y_loc - yi
+        y_obs_acvb = np.asarray([0.] * len(self.ell_ds))
+        x_obs_acvb = np.asarray([0.] * len(self.ell_ds[0]))
+        # Define coordinates to be 0,0 at center of the observed axes (find the central pixel number along each axis)
+        for i in range(len(x_obs_acvb)):
+            x_obs_acvb[i] = self.resolution * (i - x_locvb) * self.ds  # (arcsec/pix) * N_pix = arcsec
+        for i in range(len(y_obs_acvb)):
+            y_obs_acvb[i] = self.resolution * (i - y_locvb) * self.ds2
+        extent = [x_obs_acvb[0], x_obs_acvb[-1], y_obs_acvb[0], y_obs_acvb[-1]]
+        plt.imshow(collapse_flux_v, origin='lower', extent=extent)  # ell_2
+        #plt.colorbar()
         #plt.show()
         from matplotlib import patches
-        e1 = patches.Ellipse((self.xell / self.ds, self.yell / self.ds2), 2 * self.rfit / self.resolution / self.ds,
-                             2 * self.rfit / self.resolution * self.q_ell / self.ds2, angle=np.rad2deg(self.theta_ell),
+        #e3 = patches.Ellipse((0, 0), 2 * 1.0, 2 * 1.0 * self.q_ell, angle=np.rad2deg(self.theta_ell),
+        #                     linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
+        e3 = patches.Ellipse((0, 0), 2 * 0.3, 2 * 0.3 * self.q_ell, angle=np.rad2deg(self.theta_ell),
                              linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
+        e2 = patches.Ellipse((0, 0), 2 * 0.5, 2 * 0.5 * self.q_ell, angle=np.rad2deg(self.theta_ell),
+                             linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
+        e1 = patches.Ellipse((0, 0), 2 * self.rfit, 2 * self.rfit * self.q_ell, angle=np.rad2deg(self.theta_ell),
+                             linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
+#        e1 = patches.Ellipse((self.xell / self.ds, self.yell / self.ds2), 2 * self.rfit / self.resolution / self.ds,
+#                             2 * self.rfit / self.resolution * self.q_ell / self.ds2, angle=np.rad2deg(self.theta_ell),
+#                             linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
         print(e1)
         #e1.width /= self.ds
         #e1.height /= self.ds
         #e1.x /= self.ds
         #e1.y /= self.ds2
         ax.add_patch(e1)
+        ax.add_patch(e2)
+        ax.add_patch(e3)
         print('ell2')
-        plt.plot(self.xell / self.ds, self.yell / self.ds, 'w*')
+        #plt.plot(self.xell / self.ds, self.yell / self.ds, 'w*')
         #plt.plot(self.xell, self.yell, 'w*')
+        plt.xlabel('x [arcsec]')
+        plt.ylabel('y [arcsec]')
         plt.show()
+        print(oop)
         # '''  #
 
         # APPLY THE ELLIPTICAL MASK TO MODEL CUBE & INPUT DATA
@@ -1097,7 +1162,7 @@ class ModelGrid:
         return chi_sq  # Reduced or Not depending on reduced = True or False
 
 
-    def line_profiles(self, ix, iy, show_freq=False):  # compare line profiles at the given indices ix, iy
+    def line_profiles(self, ix, iy, show_freq=False, resid=False):  # compare line profiles at the given indices ix, iy
         # RESCALE (x_loc, y_loc) AND (xell, yell) PIXEL VALUES TO CORRESPOND TO SUB-CUBE PIXEL LOCATIONS!
         x_locvb = (self.x_loc - self.xyrange[0]) / self.ds  # x_loc - xi
         y_locvb = (self.y_loc - self.xyrange[2]) / self.ds2  # y_loc - yi
@@ -1108,9 +1173,9 @@ class ModelGrid:
 
         # Define coordinates to be 0,0 at center of the observed axes (find the central pixel number along each axis)
         for i in range(len(x_obs_acvb)):
-            x_obs_acvb[i] = self.resolution * (i - x_locvb) / self.ds  # (arcsec/pix) * N_pix = arcsec
+            x_obs_acvb[i] = self.resolution * (i - x_locvb) * self.ds  # (arcsec/pix) * N_pix = arcsec
         for i in range(len(y_obs_acvb)):
-            y_obs_acvb[i] = self.resolution * (i - y_locvb) / self.ds2
+            y_obs_acvb[i] = self.resolution * (i - y_locvb) * self.ds2
 
         f_sys = self.f_0 / (1 + self.zred)
         print(ix, iy)
@@ -1119,6 +1184,7 @@ class ModelGrid:
 
         hdu_m = fits.open(self.data_mask)
         data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
+        hdu_m.close()
         v_width = 2.99792458e5 * (1 + (6454.9 / 2.99792458e5)) * self.fstep / self.f_0  # velocity width [km/s] = c*(1+v/c)*fstep/f0
         mask_ds = rebin(data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
                         self.xyrange[0]:self.xyrange[1]], self.ds2, self.ds, avg=self.avg)
@@ -1143,6 +1209,7 @@ class ModelGrid:
             fig, ax = plt.subplots(len(ix), 1, figsize=(6, 12), sharex=True)
             plt.subplots_adjust(hspace=0.)
 
+            rls = [[-550, -0.0125], [-200, -0.014], [-70, -0.014], [-100, -0.0115]]  # residlocs
             for ii in range(len(ix)):
                 xp = round(x_obs_acvb[ix[ii]], 3)
                 yp = round(y_obs_acvb[iy[ii]], 3)
@@ -1152,18 +1219,32 @@ class ModelGrid:
                     dlabel = r'Data'
                     mlabel = r'Model'
                 norm = np.amax(data_ds[:, iy[ii], ix[ii]])
-                ax[ii].fill_between(vel_ax, (data_ds[:, iy[ii], ix[ii]] - self.noise) / norm,
-                                    (data_ds[:, iy[ii], ix[ii]] + self.noise) / norm, color='k', step='mid', alpha=0.3)
-                #ax[ii].fill_between(vel_ax, data_ds[:, iy[ii], ix[ii]] - self.noise,
-                #                    data_ds[:, iy[ii], ix[ii]] + self.noise, color='k', step='mid', alpha=0.2)
-                ax[ii].step(vel_ax, data_ds[:, iy[ii], ix[ii]] / norm, color='k', where='mid', label=dlabel)
-                ax[ii].step(vel_ax, ap_ds[:, iy[ii], ix[ii]] / norm, color='b', where='mid', label=mlabel)
-                # ax[ii].axvline(x=0., color='k', ls='--', label=r'v$_{\text{sys}}$')
-                ax[ii].text(-200, 0.9, r'x=' + str(xp) + r'", y=' + str(yp) + r'"')
+                #resid=False
+                if resid:
+                    leg = 'upper center'
+                    ax[ii].step(vel_ax, data_ds[:, iy[ii], ix[ii]] - ap_ds[:, iy[ii], ix[ii]], color='r', where='mid',
+                                label='Residual (data - model)')
+                    z0 = np.asarray(self.noise)
+                    ax[ii].axhline(y=0., color='k', linestyle='--')
+                    ax[ii].fill_between(vel_ax, -z0, z0, color='k', step='mid', alpha=0.2, label='Noise')
+                    fig.text(0.004, 0.5, r'$\Delta$ Flux Density [arbitrary]', va='center', rotation='vertical')
+                    ax[ii].text(rls[ii][0], rls[ii][1], r'x=' + str(xp) + r'", y=' + str(yp) + r'"')
+
+                else:
+                    leg = 'upper right'
+                    ax[ii].fill_between(vel_ax, (data_ds[:, iy[ii], ix[ii]] - self.noise) / norm,
+                                       (data_ds[:, iy[ii], ix[ii]] + self.noise) / norm, color='k', step='mid', alpha=0.25)
+                    # ax[ii].fill_between(vel_ax, data_ds[:, iy[ii], ix[ii]] - self.noise,
+                    #                     data_ds[:, iy[ii], ix[ii]] + self.noise, color='k', step='mid', alpha=0.2)
+                    ax[ii].step(vel_ax, data_ds[:, iy[ii], ix[ii]] / norm, color='k', where='mid', label=dlabel)
+                    ax[ii].step(vel_ax, ap_ds[:, iy[ii], ix[ii]] / norm, color='b', where='mid', label=mlabel)
+                    # ax[ii].axvline(x=0., color='k', ls='--', label=r'v$_{\text{sys}}$')
+                    fig.text(0.04, 0.5, r'Flux Density [arbitrary]', va='center', rotation='vertical')
+                    ax[ii].text(-200, 0.9, r'x=' + str(xp) + r'", y=' + str(yp) + r'"')
             ax[-1].set_xlabel(r'Line-of-sight velocity [km/s]')
             # ax[1].set_ylabel(r'Flux Density [arbitrary]')  # [Jy/beam]
-            ax[0].legend(loc='upper right')
-            fig.text(0.04, 0.5, r'Flux Density [arbitrary]', va='center', rotation='vertical')
+            ax[0].legend(loc=leg)
+            # fig.text(0.04, 0.5, r'Flux Density [arbitrary]', va='center', rotation='vertical')
             plt.show()
 
 
@@ -1473,6 +1554,11 @@ class ModelGrid:
         return xpix, ypix, binNum, x_in, nPixels
 
 
+    def do_stuff(self, cell):
+        ax = plt.subplot(cell)
+        ax.plot()
+
+
     def vor_moms(self, incl_beam, snr=10):
         """
         Calculate moment maps, average them within voronoi bins
@@ -1522,11 +1608,10 @@ class ModelGrid:
             subtr = beam_overlay
 
         # CALCULATE RESIDUAL
-        residual_m0 = model_masked_m0 - (data_masked_m0 - subtr)
+        residual_m0 =  (data_masked_m0 - subtr) - model_masked_m0
 
         # AVERAGE EACH MAP WITHING THE VORONOI BIN
         xpix, ypix, binNum, x_in, nPixels = self.just_the_bins(snr=snr)
-
 
         # CALCULATE NUMERATOR AND DENOMINATOR USED IN MOMENT 1 & 2, FOR MODEL THEN FOR DATA
         model_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
@@ -1564,7 +1649,7 @@ class ModelGrid:
         d2_num[d2_num < 0] = 0.  # BUCKET ADDING TO GET RID OF NANs
         data_m2 = np.sqrt(d2_num / d2_den)  # * d1  # BUCKET: no need for MASKING using d1?
         data_m2 = np.nan_to_num(data_m2)
-        residual_m2 = model_m2 - data_m2
+        residual_m2 = data_m2 - model_m2
 
         # AVERAGE EACH MOMENT MAP WITHIN THE VORONOI BINS
         d0 = map_averaging(data_masked_m0, xpix, ypix, binNum, x_in, nPixels)
@@ -1576,7 +1661,7 @@ class ModelGrid:
         max0 = np.amax([np.nanmax(m0), np.nanmax(d0)])
 
         data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
-        residual_m1 = model_m1 - (data_m1 - subtr)  # calculate residual
+        residual_m1 = (data_m1 - subtr) - model_m1  # calculate residual
         d1 = map_averaging(data_m1, xpix, ypix, binNum, x_in, nPixels)
         m1 = map_averaging(model_m1, xpix, ypix, binNum, x_in, nPixels)
         r1 = map_averaging(residual_m1, xpix, ypix, binNum, x_in, nPixels)
@@ -1612,30 +1697,65 @@ class ModelGrid:
         extent = [x_obs_acvb[0], x_obs_acvb[-1], y_obs_acvb[0], y_obs_acvb[-1]]  # left right bottom top
 
         # START PLOTTING
-        fig, ax = plt.subplots(3, 3, figsize=(12,8))
-        plt.subplots_adjust(hspace=0.02, wspace=0.02)
+
+        import matplotlib.gridspec as gridspec
+        # fig, ax = plt.subplots(3, 3, figsize=(12,8))
+        # plt.subplots_adjust(hspace=0.02, wspace=0)
+        fig = plt.figure(figsize=(12,8))
+        # gs1 = gridspec.GridSpec(3, 2, hspace=0., wspace=0., left=0.05, right=0.66)
+        # gs2 = gridspec.GridSpec(3, 1, hspace=0., wspace=0.02, left=0.67, right=0.98)
+        # gs1 = fig.add_gridspec(3, 2, hspace=0., wspace=0.)#, left=0.05, right=0.67)
+        # gs2 = fig.add_gridspec(3, 1, hspace=0., wspace=0.)#, left=0.67, right=0.98)
+        gs = gridspec.GridSpec(1,2, width_ratios=[2, 1])
+        gs1 = gridspec.GridSpecFromSubplotSpec(3, 2, hspace=0., wspace=0., subplot_spec=gs[0])#, left=0.05, right=0.67)
+        gs2 = gridspec.GridSpecFromSubplotSpec(3, 1, hspace=0., wspace=0.02, subplot_spec=gs[1])#, left=0.67, right=0.98)
+
+
+        ax0 = fig.add_subplot(gs1[0,0])
+        ax1 = fig.add_subplot(gs1[1,0])
+        ax2 = fig.add_subplot(gs1[2,0])
+        ax3 = fig.add_subplot(gs1[0,1], sharey=ax0)
+        ax4 = fig.add_subplot(gs1[1,1], sharey=ax1)
+        ax5 = fig.add_subplot(gs1[2,1], sharey=ax2)
+        ax6 = fig.add_subplot(gs2[0])
+        ax7 = fig.add_subplot(gs2[1])
+        ax8 = fig.add_subplot(gs2[2])
+        #plt.show()
+        #print(oop)
 
         # PLOT MOMENT 0
-        imd0 = ax[0][0].imshow(d0, vmin=min0, vmax=max0, origin='lower', extent=extent, cmap=cmap_0)
-        cbard0 = fig.colorbar(imd0, ax=ax[0][0], pad=0.02)
+        # imd0 = ax[0][0].imshow(d0, vmin=min0, vmax=max0, origin='lower', extent=extent, cmap=cmap_0)
+        imd0 = ax0.imshow(d0, vmin=min0, vmax=max0, origin='lower', extent=extent, cmap=cmap_0)
+        #cbard0 = fig.colorbar(imd0, ax=ax[0][0], pad=0.02)
         #cbard0.set_label(cbar_0, rotation=270, labelpad=20.)
 
-        imm0 = ax[0][1].imshow(m0, vmin=min0, vmax=max0, origin='lower', extent=extent, cmap=cmap_0)
-        cbarm0 = fig.colorbar(imm0, ax=ax[0][1], pad=0.02)
+        # imm0 = ax[0][1].imshow(m0, vmin=min0, vmax=max0, origin='lower', extent=extent, cmap=cmap_0)
+        imm0 = ax3.imshow(m0, vmin=min0, vmax=max0, origin='lower', extent=extent, cmap=cmap_0)
+        # cbarm0 = fig.colorbar(imm0, ax=ax[0][1], pad=0.02)
+        cbarm0 = fig.colorbar(imm0, ax=ax3, pad=0.02)
         #cbarm0.set_label(cbar_0, rotation=270, labelpad=20.)
 
-        imr0 = ax[0][2].imshow(r0, origin='lower', vmin=np.nanmin(r0), vmax=np.nanmax(r0), extent=extent, cmap=cmap_0)
-        cbar2r0 = fig.colorbar(imr0, ax=ax[0][2], pad=0.02)
+        # imr0 = ax[0][2].imshow(r0, origin='lower', vmin=np.nanmin(r0), vmax=np.nanmax(r0), extent=extent, cmap=cmap_0)
+        imr0 = ax6.imshow(r0, origin='lower', vmin=np.nanmin(r0), vmax=np.nanmax(r0), extent=extent, cmap=cmap_0)
+        # cbar2r0 = fig.colorbar(imr0, ax=ax[0][2], pad=0.02)
+        cbar2r0 = fig.colorbar(imr0, ax=ax6, pad=0.02)
         cbar2r0.set_label(cbar_0, rotation=270, labelpad=20.)
 
-        ax[0][0].set_xticklabels([])
+        ax0.set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+        ax0.set_xticklabels([])
+        ax3.set_xticklabels([])
+        ax3.set_yticklabels([])
+        ax6.set_xticklabels([])
+        ax6.set_yticklabels([])
+        #ax[0][0].set_xticklabels([])
+        #ax[0][1].set_xticklabels([])
+        #ax[0][1].set_yticklabels([])
+        #ax[0][2].set_xticklabels([])
+        #ax[0][2].set_yticklabels([])
+        #ax[0][0].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+
         #ax[0][0].set_yticklabels([])
-        ax[0][1].set_xticklabels([])
-        ax[0][1].set_yticklabels([])
-        ax[0][2].set_xticklabels([])
-        ax[0][2].set_yticklabels([])
         #ax[0][0].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
-        ax[0][0].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
         #ax[0][1].set_xlabel(r'x [arcsec]', fontsize=20)  # y [arcsec]
         #ax[0][1].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
         #ax[0][2].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
@@ -1643,26 +1763,38 @@ class ModelGrid:
 
 
         # PLOT MOMENT 1
-        imd1 = ax[1][0].imshow(d1, vmin=min1, vmax=max1, origin='lower', extent=extent, cmap=cmap_dm1)
-        cbard1 = fig.colorbar(imd1, ax=ax[1][0], pad=0.02)
+        # imd1 = ax[1][0].imshow(d1, vmin=min1, vmax=max1, origin='lower', extent=extent, cmap=cmap_dm1)
+        imd1 = ax1.imshow(d1, vmin=min1, vmax=max1, origin='lower', extent=extent, cmap=cmap_dm1)
+        #cbard1 = fig.colorbar(imd1, ax=ax[1][0], pad=0.02)
         #cbard1.set_label(cbar_1, rotation=270, labelpad=20.)
 
-        imm1 = ax[1][1].imshow(m1, vmin=min1, vmax=max1, origin='lower', extent=extent, cmap=cmap_dm1)
-        cbarm1 = fig.colorbar(imm1, ax=ax[1][1], pad=0.02)
+        # imm1 = ax[1][1].imshow(m1, vmin=min1, vmax=max1, origin='lower', extent=extent, cmap=cmap_dm1)
+        imm1 = ax4.imshow(m1, vmin=min1, vmax=max1, origin='lower', extent=extent, cmap=cmap_dm1)
+        # cbarm1 = fig.colorbar(imm1, ax=ax[1][1], pad=0.02)
+        cbarm1 = fig.colorbar(imm1, ax=ax4, pad=0.02)
         #cbarm1.set_label(cbar_1, rotation=270, labelpad=20.)
 
-        imr1 = ax[1][2].imshow(r1, origin='lower', vmin=np.nanmin(r1), vmax=np.nanmax(r1), extent=extent, cmap=cmap_r1)
-        cbarr1 = fig.colorbar(imr1, ax=ax[1][2], pad=0.02)
+        # imr1 = ax[1][2].imshow(r1, origin='lower', vmin=np.nanmin(r1), vmax=np.nanmax(r1), extent=extent, cmap=cmap_r1)
+        imr1 = ax7.imshow(r1, origin='lower', vmin=np.nanmin(r1), vmax=np.nanmax(r1), extent=extent, cmap=cmap_r1)
+        # cbarr1 = fig.colorbar(imr1, ax=ax[1][2], pad=0.02)
+        cbarr1 = fig.colorbar(imr1, ax=ax7, pad=0.02)
         cbarr1.set_label(cbar_1, rotation=270, labelpad=20.)
 
-        ax[1][0].set_xticklabels([])
+        ax1.set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+        ax1.set_xticklabels([])
+        ax4.set_xticklabels([])
+        ax4.set_yticklabels([])
+        ax7.set_xticklabels([])
+        ax7.set_yticklabels([])
+        #ax[1][0].set_xticklabels([])
+        #ax[1][1].set_xticklabels([])
+        #ax[1][1].set_yticklabels([])
+        #ax[1][2].set_xticklabels([])
+        #ax[1][2].set_yticklabels([])
+        #ax[1][0].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+
         #ax[1][0].set_yticklabels([])
-        ax[1][1].set_xticklabels([])
-        ax[1][1].set_yticklabels([])
-        ax[1][2].set_xticklabels([])
-        ax[1][2].set_yticklabels([])
         #ax[1][0].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
-        ax[1][0].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
         #ax[1][1].set_xlabel(r'x [arcsec]', fontsize=20)  # y [arcsec]
         #ax[1][1].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
         #ax[1][2].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
@@ -1670,27 +1802,39 @@ class ModelGrid:
 
 
         # PLOT MOMENT 2
-        imd2 = ax[2][0].imshow(d2, vmin=min2, vmax=max2, origin='lower', extent=extent, cmap=cmap_2)
-        cbard2 = fig.colorbar(imd2, ax=ax[2][0], pad=0.02)
+        # imd2 = ax[2][0].imshow(d2, vmin=min2, vmax=max2, origin='lower', extent=extent, cmap=cmap_2)
+        imd2 = ax2.imshow(d2, vmin=min2, vmax=max2, origin='lower', extent=extent, cmap=cmap_2)
+        #cbard2 = fig.colorbar(imd2, ax=ax[2][0], pad=0.02)
         #cbard2.set_label(cbar_2, rotation=270, labelpad=20.)
 
-        imm2 = ax[2][1].imshow(m2, vmin=min2, vmax=max2, origin='lower', extent=extent, cmap=cmap_2)
-        cbarm2 = fig.colorbar(imm2, ax=ax[2][1], pad=0.02)
+        # imm2 = ax[2][1].imshow(m2, vmin=min2, vmax=max2, origin='lower', extent=extent, cmap=cmap_2)
+        imm2 = ax5.imshow(m2, vmin=min2, vmax=max2, origin='lower', extent=extent, cmap=cmap_2)
+        # cbarm2 = fig.colorbar(imm2, ax=ax[2][1], pad=0.02)
+        cbarm2 = fig.colorbar(imm2, ax=ax5, pad=0.02)
         #cbarm2.set_label(cbar_2, rotation=270, labelpad=20.)
 
-        imr2 = ax[2][2].imshow(r2, origin='lower', vmin=np.nanmin(r2), vmax=np.nanmax(r2), extent=extent, cmap=cmap_2)
-        cbarr2 = fig.colorbar(imr2, ax=ax[2][2], pad=0.02)
+        # imr2 = ax[2][2].imshow(r2, origin='lower', vmin=np.nanmin(r2), vmax=np.nanmax(r2), extent=extent, cmap=cmap_2)
+        imr2 = ax8.imshow(r2, origin='lower', vmin=np.nanmin(r2), vmax=np.nanmax(r2), extent=extent, cmap=cmap_2)
+        # cbarr2 = fig.colorbar(imr2, ax=ax[2][2], pad=0.02)
+        cbarr2 = fig.colorbar(imr2, ax=ax8, pad=0.02)
         cbarr2.set_label(cbar_2, rotation=270, labelpad=20.)
 
+        ax5.set_yticklabels([])
+        ax8.set_yticklabels([])
+        ax2.set_xlabel(r'x [arcsec]', fontsize=20)  # y [arcsec]
+        ax2.set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+        ax5.set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
+        ax8.set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
+        #ax[2][1].set_yticklabels([])
+        #ax[2][2].set_yticklabels([])
+        #ax[2][0].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
+        #ax[2][0].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+        #ax[2][1].set_xlabel(r'x [arcsec]', fontsize=20)  # y [arcsec]
+        #ax[2][2].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
+
         #ax[2][1].set_xticklabels([])
-        ax[2][1].set_yticklabels([])
         #ax[2][2].set_xticklabels([])
-        ax[2][2].set_yticklabels([])
-        ax[2][0].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
-        ax[2][0].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
-        ax[2][1].set_xlabel(r'x [arcsec]', fontsize=20)  # y [arcsec]
         #ax[2][1].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
-        ax[2][2].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
         #ax[2][2].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
 
         plt.show()
@@ -2159,6 +2303,8 @@ if __name__ == "__main__":
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()
+    #mg.vor_moms(incl_beam=False, snr=10)
+    #print(oop)
     # LP at 16,11 is great!
     xs = [7, 14, 15]
     ys = [5, 9, 10]
@@ -2170,9 +2316,9 @@ if __name__ == "__main__":
     ytest = [6, 5, 7, 9, 11, 11, 8]
     xtalk = [4, 7, 13, 16]
     ytalk = [6, 5, 11, 11]
-    mg.line_profiles(xtalk, ytalk)
+    #mg.line_profiles(xtalk, ytalk, resid=True)
     #mg.vor_moms(incl_beam=True, snr=10)
-    #mg.vor_moms(incl_beam=False, snr=10)
+    mg.vor_moms(incl_beam=False, snr=10)
     #mg.pvd()
     print(oop)
     #mg.moment_0(abs_diff=False, incl_beam=True, norm=False)

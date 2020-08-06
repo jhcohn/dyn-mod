@@ -88,7 +88,7 @@ from __future__ import print_function
 
 import numpy as np
 import argparse
-from cap_quadva import quadva
+from cap_quadva import quadva  # this is from the jam package!
 
 #
 # The following set of routines computes the R acceleration
@@ -140,8 +140,7 @@ def _accR(R, z, dens, sigma, qintr, bhMass, soft):
 
 #----------------------------------------------------------------------
 
-def mge_vcirc(surf_pc, sigma_arcsec, qobs,
-              inc_deg, mbh, distance, rad, soft=0.):
+def mge_vcirc(surf_pc, sigma_arcsec, qobs, inc_deg, mbh, distance, rad, soft=0.):
 
     pc = distance*np.pi/0.648 # Constant factor to convert arcsec --> pc
     
@@ -161,7 +160,7 @@ def mge_vcirc(surf_pc, sigma_arcsec, qobs,
     if np.any(qintr <= 0.05):
         print(qobs, inc, qintr)
         raise ValueError('q < 0.05 components')
-    dens = surf_pc*qobs/(qintr*sigma*np.sqrt(2*np.pi)) # MGE deprojection
+    dens = surf_pc*qobs/(qintr*sigma*np.sqrt(2*np.pi))  # MGE deprojection
     
     # Equality of gravitational and centrifugal acceleration accR at z=0
     # R Vphi**2 == accR --> R (vcirc/R)**2 == accR
@@ -173,7 +172,8 @@ def mge_vcirc(surf_pc, sigma_arcsec, qobs,
 
 #----------------------------------------------------------------------------
 
-def test_mge_vcirc(surf=None, sigma=None, qObs=None, inc=60., mbh=1e6, distance=10., rad=np.logspace(-1,2,25), ml=5.0):
+def test_mge_vcirc(surf=None, sigma=None, qObs=None, inc=60., mbh=1e6, distance=10., rad=np.logspace(-1,2,25), ml=5.0,
+                   mge_lab=None):
     """
     Usage example for mge_vcirc()
     It takes a fraction of a second on a 2GHz computer
@@ -181,6 +181,7 @@ def test_mge_vcirc(surf=None, sigma=None, qObs=None, inc=60., mbh=1e6, distance=
     """    
     import matplotlib.pyplot as plt
     from time import clock
+    from scipy import interpolate
 
     '''
     # REPLACE THESE MOCK TEST THINGS WITH ACTUAL INPUT
@@ -198,12 +199,18 @@ def test_mge_vcirc(surf=None, sigma=None, qObs=None, inc=60., mbh=1e6, distance=
     '''
     
     t = clock()
-    vcirc = mge_vcirc(surf*ml, sigma, qObs, inc, mbh, distance, rad)
+    if ml is None:
+        vcirc = mge_vcirc(surf, sigma, qObs, inc, mbh, distance, rad)
+        ylabel = r'$V_{circ}$ [km/s / M/L]'
+    else:
+        vcirc = mge_vcirc(surf*ml, sigma, qObs, inc, mbh, distance, rad)
+        ylabel = r'$V_{circ}$ [km/s], assuming M/L=' + str(ml)
+
     print('Elapsed time:', clock()-t, ' seconds')
 
     plt.clf()
+    '''  # 
     # COMPARE
-    from scipy import interpolate
     radii = []
     v_circ = []
     with open('/Users/jonathancohn/Documents/dyn_mod/ngc_3258/ngc3258_wfc3mge_vc2mlr.txt') as em:  # note: current file has units v_circ^2/(M/L) --> v_circ = np.sqrt(col * (M/L))
@@ -217,21 +224,56 @@ def test_mge_vcirc(surf=None, sigma=None, qObs=None, inc=60., mbh=1e6, distance=
     rad2 = np.logspace(-1.7, 1., 20)
     # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
     vel = np.sqrt(v_c_r(rad2) * ml)  # velocities sum in quadrature
+    plt.plot(rad2, vel, 'k-', label=r'v(R) from numerical integration (B1)')
+    # '''
 
     vc2 = interpolate.interp1d(rad, vcirc, fill_value='extrapolate')
     vcirc2 = vc2(np.logspace(-2, 2., 50))
 
     # plt.plot(np.logspace(-2., 2., 50), vcirc2, 'r--')
-    plt.plot(rad2, vel, 'k-', label=r'v(R) from numerical integration (B1)')
-    # plt.plot(radii, np.sqrt(np.asarray(v_circ) * ml), 'k*')
-    plt.plot(rad, vcirc, 's', markerfacecolor='none', label=r'New MGE')
+    # plt.plot(radii, np.sqrt(np.asarray(v_circ) * ml), 'k*'
+    plt.plot(rad, vcirc, 's', markerfacecolor='none', label=r'MGE + ' + mge_lab)
     plt.xlabel('R (arcsec)')
-    plt.ylabel(r'$V_{circ}$ (km/s)')
+    plt.ylabel(ylabel)  # r'$V_{circ}$ (km/s)'
     plt.xscale('log')
     plt.yscale('log')
-    plt.ylim(1., 10**3.)
-    plt.xlim(0.001, 10.)
+    #plt.ylim(1., 10**3.)
+    #plt.xlim(np.min(rad), np.max(rad))
     plt.legend(loc='upper left')  # lower right
+    plt.show()
+
+
+def multi_vcirc(files, inc=60., mbh=0., distance=89., rad=np.logspace(-1,2,25), ml=5.0, mge_labs=None, fmts=None,
+                zoom=False):
+    for f in range(len(files)):
+        comp, surf, sigma, qObs = load_mge(files[f], logged=False)
+        import matplotlib.pyplot as plt
+        from time import clock
+        from scipy import interpolate
+
+        t = clock()
+        if ml is None:
+            vcirc = mge_vcirc(surf, sigma, qObs, inc, mbh, distance, rad)
+            ylabel = r'$V_{circ}$ [km/s / M/L]'
+        else:
+            vcirc = mge_vcirc(surf * ml, sigma, qObs, inc, mbh, distance, rad)
+            ylabel = r'$V_{circ}$ [km/s], assuming M/L=' + str(ml)
+
+        vc2 = interpolate.interp1d(rad, vcirc, fill_value='extrapolate')
+        vcirc2 = vc2(np.logspace(-2, 2., 50))
+
+        plt.plot(rad, vcirc, fmts[f], markerfacecolor='none', label=r'MGE: ' + mge_labs[f])
+
+    plt.xlabel('R (arcsec)')
+    plt.ylabel(ylabel)  # r'$V_{circ}$ (km/s)'
+    plt.xscale('log')
+    # plt.yscale('log')
+    if zoom:
+        plt.xlim(0.04, 8.)
+        plt.ylim(75., 750.)
+    # plt.ylim(1., 10**3.)
+    # plt.xlim(np.min(rad), np.max(rad))
+    plt.legend()  # lower right  # loc='upper left'
     plt.show()
 
 #----------------------------------------------------------------------
@@ -288,7 +330,7 @@ def par_dicts(parfile):
     return params, fixed_pars, files, priors
 
 
-def load_mge(filename):
+def load_mge(filename, logged=False):
 
     comp = []
     surf_pots = []
@@ -297,11 +339,12 @@ def load_mge(filename):
     with open(filename, 'r') as mge_f:
         for line in mge_f:
             if line.startswith('j'):
-                mge_params = line.split()
-            elif not line.startswith('#'):
+                logged = True
+            if not line.startswith('#') and not line.startswith('j'):
                 cols = line.split()
                 comp.append(float(cols[0]))
-                if mge_params[1].startswith('log'):  # ie if file reports log10(L/pc^2) instead of L/pc^2
+                # if mge_params[1].startswith('log'):  # ie if file reports log10(L/pc^2) instead of L/pc^2
+                if logged:  # ie if file reports log10(L/pc^2) instead of L/pc^2
                     surf_pots.append(10 ** float(cols[1]))  # units L_sol/pc^2 --> want M_sol/pc^2 --> multiply by ml
                 else:  # if file reports L/pc^2
                     surf_pots.append(float(cols[1]))
@@ -312,6 +355,43 @@ def load_mge(filename):
 
 
 if __name__ == '__main__':
+    dm = '/Users/jonathancohn/Documents/dyn_mod/'
+    ugc = dm + 'ugc_2698/'
+    mdir = '/Users/jonathancohn/Documents/mge/'
+    mge_rre = ugc + 'ugc_2698_rre_mge.txt'
+    mge_rhe = ugc + 'ugc_2698_rhe_mge.txt'
+    mge_ahe = ugc + 'ugc_2698_ahe_mge.txt'
+    mge_akin = ugc + 'yildirim_table_2698.txt'
+    mge_rrepsf = ugc + 'ugc_2698_rrepsf_mge.txt'
+    mge_rhepsf = ugc + 'ugc_2698_rhepsf_mge.txt'
+    mge_ahepsf = ugc + 'ugc_2698_ahepsf_mge.txt'
+
+    all_mges = [mge_rre, mge_rrepsf, mge_rhe, mge_rhepsf, mge_ahe, mge_ahepsf, mge_akin]
+    all_mge_labs = ['reg H, reg mask', 'reg H, dust mask, AGN', 'reg H, dust mask', 'reg H, reg mask, AGN',
+                     'dust-corr H, reg mask', 'dust-corr H, reg mask, AGN', 'Akin']
+    all_fmts = ['ok', '+k', 'om', '+m', 'ob', '+b', '*r']
+    mges = [mge_rre, mge_rhe, mge_ahe, mge_akin]
+    mge_labs = ['reg H, reg mask', 'reg H, dust mask', 'dust-corr H, reg mask', 'Akin']
+    mges_psf = [mge_rrepsf, mge_rhepsf, mge_ahepsf]
+    mge_psflabs = ['reg H, reg mask, AGN', 'reg H, dust mask, AGN', 'dust-corr H, reg mask, AGN']
+    fmts = ['+k', 'om', 'sb', '*r']
+    fmts_psf = ['+k', 'om', 'sb']
+
+    multi_vcirc(all_mges, inc=67.6, mbh=0., distance=91., rad=np.logspace(-1., 0.5, 25), ml=1., mge_labs=all_mge_labs,  # -1.7, 0.6, 25
+                fmts=all_fmts, zoom=False)
+    # multi_vcirc(mges, inc=67.6, mbh=0., distance=91., rad=np.logspace(-1.7, 0.6, 25), ml=1., mge_labs=mge_labs, fmts=fmts,  # -1.7, 0.6, 25
+    multi_vcirc(mges, inc=67.6, mbh=0., distance=91., rad=np.logspace(-1., 0.5, 25), ml=1., mge_labs=mge_labs, fmts=fmts,  # -1.7, 0.6, 25
+                zoom=False)
+    multi_vcirc(mges_psf, inc=67.6, mbh=0., distance=91., rad=np.logspace(-3, 2, 25), ml=1.67, mge_labs=mge_psflabs,
+                fmts=fmts_psf, zoom=True)
+
+    #for f in range(len(mges)):
+    #    comp, surfpots, sigpots, qobs = load_mge(mges[f], logged=False)
+    #
+    #    test_mge_vcirc(surf=surfpots, sigma=sigpots, qObs=qobs, inc=68.1, mbh=0., distance=89.,
+    #                   rad=np.logspace(-2, 3, 40), ml=None, mge_lab=mge_labs[f])
+
+    '''
     parser = argparse.ArgumentParser(argument_default=argparse.SUPPRESS)
     parser.add_argument('--parfile')
 
@@ -327,6 +407,7 @@ if __name__ == '__main__':
     test_mge_vcirc(surf=surf_pots, sigma=sigma_pots, qObs=qobs,
                    rad=rad, inc=fixed_pars['inc_star'], mbh=0., distance=fixed_pars['dist'],
                    ml=1.)  # params['ml_ratio']
+    '''
 
     # SURF_POT is mge, mbh=0 bc stars only
     # maybe run this code each time for each model inclination angle (assume gas disk and stars have same inc)

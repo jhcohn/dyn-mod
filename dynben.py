@@ -94,9 +94,7 @@ def mbh_relations(mbh, mbh_err, lum_k=None, mass_k=None, sigma=None, xerr=None, 
             plt.text(2.75e10, 5.5e9, 'M1216', color='r')
 
         for item in range(len(mbh)):
-            #plt.errorbar(lum_k[item], mbh[item], yerr=[[mbh_err[item][0]], [mbh_err[item][1]]], fmt='bD')
-            plt.errorbar(lum_k[item], mbh[item], yerr=[[mbh_err[item][0]], [mbh_err[item][1]]], xerr=xerr, color='b',
-                         marker=None)
+            plt.errorbar(lum_k[item], mbh[item], yerr=[[mbh_err[item][0]], [mbh_err[item][1]]], fmt='bD')
             plt.text(9.5e10, 2.3e9, 'U2698', color='b')
             # , assuming an H-K color of 0.2 (Vazdekis et al. 1996) and a K-band solar absolute magnitude of 3.29.
         plt.xscale('log')
@@ -121,7 +119,6 @@ def mbh_relations(mbh, mbh_err, lum_k=None, mass_k=None, sigma=None, xerr=None, 
         #saglia_down = 10**((5.246-0.274) * np.log10(sig_x) - 3.77-0.631)  # log MBH = (a-da) * log sigma + ZP - dZP
         # da = 0.274, dZP = 0.631, rms = 0.459
         saglia = 10**(4.868 * np.log10(sig_x) - 2.827)  # log MBH = a * log sigma + ZP (CorePowerEClassPC) -> scatter=0.38
-        # CorePowerEClassPC = Core & power-law ellipticals, classical bulges, & classical component (Saglia+16 Table 8)
 
         vdbosch = 10**(-4.00 + 5.35*np.log10(sig_x))
 
@@ -150,9 +147,7 @@ def mbh_relations(mbh, mbh_err, lum_k=None, mass_k=None, sigma=None, xerr=None, 
             plt.text(245, 5.5e9, 'M1216', color='r')
 
         for item in range(len(mbh)):
-            plt.errorbar(sigma[item], mbh[item], yerr=[[mbh_err[item][0]], [mbh_err[item][1]]], xerr=xerr, color='bD')
-            #plt.errorbar(sigma[item], mbh[item], yerr=[[mbh_err[item][0]], [mbh_err[item][1]]], xerr=xerr, color='b',
-            #             marker=None)
+            plt.errorbar(sigma[item], mbh[item], yerr=[[mbh_err[item][0]], [mbh_err[item][1]]], xerr=xerr, fmt='bD')
             plt.text(310, 1.5e9, 'U2698', color='b')
         plt.xscale('log')
         plt.yscale('log')
@@ -789,11 +784,8 @@ class ModelGrid:
         '''  #
         lum_H = 10**11.3348
         LKcorr = lum_H * 10 ** (0.4 * 0.2)
-        mbh_relations([10 ** 9.39], [[5.5e7, 5.6e7]], lum_k=[LKcorr])
-        mbh_relations([10 ** 9.39], [[5.5e7, 5.6e7]], sigma=[304], xerr=[[6], [6]])
-        print(oop)
-        mbh_relations([10 ** 9.39], [[0.71e9, 0.7e9]], lum_k=[LKcorr])
-        mbh_relations([10 ** 9.39], [[0.71e9, 0.7e9]], sigma=[304], xerr=[[6], [6]])
+        mbh_relations([10 ** 9.39], [[0.7e9, 0.7e9]], lum_k=[LKcorr])
+        mbh_relations([10 ** 9.39], [[0.7e9, 0.7e9]], sigma=[304], xerr=[[6], [6]])
         print(oop)
         # def mbh_relations(mbh, mbh_err, lum_k=None, mass_k=None, sigma=None, incl_past=True):
         Ltot = mge_sum(self.enclosed_mass, self.pc_per_ac)
@@ -893,16 +885,16 @@ class ModelGrid:
         if self.menc_type == 0:  # if calculating v(R) due to stars directly from MGE parameters
             if not self.quiet:
                 print('mge')
-            test_rad = np.linspace(np.amin(R_ac), np.amax(R_ac), 100)  # create an array of test radii [arcsec]
+            test_rad = np.linspace(np.amin(R_ac), np.amax(R_ac), 100)  # create an array of test radii
 
             comp, surf_pots, sigma_pots, qobs = mvm.load_mge(self.enclosed_mass)  # load the MGE parameters
 
             v_c = mvm.mge_vcirc(surf_pots * self.ml_ratio, sigma_pots, qobs, np.rad2deg(self.inc), 0., self.dist,
                                 test_rad)  # calculate v_c,star
-            v_c_r = interpolate.interp1d(test_rad, v_c, kind='cubic', fill_value='extrapolate')  # interpolate v(R[ac])
+            v_c_r = interpolate.interp1d(test_rad, v_c, kind='cubic', fill_value='extrapolate')  # interpolate v_c(R)
 
             # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
-            vel = np.sqrt((self.G_pc * self.mbh / R) + v_c_r(R_ac)**2 + vg**2)  # G_pc -> use R [pc], v_c_r needs R [ac]
+            vel = np.sqrt((self.G_pc * self.mbh / R) + v_c_r(R_ac)**2 + vg**2)
         elif self.menc_type == 1:  # elif using a file with v_circ(R) due to stellar mass
             if not self.quiet:
                 print('v(r)')
@@ -1104,6 +1096,31 @@ class ModelGrid:
         plt.show()
         # '''  #
 
+        hdu = fits.open('/Users/jonathancohn/Documents/dyn_mod/ugc_2698/ben_model_cube.fits')
+        benmodel = hdu[0].data  # data[0] contains: z, y, x (121, 700, 700)
+        hdu.close()
+        print(benmodel.shape)
+        # print(oop)
+        clipped_benmodel = benmodel[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
+                                            self.xyrange[0]:self.xyrange[1]]
+        bm_ds = rebin(clipped_benmodel, self.ds2, self.ds, avg=self.avg)
+        bm_ds *= self.ell_ds
+
+        ben_noise = []
+        with open('/Users/jonathancohn/Documents/dyn_mod/ugc_2698/ben_noise_avging4x4ds.txt', 'r') as bn:
+            for line in bn:
+                if not line.startswith('#'):
+                    cols = line.split()
+                    ben_noise.append(float(cols[2]) * 1e-3)
+        print(ben_noise[self.zrange[0]:self.zrange[1]])
+        print(noise)
+        ben_noise = ben_noise[self.zrange[0]:self.zrange[1]]
+        plt.plot(self.z_ax, ben_noise, 'b+')
+        plt.plot(self.z_ax, noise, 'k*')
+        plt.show()
+        #print(oop)
+
+
         # APPLY THE ELLIPTICAL MASK TO MODEL CUBE & INPUT DATA
         data_ds *= self.ell_ds
         ap_ds *= self.ell_ds
@@ -1111,18 +1128,24 @@ class ModelGrid:
         # data_2 = data_ds * ell_2  # BUCKET
         # ap_2 = ap_ds * ell_2  # BUCKET
         # n_2 = np.sum(ell_2) * len(self.z_ax)  # BUCKET
-        n_1 = np.sum(ell_1) * len(self.z_ax)  # BUCKET
+        # n_1 = np.sum(ell_1) * len(self.z_ax)  # BUCKET
         #print(n_pts - n_1)
         #print(np.sum(ell_1) - np.sum(self.ell_ds))
         #print(n_2, n_pts)
 
+        chi_ben = 0.
         chi_sq = 0.  # initialize chi^2
         cs = []  # initialize chi^2 per slice
         # chi_2 = 0.  # BUCKET
+        chisq_nonoise = 0
+        chisq_nonoisebencube = 0
 
         z_ind = 0  # the actual index for the model-data comparison cubes
         for z in range(self.zrange[0], self.zrange[1]):  # for each relevant freq slice (ignore slices with only noise)
-            chi_sq += np.sum((ap_ds[z_ind] - data_ds[z_ind])**2 / self.noise[z_ind]**2)  # calculate chisq!
+            chisq_nonoise += np.sum(bm_ds[z_ind] - data_ds[z_ind])**2
+            chisq_nonoisebencube += np.sum(ap_ds[z_ind] - data_ds[z_ind])**2
+            chi_ben += np.sum((bm_ds[z_ind] - data_ds[z_ind])**2 / ben_noise[z_ind]**2)  # BEN'S CUBE
+            chi_sq += np.sum((ap_ds[z_ind] - data_ds[z_ind])**2 / ben_noise[z_ind]**2)  # calculate chisq!
             cs.append(np.sum((ap_ds[z_ind] - data_ds[z_ind])**2 / self.noise[z_ind]**2))  # chisq per slice
             # np.std(x) = sqrt(mean(abs(x - x.mean())**2))
             # chi_2 += np.sum((ap_2[z_ind] - data_2[z_ind])**2 / self.noise[z_ind]**2)  # BUCKET
@@ -1131,8 +1154,10 @@ class ModelGrid:
 
         if not self.quiet:
             print(np.sum(self.ell_ds), len(self.z_ax), n_pts)
-            print(r'chi^2=', chi_sq)
-            print('reduced = ', chi_sq / (n_pts - self.n_params))
+            print(r'chi^2=', chi_sq, chi_ben)
+            print('reduced = ', chi_sq / (n_pts - self.n_params), chi_ben / (n_pts - self.n_params))
+            print(r"chisq numerator my cube, Ben's cube", chisq_nonoise, chisq_nonoisebencube)  # equal through ~6 decimal points
+            print(oop)
 
         if self.reduced:  # CALCULATE REDUCED CHI^2
             chi_sq /= (n_pts - self.n_params)  # convert to reduced chi^2; else just return full chi^2
@@ -1201,9 +1226,7 @@ class ModelGrid:
         e1 = patches.Ellipse((self.xell / self.ds, self.yell / self.ds2), 2 * self.rfit / (self.resolution * self.ds), 2 * self.rfit / (self.resolution * self.ds2) * self.q_ell,
                              angle=np.rad2deg(self.theta_ell), linewidth=2, edgecolor='w', fill=False)
         ax.add_patch(e1)
-        #plt.plot(10.7125, 8.225, 'w*')  # ix, iy, 'w*'
-        for i in range(len(ix)):
-            plt.plot(ix[i], iy[i], 'w*')
+        plt.plot(10.7125, 8.225, 'w*')  # ix, iy, 'w*'
         plt.show()
         #plt.imshow(ap_ds[20], origin='lower')
         #plt.show()
@@ -1281,8 +1304,8 @@ class ModelGrid:
         #from mpl_toolkits.axes_grid1 import make_axes_locatable
         #divider1 = make_axes_locatable(ax[0])
         # CONVERT FROM Jy/beam TO mJy/beam
-        slice *= 1e3 * self.pvd_width
-        slice2 *= 1e3 * self.pvd_width
+        slice *= 1e3
+        slice2 *= 1e3
         vmin = np.amin([slice, slice2])
         vmax = np.amax([slice, slice2])
         p1 = ax[0].pcolormesh(x_rad, vel_ax, slice, vmin=vmin, vmax=vmax, cmap='Greys')  # x_rad[0], x_rad[-1]
@@ -1666,7 +1689,7 @@ if __name__ == "__main__":
         params['ds2'] = params['ds']
 
     # DECIDE HERE WHETHER TO AVG IN THE REBIN() FUNCTION (avging=True) OR SUM (avging=False)
-    avging = False
+    avging = True
 
     # CREATE THINGS THAT ONLY NEED TO BE CALCULATED ONCE (collapse fluxes, lucy, noise)
     mod_ins = model_prep(data=params['data'], ds=params['ds'], ds2=params['ds2'], lucy_out=params['lucy'],
@@ -1713,19 +1736,13 @@ if __name__ == "__main__":
                    f_0=f_0, bl=params['bl'], xyrange=[params['xi'], params['xf'], params['yi'], params['yf']],
                    n_params=n_free, data_mask=params['mask'], incl_gas=params['incl_gas']=='True', vrad=params['vrad'],
                    kappa=params['kappa'], omega=params['omega'], co_rad=co_ell_rad, co_sb=co_ell_sb, avg=avging,
-                   pvd_width=params['x_fwhm']/params['resolution'], vcg_func=vcg_in)
-    # pvd_width = (params['x_fwhm']*params['y_fwhm'])/params['resolution']/2.
+                   pvd_width=(params['x_fwhm']*params['y_fwhm'])/params['resolution']/2., vcg_func=vcg_in)
 
     # x_fwhm=0.197045, y_fwhm=0.103544 -> geometric mean = sqrt(0.197045*0.103544) = 0.142838; regular mean = 0.1502945
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()
     mg.pvd()
-    #xtalk = [4, 7, 13, 16]
-    #ytalk = [6, 5, 11, 11]
-    #xtalk = 14
-    #ytalk = 9
-    #mg.line_profiles(xtalk, ytalk)
     print(oop)
     #mg.moment_0(abs_diff=False, incl_beam=True, norm=False)
     #mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1)

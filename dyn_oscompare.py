@@ -34,7 +34,7 @@ direc = '/Users/jonathancohn/Documents/dyn_mod/nest_out/'
 grp = '/Users/jonathancohn/Documents/dyn_mod/groupmtg/'
 
 
-os_to_compare = ['u2698_exv_os1_baseline_rhe_orig_nog_10000000_8_0.02_1594865056.9097123_end.pkl',
+os_to_compare = [#'u2698_exv_os1_baseline_rhe_orig_nog_10000000_8_0.02_1594865056.9097123_end.pkl',
                  'u2698_exv_os2_baseline_rhe_orig_nog_10000000_8_0.02_1593211158.390702_end.pkl',
                  'u2698_exv_os3_baseline_rhe_orig_nog_10000000_8_0.02_1593216852.5147808_end.pkl',
                  'u2698_exv_os4_baseline_rhe_orig_nog_10000000_8_0.02_1593211776.966962_end.pkl',
@@ -45,7 +45,7 @@ os_to_compare = ['u2698_exv_os1_baseline_rhe_orig_nog_10000000_8_0.02_1594865056
                  'u2698_exv_os14_baseline_rhe_orig_nog_10000000_8_0.02_1593261183.7849855_end.pkl',
                  'u2698_exv_os16_baseline_rhe_orig_nog_10000000_8_0.02_1593336953.3834007_end.pkl']
 
-os_parfiles = ['ugc_2698/ugc_2698_exv_os1_baseline_rhe_orig_nog_out.txt',
+os_parfiles = [#'ugc_2698/ugc_2698_exv_os1_baseline_rhe_orig_nog_out.txt',
                'ugc_2698/ugc_2698_exv_os2_baseline_rhe_orig_nog_out.txt',
                'ugc_2698/ugc_2698_exv_os3_baseline_rhe_orig_nog_out.txt',
                'ugc_2698/ugc_2698_exv_os4_baseline_rhe_orig_nog_out.txt',
