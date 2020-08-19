@@ -83,7 +83,7 @@ def mbh_relations(mbh, mbh_err, lum_k=None, mass_k=None, sigma=None, xerr=None, 
         # PAGE 54-55 https://arxiv.org/pdf/1304.7762.pdf:
         # -2.5log10(L2/L1) = m2 - m1 -> 10^[(m1-m2)/2.5] = L2/L1 -> L2 = L1*10^[0.4(m1-m2)] ->
         # -> L1 - L2 = L1(1 - 10^[0.4(m1-m2)]) -> L2 - L1 = delta L = L1 (10^[0.4(-delta mag)] - 1)
-        # LK = LH * 10^(0.4(LH - LK))
+        # LK = LH * 10^(0.4(MH - MK))
 
         if incl_past:
             plt.errorbar(7.7e10, 4.9e9, xerr=2.8e10, yerr=1.6e9, fmt='rs')  # NGC 1277
@@ -361,6 +361,28 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
     for zi in range(len(input_data)):
         collapsed_fluxes_vel += input_data[zi] * fullmask[zi] * v_width
     # collapsed_fluxes_vel[collapsed_fluxes_vel < 0] = 0.  # ignore negative values? probably not?
+
+    '''  # TESTING STUFF
+    rect = patches.Rectangle((xyerr[0]/ds, xyerr[2]/ds2), (xyerr[1] - xyerr[0])/ds, (xyerr[3]-xyerr[2])/ds2,
+                             linewidth=2, edgecolor='w', facecolor='none')
+
+    n2 = []
+    ndat2 = rebin(input_data, ds2, ds, avg=avg)
+    for z in range(zrange[0], zrange[1]):
+        print(ndat2[z, 10, 20])
+        plt.imshow(ndat2[z], origin='lower')
+        plt.colorbar()
+        plt.show()
+        print(oop)
+        n2.append(np.std(ndat2[z, int(xyerr[2]/ds):int(xyerr[3]/ds), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
+
+    fig, ax = plt.subplots(1,1, figsize=(8,6))
+    collapsed_ds = rebin(collapsed_fluxes_vel, ds2, ds, avg=avg)[0]
+    plt.imshow(collapsed_ds, origin='lower')
+    ax.add_patch(rect)  # Add the patch to the Axes
+    plt.show()
+    print(oop)
+    # '''  # END TESTING STUFF
 
     # DEFINE SEMI-MAJOR AXES FOR SAMPLING, THEN CALCULATE THE MEAN SURFACE BRIGHTNESS INSIDE ELLIPTICAL ANNULI
     semi_major = np.linspace(0., 100., num=85)  # [pix]
@@ -806,13 +828,15 @@ class ModelGrid:
         if not self.quiet:
             print('start')
         if self.os == 1:  # subpix_deconvolved == lucy_out, but with sxs subpixels per pixel & total flux conserved
-            subpix_deconvolved = self.lucy_out
+            subpix_deconvolved = self.lucy_out + 0.
         else:
             subpix_deconvolved = np.zeros(shape=(len(self.lucy_out) * self.os, len(self.lucy_out[0]) * self.os))
             for ypix in range(len(self.lucy_out)):
                 for xpix in range(len(self.lucy_out[0])):
                     subpix_deconvolved[(ypix * self.os):(ypix + 1) * self.os, (xpix * self.os):(xpix + 1) * self.os] = \
                         self.lucy_out[ypix, xpix] / self.os ** 2
+
+        #print(self.lucy_out[23,31], subpix_deconvolved[23,31])
 
         # convert from frequency (Hz) to velocity (km/s), with freq_ax in Hz
         if self.opt:  # optical convention
@@ -825,6 +849,14 @@ class ModelGrid:
         # RESCALE subpix_deconvolved, z_ax, freq_ax TO CONTAIN ONLY THE SUB-CUBE REGION WHERE EMISSION ACTUALLY EXISTS
         subpix_deconvolved = subpix_deconvolved[self.os * self.xyrange[2]:self.os * self.xyrange[3],
                                                 self.os * self.xyrange[0]:self.os * self.xyrange[1]]  # stored: y,x
+
+        #sp2 = self.lucy_out[self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]]
+        #print(sp2.shape, subpix_deconvolved.shape)
+        #print(sp2[23,31], subpix_deconvolved[23,31])
+        #plt.imshow(sp2 - subpix_deconvolved, origin='lower')
+        #plt.colorbar()
+        #plt.show()
+        #print(oop)
         self.z_ax = z_ax[self.zrange[0]:self.zrange[1]]
         self.freq_ax = self.freq_ax[self.zrange[0]:self.zrange[1]]
 
@@ -839,27 +871,49 @@ class ModelGrid:
         y_obs_ac = np.asarray([0.] * len(subpix_deconvolved))
         x_obs_ac = np.asarray([0.] * len(subpix_deconvolved[0]))
 
+        #xn = np.asarray([0.] * len(subpix_deconvolved[0]))  # testing self.os==1 stuff
+        #yn = np.asarray([0.] * len(subpix_deconvolved))
+
         # Define coordinates to be 0,0 at center of the observed axes (find the central pixel number along each axis)
         if len(x_obs_ac) % 2. == 0:  # if even
             x_ctr = (len(x_obs_ac)) / 2.  # set the center of the axes (in pixel number)
             for i in range(len(x_obs_ac)):
                 x_obs_ac[i] = self.resolution * (i - x_ctr) / self.os  # (arcsec/pix) * N_subpix / (subpix/pix) = arcsec
+                #xn[i] = self.resolution * (i - x_ctr)  # self.os==1 stuff
         else:  # elif odd
             x_ctr = (len(x_obs_ac) + 1.) / 2.  # +1 bc python starts counting at 0
             for i in range(len(x_obs_ac)):
                 x_obs_ac[i] = self.resolution * ((i + 1) - x_ctr) / self.os
+                #xn[i] = self.resolution * (i + 1 - x_ctr)  # self.os==1 stuff
         if len(y_obs_ac) % 2. == 0:
             y_ctr = (len(y_obs_ac)) / 2.
             for i in range(len(y_obs_ac)):
                 y_obs_ac[i] = self.resolution * (i - y_ctr) / self.os
+                #yn[i] = self.resolution * (i - y_ctr)  # self.os==1 stuff
         else:
             y_ctr = (len(y_obs_ac) + 1.) / 2.
             for i in range(len(y_obs_ac)):
                 y_obs_ac[i] = self.resolution * ((i + 1) - y_ctr) / self.os
+                #yn[i] = self.resolution * (i + 1 - y_ctr)  # self.os==1 stuff
+
+        # self.os==1 stuff
+        #sp2 = self.lucy_out[self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]]
+        #print(xn.shape, x_obs_ac.shape, yn.shape, y_obs_ac.shape)
+        #print(np.count_nonzero(xn - x_obs_ac), np.count_nonzero(yn - y_obs_ac))
+        #print(oop)
+        #print(sp2[23,31], subpix_deconvolved[23,31])
+        #plt.imshow(sp2 - subpix_deconvolved, origin='lower')
+        #plt.colorbar()
+        #plt.show()
 
         # SET BH OFFSET from center [in arcsec], based on input BH pixel position (*_loc in pixels; *_ctr in subpixels)
         x_bh_ac = (x_loc - x_ctr / self.os) * self.resolution  # [pix - subpix/(subpix/pix)] * [arcsec/pix] = arcsec
         y_bh_ac = (y_loc - y_ctr / self.os) * self.resolution
+
+        #xn = (x_loc - x_ctr) * self.resolution  # self.os==1 stuff
+        #yn = (y_loc - y_ctr) * self.resolution  # self.os==1 stuff
+        #print(x_bh_ac - xn, y_bh_ac - yn)  # self.os==1 stuff
+        #print(oop)
 
         # CONVERT FROM ARCSEC TO PHYSICAL UNITS (pc)
         x_bhoff = self.dist * 10 ** 6 * np.tan(x_bh_ac / self.arcsec_per_rad)  # tan(off) = xdisk/dist -> x = d*tan(off)
@@ -1121,9 +1175,11 @@ class ModelGrid:
         # chi_2 = 0.  # BUCKET
 
         z_ind = 0  # the actual index for the model-data comparison cubes
+        chi_disk = np.zeros(shape=ap_ds[0].shape)
         for z in range(self.zrange[0], self.zrange[1]):  # for each relevant freq slice (ignore slices with only noise)
             chi_sq += np.sum((ap_ds[z_ind] - data_ds[z_ind])**2 / self.noise[z_ind]**2)  # calculate chisq!
             cs.append(np.sum((ap_ds[z_ind] - data_ds[z_ind])**2 / self.noise[z_ind]**2))  # chisq per slice
+            chi_disk += (ap_ds[z_ind] - data_ds[z_ind])**2 / self.noise[z_ind]**2
             # np.std(x) = sqrt(mean(abs(x - x.mean())**2))
             # chi_2 += np.sum((ap_2[z_ind] - data_2[z_ind])**2 / self.noise[z_ind]**2)  # BUCKET
 
@@ -1138,8 +1194,8 @@ class ModelGrid:
             chi_sq /= (n_pts - self.n_params)  # convert to reduced chi^2; else just return full chi^2
             # chi_2 /= (n_2 - self.n_params)  # BUCKET
             if not self.quiet:
-                print(r'Reduced chi^2=', chi_sq)
-                print(n_pts - self.n_params)
+                print(r'Reduced chi^2 =', chi_sq)
+                print(r'dof =', n_pts - self.n_params)
                 #print(r'OR reduced chi^2 = ', chi_2)  # BUCKET
                 #print(n_2 - self.n_params)  # BUCKET
 
@@ -1307,7 +1363,7 @@ class ModelGrid:
         #ax[2].set_xticks([2, 27, 52, 77, 102])
         #ax[2].set_xticklabels([x_rad[2], x_rad[27], x_rad[52], x_rad[77], x_rad[102]])
 
-        ax[1].set_ylabel('Velocity [km/s]')
+        ax[1].set_ylabel('Line-of-sight velocity [km/s]')
         plt.xlabel('Distance [arcsec]')
         #plt.colorbar()
         plt.show()
@@ -1720,7 +1776,8 @@ if __name__ == "__main__":
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()
-    mg.pvd()
+    #mg.pvd()
+    mg.line_profiles(5,6)
     #xtalk = [4, 7, 13, 16]
     #ytalk = [6, 5, 11, 11]
     #xtalk = 14
