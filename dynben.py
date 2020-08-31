@@ -256,6 +256,19 @@ def par_dicts(parfile, q=False):
         return params, priors, nfree
 
 
+def stddev(noise_array):
+    noise_array = np.asarray(noise_array)
+    std = np.sqrt(np.sum((noise_array - np.mean(noise_array))**2) / (noise_array.size-1.))
+
+    return std
+
+
+def std_rms(noise_array):
+    std = np.sqrt(np.mean((noise_array - np.mean(noise_array)) ** 2))
+
+    return std
+
+
 def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it=None, data=None, data_mask=None,
                grid_size=None, res=1., x_std=1., y_std=1., pa=0., ds=4, ds2=4, zrange=None, xyerr=None, theta_ell=0,
                q_ell=0, xell=0, yell=0, avg=True):
@@ -343,10 +356,117 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
     if cut_y == 0:  # if there is no remainder:
         cut_y = -len(input_data[0])  # don't want to cut anything below
     noise_ds = rebin(input_data[:, :-cut_y, :-cut_x], ds2, ds, avg=avg)  # down-sample noise to the chi^2 pixel scale
+    # noise_ds = rebin(input_data[zrange[0]:zrange[1], 110:190, 80:172], ds2, ds, avg=False)  # down-sample noise to the chi^2 pixel scale
+    # noise_ds = rebin(input_data, ds2, ds, avg=avg)  # down-sample noise to the chi^2 pixel scale
+
+    hdun = fits.open('/Users/jonathancohn/Documents/dyn_mod/ugc_2698/UGC2698_CO21_stdevregion_cube.fits')
+    noisereg = hdun[0].data
+    hdun.close()
+
+    hdun = fits.open('/Users/jonathancohn/Documents/dyn_mod/ugc_2698/UGC2698_CO21_blockavg_4x4_fulldatacube_new.fits')
+    bendata = hdun[0].data
+    hdun.close()
+    bendata *= noisereg[0]
+
+    slice1 = []
+    with open('noise_region_firstslice_slice25.txt', 'r') as nr:
+        for line in nr:
+            if not line.startswith('#'):
+                cols = line.split()
+                slice1.append(float(cols[2]))#*16)
+    print(np.std(slice1))
+    print(std_rms(slice1))
+    print(stddev(slice1))
+    #print(oop)
+
+    # mynreg = np.zeros(shape=noise_ds[0].shape)
+    # reg2 = np.zeros(shape=noise_ds[0].shape)
+    # mynreg[int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)] += 1.
+
+    # print(n2.shape)
+    print(noise_ds.shape, bendata.shape)
+    # print(oop)
 
     noise = []  # For large N, Variance ~= std^2
+    noise2 = []
+    noise_bes = []
+    bennoise = []
+    # noise3 = []
+    z0 = 0
     for z in range(zrange[0], zrange[1]):  # for each relevant freq slice, calculte std (aka rms) ~variance
-        noise.append(np.std(noise_ds[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
+        # mynreg[int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)] += noise_ds[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)]
+        # reg2 += noise_ds[z] * noisereg[z]
+        # plt.imshow(reg2 - mynreg, origin='lower')  # reg difference = 0, they're the same!
+        # plt.colorbar()
+        # plt.show()
+        # print(oop)
+        # print(z)
+        #reg = noise_ds[z, int(xyerr[2] / ds2):int(xyerr[3] / ds2), int(xyerr[0] / ds):int(xyerr[1] / ds)]
+        #print(z, reg)
+        #for x in range(len(reg)):
+        #    for y in range(len(reg)):
+        #        print(x+36, y+24, reg[x,y])
+        #print(oop)
+        # ben = (noise_ds[z] * noisereg[z])[int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)]
+        # ben = noise_ds[z] * noisereg[z] # [int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)]
+        #print(stddev(noise_ds[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
+        #print(np.std(noise_ds[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
+        noise.append(np.std(noise_ds[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)], ddof=1))
+        noise_bes.append(stddev(noise_ds[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
+        # noise2.append(np.std(noise_ds[z, 36:42, 24:30]))  # swap
+        # noise2.append(np.std(noise_ds[z, 25:31, 35:41]))  # shift 1pix x,y
+        noise2.append(np.std(noise_ds[z, 35:41, 25:31]))  # specifically contaminated region
+        bennoise.append(np.std(bendata[z0, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
+        #noise.append(np.std(noise_ds[z0, 0:6, 16:22]))
+        # noise2.append(np.std(n2[z0, 0:6, 16:22]))
+        z0 += 1
+        '''  #
+        # noise2.append(std_rms(ben))
+        # mynreg[int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)] = noise_ds[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)]
+        fig, ax = plt.subplots(1, 3, figsize=(16, 4))
+        # im0 = ax[0].imshow(noise_ds[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)], origin='lower')
+        # im0 = ax[0].imshow(mynreg, origin='lower')
+        im0 = ax[0].imshow(noise_ds[z0], origin='lower')
+        ax[0].set_title('My regular noise region')
+        cbar = fig.colorbar(im0, ax=ax[0], pad=0.02)
+        # im1 = ax[1].imshow(ben, origin='lower')
+        im1 = ax[1].imshow(n2[z0], origin='lower')
+        ax[1].set_title("Noise region using Ben's fits file")
+        cbar1 = fig.colorbar(im1, ax=ax[1], pad=0.02)
+        # im2 = ax[2].imshow(noise_ds[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)] - ben, origin='lower')
+        # im2 = ax[2].imshow(mynreg - ben, origin='lower')
+        im2 = ax[2].imshow(noise_ds[z0] - n2[z0], origin='lower')
+        ax[2].set_title("Residual [my region - Ben's]")
+        cbar2 = fig.colorbar(im2, ax=ax[2], pad=0.02)
+        plt.show()
+        print(oop)
+        # noise2.append(std_rms(noise_ds[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)] * noisereg[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
+#        noise2.append(np.std(noise_ds[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)] * noisereg[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
+        noise3.append(std_rms(noise_ds[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)] * mynreg[int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
+        # '''  #
+    #print(noise2)
+    print(noise[0])
+    print(len(noise), len(bennoise))
+    plt.plot(noise, 'b*', label='Noise from my data cube [old]')
+    plt.plot(noise_bes, 'mo', label='Noise from my data cube [using 1/(N-1)]')
+    # plt.plot(noise2, 'b*', label='Noise from my data cube [contaminated region]')  # [shift]') #
+    # plt.plot(bennoise, 'k+', label="Noise from Ben's 4x4 block-averaged data cube")
+    ben_noise = []
+    with open('/Users/jonathancohn/Documents/dyn_mod/ugc_2698/ben_noise_avging4x4ds.txt', 'r') as bn:
+        for line in bn:
+            if not line.startswith('#'):
+                cols = line.split()
+                ben_noise.append(float(cols[2]) * 1e-3)
+    plt.plot(ben_noise[zrange[0]:zrange[1]], 'k+', label="Ben's noise array")
+    plt.legend()
+    plt.show()
+    #print(oop)
+
+    #plt.plot(noise, 'mo', label='My regular noise region, using built-in standard deviation function')
+    #plt.plot(noise2, 'k+', label="Noise region using Ben's fits file, using a hand-written standard deviation function")
+    #plt.legend()
+    #plt.show()
+    #print(oop)
 
     # CALCULATE VELOCITY WIDTH  # vsys = 6454.9 estimated from various test runs; see eg. Week of 2020-05-04 on wiki
     v_width = 2.99792458e5 * (1 + (6454.9 / 2.99792458e5)) * fstep / f_0  # velocity width [km/s] = c*(1+v/c)*fstep/f0
@@ -356,6 +476,14 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
     for zi in range(len(input_data)):
         collapsed_fluxes_vel += input_data[zi] * fullmask[zi] * v_width
     # collapsed_fluxes_vel[collapsed_fluxes_vel < 0] = 0.  # ignore negative values? probably not?
+
+    #print(int(xyerr[2] / ds2), int(xyerr[3] / ds2), int(xyerr[0] / ds), int(xyerr[1] / ds))  # 36:42, 24:30
+    #print(noise)
+    # plt.imshow(noisereg[0] + collapsed_fluxes_vel, origin='lower')  # region in correct location
+    # plt.imshow(mynreg + collapsed_fluxes_vel, origin='lower')  # my region also in correct location
+    # plt.colorbar()
+    # plt.show()
+    #print(oop)
 
     # DEFINE SEMI-MAJOR AXES FOR SAMPLING, THEN CALCULATE THE MEAN SURFACE BRIGHTNESS INSIDE ELLIPTICAL ANNULI
     semi_major = np.linspace(0., 100., num=85)  # [pix]
@@ -984,18 +1112,73 @@ class ModelGrid:
             cube_model[fr] = self.weight * np.exp(-(self.freq_ax[fr] - self.freq_obs) ** 2 /
                                                   (2 * self.delta_freq_obs ** 2))
 
+        '''  #
+        # BEN: this is in Jy/beam units!
+        # At start: Ben divides lucy flux map by frequency spacing
+        hduc = fits.open('ugc_2698/UGC2698_CO21_oversamp_s4_modcube_new.fits')  # UGC2698_CO21_oversamp_s4_modcube
+        benc = hduc[0].data
+        hduc.close()
+        print(benc.shape, cube_model.shape)
+        print(np.sum(benc), np.sum(cube_model))
+        for z in (15, 28, 29, 30, 45):  # range(30, len(benc))
+            fig, ax = plt.subplots(1,3,figsize=(16,4))
+            im0 = ax[0].imshow(cube_model[z], origin='lower')
+            cbar = fig.colorbar(im0, ax=ax[0], pad=0.02)
+            ax[0].set_title('My cube')
+            im1 = ax[1].imshow(benc[z], origin='lower')
+            cbar = fig.colorbar(im1, ax=ax[1], pad=0.02)
+            ax[1].set_title("Ben's cube")
+            im2 = ax[2].imshow(cube_model[z] - benc[z], origin='lower')
+            ax[2].set_title("Residual cube [mine - Ben's]")
+            cbar = fig.colorbar(im2, ax=ax[2], pad=0.02)
+            plt.show()
+        print(oop)
+        # '''  #
+
+        #hduc = fits.open('ugc_2698/UGC2698_CO21_oversamp_s4_modcube.fits')
+        #benc = hduc[0].data
+        #hduc.close()
+        #bencrb = rebin(benc, self.os, self.os, avg=False)
+
         # RE-SAMPLE BACK TO CORRECT PIXEL SCALE (take avg of sxs sub-pixels for real alma pixel) --> intrinsic data cube
         #if self.os == 1:
         #    intrinsic_cube = cube_model
         #else:  # intrinsic_cube = block_reduce(cube_model, self.os, np.mean)
+        #for z in range(len(cube_model))
         intrinsic_cube = rebin(cube_model, self.os, self.os, avg=False)  # this must use avg=False
 
         tc = time.time()
         # CONVERT INTRINSIC TO OBSERVED (convolve each slice of intrinsic_cube with ALMA beam --> observed data cube)
         self.convolved_cube = np.zeros(shape=intrinsic_cube.shape)  # approx ~1e-6 to 3e-6s per pixel
+        # convol_ben = np.zeros(shape=intrinsic_cube.shape)  # approx ~1e-6 to 3e-6s per pixel
         for z in range(len(self.z_ax)):
             self.convolved_cube[z, :, :] = convolution.convolve(intrinsic_cube[z, :, :], self.beam)
+            # convol_ben[z,:,:] = convolution.convolve(bencrb[z,:,:], self.beam)
         print('convolution loop ' + str(time.time() - tc))
+
+        '''  #
+        hduc = fits.open('ugc_2698/UGC2698_CO21_oversamp_s1_modcube_new.fits')  # UGC2698_CO21_oversamp_s1_modcube
+        bencc = hduc[0].data
+        hduc.close()
+        print(np.sum(bencc), np.sum(cube_model))#, np.sum(convol_ben))  # I get something very similar to Ben here.
+        print(bencc.shape, cube_model.shape)
+        #print(oop)
+        for z in (15, 30, 45):  # range(40, len(bencc)):
+            fig, ax = plt.subplots(1,3,figsize=(16,4))
+            im0 = ax[0].imshow(self.convolved_cube[z], origin='lower')
+            #im0 = ax[0].imshow(convol_ben[z], origin='lower')
+            cbar = fig.colorbar(im0, ax=ax[0], pad=0.02)
+            ax[0].set_title('My cube')
+            im1 = ax[1].imshow(bencc[z], origin='lower')
+            cbar = fig.colorbar(im1, ax=ax[1], pad=0.02)
+            ax[1].set_title("Ben's cube")
+            im2 = ax[2].imshow(self.convolved_cube[z] - bencc[z], origin='lower')
+            #im2 = ax[2].imshow(convol_ben[z] - bencc[z], origin='lower')
+            ax[2].set_title("Residual cube [mine - Ben's]")
+            cbar = fig.colorbar(im2, ax=ax[2], pad=0.02)
+            plt.show()
+        print(oop)
+        # '''  #
 
 
     def chi2(self):
@@ -1069,31 +1252,144 @@ class ModelGrid:
         data_ds = rebin(self.clipped_data, self.ds2, self.ds, avg=self.avg)
         ap_ds = rebin(self.convolved_cube, self.ds2, self.ds, avg=self.avg)
 
+        '''  # Down-sampled data cubes are identical
+        hduc = fits.open('ugc_2698/UGC2698_CO21_blockavg_4x4_datacube.fits')
+        bendat = hduc[0].data
+        hduc.close()
+
+        data_dcompare = rebin(self.clipped_data, self.ds2, self.ds, avg=False)
+        print(bendat.shape)
+        print(np.sum(bendat), np.sum(data_dcompare))
+        for z in (15, 30, 45):  # range(30, len(benmds))
+            fig, ax = plt.subplots(1, 3, figsize=(16, 4))
+            im0 = ax[0].imshow(data_dcompare[z], origin='lower')
+            cbar = fig.colorbar(im0, ax=ax[0], pad=0.02)
+            ax[0].set_title('My down-sampled data cube')
+            im1 = ax[1].imshow(bendat[z], origin='lower')
+            cbar = fig.colorbar(im1, ax=ax[1], pad=0.02)
+            ax[1].set_title("Ben's down-sampled data cube")
+            im2 = ax[2].imshow(data_dcompare[z] - bendat[z], origin='lower')
+            ax[2].set_title("Residual cube [mine - Ben's]")
+            cbar = fig.colorbar(im2, ax=ax[2], pad=0.02)
+            plt.show()
+        print(oop)
+        # '''  #
+
+        '''  #
+        hduc = fits.open('ugc_2698/UGC2698_CO21_oversamp_s1_modcube.fits')
+        bencc = hduc[0].data
+        hduc.close()
+
+        benccds = rebin(bencc, self.ds2, self.ds, avg=False)
+
+        hduc = fits.open('ugc_2698/UGC2698_CO21_blockavg_4x4_modcube.fits')
+        benmds = hduc[0].data
+        hduc.close()
+
+        print(np.sum(benccds), np.sum(benmds))
+        for z in (15, 30, 45):  # range(30, len(benmds))
+            fig, ax = plt.subplots(1, 3, figsize=(16, 4))
+            im0 = ax[0].imshow(benccds[z], origin='lower')
+            cbar = fig.colorbar(im0, ax=ax[0], pad=0.02)
+            ax[0].set_title('Convolved cube, down-sampled by me')
+            im1 = ax[1].imshow(benmds[z], origin='lower')
+            cbar = fig.colorbar(im1, ax=ax[1], pad=0.02)
+            ax[1].set_title("Ben's down-sampled cube")
+            im2 = ax[2].imshow(benccds[z] - benmds[z], origin='lower')
+            ax[2].set_title("Residual cube [mine - Ben's]")
+            cbar = fig.colorbar(im2, ax=ax[2], pad=0.02)
+            plt.show()
+        print(oop)
+        # '''  #
+
+        '''  # Compare Ben model to my model!
+        ap_ds = rebin(self.convolved_cube, self.ds2, self.ds, avg=False)
+        hduc = fits.open('ugc_2698/UGC2698_CO21_blockavg_4x4_modcube_new.fits')
+        benmds = hduc[0].data
+        hduc.close()
+        print(benmds.shape, ap_ds.shape)
+        print(np.sum(benmds), np.sum(ap_ds))
+        for z in (15, 30, 45):  # range(30, len(benmds))
+            fig, ax = plt.subplots(1, 3, figsize=(16, 4))
+            im0 = ax[0].imshow(ap_ds[z], origin='lower')
+            cbar = fig.colorbar(im0, ax=ax[0], pad=0.02)
+            ax[0].set_title('My cube')
+            im1 = ax[1].imshow(benmds[z], origin='lower')
+            cbar = fig.colorbar(im1, ax=ax[1], pad=0.02)
+            ax[1].set_title("Ben's cube")
+            im2 = ax[2].imshow(ap_ds[z] - benmds[z], origin='lower')
+            ax[2].set_title("Residual cube [mine - Ben's]")
+            cbar = fig.colorbar(im2, ax=ax[2], pad=0.02)
+            plt.show()
+        print(oop)
+        # '''  #
+
         print(data_ds.shape)
         print(self.convolved_cube.shape)
         #print(oops)
         self.ell_ds = ellipse_fitting(data_ds, self.rfit, self.xell / self.ds, self.yell / self.ds2,
                                       self.resolution * self.ds, self.theta_ell, self.q_ell)  # create ellipse mask
-        '''  #
-        fig = plt.figure()
-        ax = plt.gca()
-        plt.imshow(ell_2, origin='lower')
-        plt.colorbar()
+
+        hdu2b = fits.open('/Users/jonathancohn/Documents/dyn_mod/ugc_2698/UGC2698_CO21_ellipsefitting_cube_subregion_corr.fits')
+        ben_scell = hdu2b[0].data
+        hdu2b.close()
+
+        hdu = fits.open('/Users/jonathancohn/Documents/dyn_mod/ugc_2698/UGC2698_CO21_ellipsefitting_cube.fits')
+        benell = hdu[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
+        hdu.close()
+        print(ben_scell.shape)
+        #plt.imshow(ben_scell[0], origin='lower')
+        #plt.colorbar()
+        #plt.show()
+        # ben_scell = ben_scell[0, 30:46, 21:42]
+        # ben_ellds = benell[0, 30:46, 21:42]  # 29:45, 21:42  # benell[0, 30:46, 21:42]
+        ben_ellds = ben_scell[0]
+
+        '''  #  COMPARE ELLIPSE REGIONS
+        print(int(self.xyrange[2]/self.ds2), int(self.xyrange[3]/self.ds2),
+              int(self.xyrange[0]/self.ds), int(self.xyrange[1]/self.ds))
+        print(np.sum(benell), np.count_nonzero(benell[0]), np.count_nonzero(benell[0] == 0.))
+        #b2d = np.zeros(shape=benell[0].shape)
+        #for z in range(len(benell)):
+        #    b2d += benell[z]
+        #plt.imshow(b2d, origin='lower')
+        #plt.colorbar()
+        #plt.show()
+        fig, ax = plt.subplots(1,3, figsize=(16,3))
+        # ax = plt.gca()
+        im0 = ax[0].imshow(self.ell_ds, origin='lower')
+        cbar = fig.colorbar(im0, ax=ax[0], pad=0.02)
+        ax[0].set_title("My ellipse")
+        # int(self.xyrange[2]/self.ds2):int(self.xyrange[3]/self.ds2), int(self.xyrange[0]/self.ds):int(self.xyrange[1]/self.ds)
+        im1 = ax[1].imshow(ben_ellds, origin='lower')
+        #im1 = ax[1].imshow(ben_scell, origin='lower')
+        cbar = fig.colorbar(im1, ax=ax[1], pad=0.02)
+        ax[1].set_title("Ben's ellipse")
+        #plt.colorbar()
         #plt.show()
         from matplotlib import patches
         e1 = patches.Ellipse((self.xell / self.ds, self.yell / self.ds2), 2 * self.rfit / self.resolution / self.ds,
                              2 * self.rfit / self.resolution * self.q_ell / self.ds2, angle=np.rad2deg(self.theta_ell),
                              linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
         print(e1)
+        print(np.sum(self.ell_ds), np.sum(benell[0]))
         #e1.width /= self.ds
         #e1.height /= self.ds
         #e1.x /= self.ds
         #e1.y /= self.ds2
-        ax.add_patch(e1)
+        ax[0].add_patch(e1)
+        e2 = patches.Ellipse((self.xell / self.ds, self.yell / self.ds2), 2 * self.rfit / self.resolution / self.ds,
+                             2 * self.rfit / self.resolution * self.q_ell / self.ds2, angle=np.rad2deg(self.theta_ell),
+                             linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
+        ax[1].add_patch(e2)
         print('ell2')
-        plt.plot(self.xell / self.ds, self.yell / self.ds, 'w*')
+        im2 = ax[2].imshow(self.ell_ds - ben_ellds, origin='lower')
+        cbar = fig.colorbar(im2, ax=ax[2], pad=0.02)
+        ax[2].set_title("Residual (My ellipse - Ben's ellipse)")
+        #plt.plot(self.xell / self.ds, self.yell / self.ds, 'w*')
         #plt.plot(self.xell, self.yell, 'w*')
         plt.show()
+        print(oop)
         # '''  #
 
         hdu = fits.open('/Users/jonathancohn/Documents/dyn_mod/ugc_2698/ben_model_cube.fits')
@@ -1104,6 +1400,7 @@ class ModelGrid:
         clipped_benmodel = benmodel[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
                                             self.xyrange[0]:self.xyrange[1]]
         bm_ds = rebin(clipped_benmodel, self.ds2, self.ds, avg=self.avg)
+        bm_true = bm_ds * ben_scell  # ben_ellds
         bm_ds *= self.ell_ds
 
         ben_noise = []
@@ -1115,16 +1412,29 @@ class ModelGrid:
         print(ben_noise[self.zrange[0]:self.zrange[1]])
         print(noise)
         ben_noise = ben_noise[self.zrange[0]:self.zrange[1]]
-        plt.plot(self.z_ax, ben_noise, 'b+')
-        plt.plot(self.z_ax, noise, 'k*')
+        '''  # COMPARE MY NOISE TO BEN'S NOISE ARRAY
+        fig, ax = plt.subplots(2,1,sharex=True)
+        ax[0].plot(self.z_ax, noise, 'mo', label="My noise")
+        ax[0].plot(self.z_ax, ben_noise, 'k+', label="Ben's noise")
+        ax[0].legend()
+        ax[1].plot(self.z_ax, np.asarray(noise) - np.asarray(ben_noise), 'b*', label="My noise - Ben's noise")
+        ax[1].legend()
         plt.show()
         #print(oop)
+        # '''  #
 
+        hduc = fits.open('ugc_2698/UGC2698_CO21_blockavg_4x4_modcube_new.fits')  # UGC2698_CO21_blockavg_4x4_modcube
+        benmds = hduc[0].data
+        hduc.close()
+        #benmds = benmds[:, 2:-2, 1:-1]
+        #benmds *= ben_scell[0] / 16.
+        benmds *= self.ell_ds / 16.
 
         # APPLY THE ELLIPTICAL MASK TO MODEL CUBE & INPUT DATA
         data_ds *= self.ell_ds
         ap_ds *= self.ell_ds
         n_pts = np.sum(self.ell_ds) * len(self.z_ax)  # total number of pixels compared in chi^2 calculation!
+        n_bt = np.sum(ben_ellds) * len(self.z_ax)
         # data_2 = data_ds * ell_2  # BUCKET
         # ap_2 = ap_ds * ell_2  # BUCKET
         # n_2 = np.sum(ell_2) * len(self.z_ax)  # BUCKET
@@ -1134,29 +1444,71 @@ class ModelGrid:
         #print(n_2, n_pts)
 
         chi_ben = 0.
+        chi_bt = 0.
+        chi_bnewtrue = 0.
         chi_sq = 0.  # initialize chi^2
+        chisq3 = 0.
         cs = []  # initialize chi^2 per slice
+        cs_bn = []
+        chi_bmodmynoi = 0.
         # chi_2 = 0.  # BUCKET
         chisq_nonoise = 0
         chisq_nonoisebencube = 0
 
         z_ind = 0  # the actual index for the model-data comparison cubes
         for z in range(self.zrange[0], self.zrange[1]):  # for each relevant freq slice (ignore slices with only noise)
-            chisq_nonoise += np.sum(bm_ds[z_ind] - data_ds[z_ind])**2
-            chisq_nonoisebencube += np.sum(ap_ds[z_ind] - data_ds[z_ind])**2
-            chi_ben += np.sum((bm_ds[z_ind] - data_ds[z_ind])**2 / ben_noise[z_ind]**2)  # BEN'S CUBE
+            chisq_nonoise += np.sum(ap_ds[z_ind] - data_ds[z_ind])**2
+            # chisq_nonoisebencube += np.sum(bm_ds[z_ind] - data_ds[z_ind])**2
+            # chisq_nonoisebencube += np.sum(bm_true[z_ind] - data_ds[z_ind])**2  # ben model + ellipse
+            # chi_ben += np.sum((bm_ds[z_ind] - data_ds[z_ind])**2 / ben_noise[z_ind]**2)  # BEN'S CUBE
+            # chi_bt += np.sum((bm_true[z_ind] - data_ds[z_ind])**2 / ben_noise[z_ind]**2)  # BEN'S TRUE CALCULATION
+            chi_bnewtrue += np.sum((benmds[z_ind] - data_ds[z_ind])**2 / ben_noise[z_ind]**2)  # BEN'S TRUE NEW CALCULATION
+            chi_bmodmynoi += np.sum((benmds[z_ind] - data_ds[z_ind])**2 / self.noise[z_ind]**2)  # BEN'S MOD MY NOISE
             chi_sq += np.sum((ap_ds[z_ind] - data_ds[z_ind])**2 / ben_noise[z_ind]**2)  # calculate chisq!
+            chisq3 += np.sum((ap_ds[z_ind] - data_ds[z_ind])**2 / self.noise[z_ind]**2)  # calculate chisq!
             cs.append(np.sum((ap_ds[z_ind] - data_ds[z_ind])**2 / self.noise[z_ind]**2))  # chisq per slice
+            cs_bn.append(np.sum((ap_ds[z_ind] - data_ds[z_ind])**2 / ben_noise[z_ind]**2))  # chisq per slice
             # np.std(x) = sqrt(mean(abs(x - x.mean())**2))
             # chi_2 += np.sum((ap_2[z_ind] - data_2[z_ind])**2 / self.noise[z_ind]**2)  # BUCKET
 
             z_ind += 1  # the actual index for the model-data comparison cubes
 
+        '''  #
+        cs = np.asarray(cs)
+        cs_bn = np.asarray(cs_bn)
+        print(np.sum(cs), np.sum(cs_bn))
+        print(np.sum((cs - cs_bn)), np.sum((cs - cs_bn) / np.sum(self.ell_ds)))
+        fig, ax = plt.subplots(2,2,figsize=(12,12), sharex=True)
+        ax[0,0].plot(cs, 'mo', label=r'Calculated with my noise')
+        ax[0,0].plot(cs_bn, 'b+', label=r"Calculated with Ben's noise")
+        ax[0,0].legend()
+        ax[0,0].set_ylabel(r'$\chi^2$ per slice')
+        ax[1,0].axhline(y=0.)
+        ax[1,0].plot(cs - cs_bn, 'kx', label=r"residual [$\chi^2$ (my noise) - $\chi^2$ (Ben's noise)]")
+        ax[1,0].legend()
+        ax[0,1].plot(cs / np.sum(self.ell_ds), 'mo', label=r'Calculated with my noise')
+        ax[0,1].plot(cs_bn / np.sum(self.ell_ds), 'b+', label=r"Calculated with Ben's noise")
+        ax[0,1].legend()
+        ax[0,1].set_ylabel(r'$\chi^2_\nu$ per slice')
+        ax[1,1].axhline(y=0.)
+        ax[1,1].plot((cs - cs_bn) / np.sum(self.ell_ds), 'kx', label=r"residual [$\chi^2_\nu$ (my noise) - $\chi^2_\nu$ (Ben's noise)]")
+        ax[1,1].legend()
+        plt.show()
+        # '''  #
+
         if not self.quiet:
             print(np.sum(self.ell_ds), len(self.z_ax), n_pts)
-            print(r'chi^2=', chi_sq, chi_ben)
-            print('reduced = ', chi_sq / (n_pts - self.n_params), chi_ben / (n_pts - self.n_params))
-            print(r"chisq numerator my cube, Ben's cube", chisq_nonoise, chisq_nonoisebencube)  # equal through ~6 decimal points
+            print(r'chisq3 my everything', chisq3, chisq3 / (n_pts - self.n_params))
+            print(r'chisq my model, Ben noise', chi_sq, chi_sq / (n_pts - self.n_params))
+            #print(r'my model my ellipse + ben noise, ben model my ellipse + ben noise chi^2=', chi_sq, chi_ben)
+            #print('same as immediately above, reduced = ', chi_sq / (n_pts - self.n_params), chi_ben / (n_pts - self.n_params))
+            #print(r"chisq numerator my cube, Ben's cube", chisq_nonoise, chisq_nonoisebencube)  # equal through ~6 decimal points, more different with Ben's true ellipse?
+            #print(r"Ben true (using his ellipse, noise, and old model cube): chi^2 = ", chi_bt,
+            #      'reduced chi^2 = ', chi_bt / (n_bt - self.n_params), "npts = ", n_bt)
+            print(r"(using Ben's noise, and Ben's new model cube): chi^2 = ", chi_bnewtrue,
+                  'reduced chi^2 = ', chi_bnewtrue / (n_bt - self.n_params), "npts = ", n_bt)
+            print(r"(using MY noise, and Ben's new model cube): chi^2 = ", chi_bmodmynoi,
+                  'reduced chi^2 = ', chi_bmodmynoi / (n_bt - self.n_params), "npts = ", n_bt)
             print(oop)
 
         if self.reduced:  # CALCULATE REDUCED CHI^2
@@ -1372,6 +1724,7 @@ class ModelGrid:
         hdu_m = fits.open(self.data_mask)
         data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
         vel_ax = []
+        hdu_m.close()
         velwidth = self.c_kms * (1 + self.zred) * self.fstep / self.f_0
         for v in range(len(self.freq_ax)):
             vel_ax.append(self.c_kms * (1. - (self.freq_ax[v] / self.f_0) * (1 + self.zred)))
