@@ -1041,23 +1041,23 @@ class ModelGrid:
 
             z_ind += 1  # the actual index for the model-data comparison cubes
 
-        if not self.quiet:
-            print(np.sum(self.ell_ds), len(self.z_ax), n_pts)
-            print(r'chi^2=', chi_sq)
-            print('reduced = ', chi_sq / (n_pts - self.n_params))
-
-        if self.reduced:  # CALCULATE REDUCED CHI^2
-            chi_sq /= (n_pts - self.n_params)  # convert to reduced chi^2; else just return full chi^2
-            if not self.quiet:
-                print(r'Reduced chi^2 =', chi_sq)
-                print(r'dof =', n_pts - self.n_params)
 
         if n_pts == 0.:  # PROBLEM WARNING
             print(self.resolution, self.xell, self.yell, self.theta_ell, self.q_ell, self.rfit)
             print('WARNING! STOP! There are no pixels inside the fitting ellipse! n_pts = ' + str(n_pts))
-            chi_sq = np.inf
+            return np.inf
 
-        return chi_sq  # Reduced or Not depending on reduced = True or False
+        if not self.quiet:
+            print(np.sum(self.ell_ds), len(self.z_ax), n_pts)
+            print(r'chi^2=', chi_sq)
+            print('reduced = ', chi_sq / (n_pts - self.n_params))
+            print(r'dof =', n_pts - self.n_params)
+
+        if self.reduced:  # CALCULATE REDUCED CHI^2, RETURN BOTH REDUCED & FULL
+            return chi_sq, chi_sq / (n_pts - self.n_params)  # convert to reduced chi^2; else just return full chi^2
+
+        else:  # RETURN FULL CHI^2
+            return chi_sq  # Reduced or Not depending on reduced = True or False
 
 
     def scaling_rels(self, rel=0):
