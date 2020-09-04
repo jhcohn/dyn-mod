@@ -253,11 +253,11 @@ def output_dictionary(model, err):
                 'outpf': 'ugc_2698/ugc_2698_finaltests_ds510_out.txt',
                 'mod': 'ds510', 'extra_params': None}
 
-    exp_dict = {'pkl': 'ugc_2698_finaltests_exp_10000000_8_0.02_1598971509.1307032_tempsave.pkl',  # ~297000 func calls
-                'name': 'finaltests/u2698_finaltests_exp_' + str(err) + 'sig_temp.png',
-                'cornername': 'finaltests/u2698_finaltests_exp_corner_' + str(err) + 'sig_temp.png',
+    exp_dict = {'pkl': 'ugc_2698_finaltests_exp_10000000_8_0.02_1599221245.840947_end.pkl',  # ~297000 func calls; ~638013 (batch stage)
+                'name': 'finaltests/u2698_finaltests_exp_' + str(err) + 'sig.png',
+                'cornername': 'finaltests/u2698_finaltests_exp_corner_' + str(err) + 'sig.png',
                 'inpf': 'ugc_2698/ugc_2698_finaltests_exp.txt',
-                'outpf': 'ugc_2698/ugc_2698_finaltests_exp_out_temp.txt',
+                'outpf': 'ugc_2698/ugc_2698_finaltests_exp_out.txt',
                 'mod': 'exp', 'extra_params': [['r0', 'pc'], ['sig1', 'km/s']]}
 
     ful_dict = {'pkl': 'ugc_2698_finaltests_fullpriors_10000000_8_0.02_1599057523.4734955_end.pkl',
@@ -274,11 +274,11 @@ def output_dictionary(model, err):
                 'outpf': 'ugc_2698/ugc_2698_finaltests_gas_out.txt',
                 'mod': 'gas', 'extra_params': None}
 
-    kap_dict = {'pkl': 'ugc_2698_finaltests_kappa_10000000_8_0.02_1598973095.462015_tempsave.pkl',  # ~327116 func calls
-                'name': 'finaltests/u2698_finaltests_kappa_' + str(err) + 'sig_temp.png',
-                'cornername': 'finaltests/u2698_finaltests_kappa_corner_' + str(err) + 'sig_temp.png',
+    kap_dict = {'pkl': 'ugc_2698_finaltests_kappa_10000000_8_0.02_1599130684.4075377_end.pkl',  # ~327116 func calls temp, ~413422 temp2 (prelim cvg)
+                'name': 'finaltests/u2698_finaltests_kappa_' + str(err) + 'sig.png',
+                'cornername': 'finaltests/u2698_finaltests_kappa_corner_' + str(err) + 'sig.png',
                 'inpf': 'ugc_2698/ugc_2698_finaltests_kappa.txt',
-                'outpf': 'ugc_2698/ugc_2698_finaltests_kappa_out_temp.txt',
+                'outpf': 'ugc_2698/ugc_2698_finaltests_kappa_out.txt',
                 'mod': 'kappa', 'extra_params': [['kappa', 'unitless']]}
 
     s01_dict = {'pkl': 'ugc_2698_finaltests_os1_10000000_8_0.02_1598993131.9236333_end.pkl',
@@ -330,18 +330,18 @@ def output_dictionary(model, err):
                 'outpf': 'ugc_2698/ugc_2698_finaltests_os12_out.txt',
                 'mod': 'os12', 'extra_params': None}
 
-    r03_dict = {'pkl': 'ugc_2698_finaltests_rfit0.3_10000000_8_0.02_1598973877.4783337_tempsave.pkl',  # ~325800 calls
-                'name': 'finaltests/u2698_finaltests_rfit0.3_' + str(err) + 'sig_temp.png',
-                'cornername': 'finaltests/u2698_finaltests_rfit0.3_corner_' + str(err) + 'sig_temp.png',
+    r03_dict = {'pkl': 'ugc_2698_finaltests_rfit0.3_10000000_8_0.02_1598973877.4783337_tempsave.pkl',  # ~325800 calls; ~649210 temp2 (unchanged from temp); ~958458 temp3
+                'name': 'finaltests/u2698_finaltests_rfit0.3_' + str(err) + 'sig_temp3.png',
+                'cornername': 'finaltests/u2698_finaltests_rfit0.3_corner_' + str(err) + 'sig_temp3.png',
                 'inpf': 'ugc_2698/ugc_2698_finaltests_rfit0.3.txt',
-                'outpf': 'ugc_2698/ugc_2698_finaltests_rfit0.3_out_temp.txt',
+                'outpf': 'ugc_2698/ugc_2698_finaltests_rfit0.3_out_temp3.txt',
                 'mod': 'rfit0.3', 'extra_params': None}
 
-    r04_dict = {'pkl': 'ugc_2698_finaltests_rfit0.4_10000000_8_0.02_1598973877.4808373_tempsave.pkl',  # ~293900 calls
-                'name': 'finaltests/u2698_finaltests_rfit0.4_' + str(err) + 'sig_temp.png',
-                'cornername': 'finaltests/u2698_finaltests_rfit0.4_corner_' + str(err) + 'sig_temp.png',
+    r04_dict = {'pkl': 'ugc_2698_finaltests_rfit0.4_10000000_8_0.02_1598973877.4808373_tempsave.pkl',  # ~293900 calls; ~627888 temp2 (identical to temp); ~918764 temp3
+                'name': 'finaltests/u2698_finaltests_rfit0.4_' + str(err) + 'sig_temp3.png',
+                'cornername': 'finaltests/u2698_finaltests_rfit0.4_corner_' + str(err) + 'sig_temp3.png',
                 'inpf': 'ugc_2698/ugc_2698_finaltests_rfit0.4.txt',
-                'outpf': 'ugc_2698/ugc_2698_finaltests_rfit0.4_out_temp.txt',
+                'outpf': 'ugc_2698/ugc_2698_finaltests_rfit0.4_out_temp3.txt',
                 'mod': 'rfit0.4', 'extra_params': None}
 
     r05_dict = {'pkl': 'ugc_2698_finaltests_rfit0.5_10000000_8_0.02_1599019066.0246398_end.pkl',
@@ -365,23 +365,23 @@ def output_dictionary(model, err):
                 'outpf': 'ugc_2698/ugc_2698_finaltests_rfit0.8_out.txt',
                 'mod': 'rfit0.8', 'extra_params': None}
 
-    vra_dict = {'pkl': 'ugc_2698_finaltests_vrad_10000000_8_0.02_1598973961.12938_tempsave.pkl',  # ~233582 calls
-                'name': 'finaltests/u2698_finaltests_vrad_' + str(err) + 'sig_temp.png',
-                'cornername': 'finaltests/u2698_finaltests_vrad_corner_' + str(err) + 'sig_temp.png',
+    vra_dict = {'pkl': 'ugc_2698_finaltests_vrad_10000000_8_0.02_1599163402.2385688_end.pkl',  # ~233582 calls, temp2 299242 (after prelim cvg), temp3 ~603270
+                'name': 'finaltests/u2698_finaltests_vrad_' + str(err) + 'sig.png',
+                'cornername': 'finaltests/u2698_finaltests_vrad_corner_' + str(err) + 'sig.png',
                 'inpf': 'ugc_2698/ugc_2698_finaltests_vrad.txt',
-                'outpf': 'ugc_2698/ugc_2698_finaltests_vrad_out_temp.txt',
+                'outpf': 'ugc_2698/ugc_2698_finaltests_vrad_out.txt',
                 'mod': 'vrad', 'extra_params': [['vrad', 'km/s']]}
 
     results_dict = {'ahe': ahe_dict,#
-                    'dlogz': dlz_dict,
+                    'dlogz': dlz_dict,#
                     'ds48': d48_dict,#
                     'ds510': d51_dict,#
                     'exp': exp_dict,#
                     'fiducial': fid_dict,#
-                    'fullpriors': ful_dict,
+                    'fullpriors': ful_dict,#
                     'gas': gas_dict,#
                     'kappa': kap_dict,#
-                    'nlive': nlv_dict,
+                    'nlive': nlv_dict,#
                     'os1': s01_dict,#
                     'os2': s02_dict,#
                     'os3': s03_dict,#
@@ -406,7 +406,7 @@ grp = '/Users/jonathancohn/Documents/dyn_mod/groupmtg/'
 sig = 3  # 1 # 3  # show 1sigma errors or 3sigma errors
 
 # CHOOSE DICTIONARY
-dict = output_dictionary('nlive', sig)
+dict = output_dictionary('rfit0.4', sig)
 
 if 'nobh' in dict['pkl']:
     labels = np.array(['xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])

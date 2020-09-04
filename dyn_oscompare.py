@@ -34,27 +34,19 @@ direc = '/Users/jonathancohn/Documents/dyn_mod/nest_out/'
 grp = '/Users/jonathancohn/Documents/dyn_mod/groupmtg/'
 
 
-os_to_compare = [#'u2698_exv_os1_baseline_rhe_orig_nog_10000000_8_0.02_1594865056.9097123_end.pkl',
-                 'u2698_exv_os2_baseline_rhe_orig_nog_10000000_8_0.02_1593211158.390702_end.pkl',
-                 'u2698_exv_os3_baseline_rhe_orig_nog_10000000_8_0.02_1593216852.5147808_end.pkl',
-                 'u2698_exv_os4_baseline_rhe_orig_nog_10000000_8_0.02_1593211776.966962_end.pkl',
-                 'u2698_exv_os6_baseline_rhe_orig_nog_10000000_8_0.02_1593218525.8919191_end.pkl',
-                 'u2698_exv_os8_baseline_rhe_orig_nog_10000000_8_0.02_1593227152.5059612_end.pkl',
-                 'u2698_exv_os10_baseline_rhe_orig_nog_10000000_8_0.02_1593239740.6758_end.pkl',
-                 'u2698_exv_os12_baseline_rhe_orig_nog_10000000_8_0.02_1593265549.3681285_end.pkl',
-                 'u2698_exv_os14_baseline_rhe_orig_nog_10000000_8_0.02_1593261183.7849855_end.pkl',
-                 'u2698_exv_os16_baseline_rhe_orig_nog_10000000_8_0.02_1593336953.3834007_end.pkl']
+os_to_compare = ['ugc_2698_finaltests_os1_10000000_8_0.02_1598993131.9236333_end.pkl',
+                 'ugc_2698_finaltests_os2_10000000_8_0.02_1598993294.4051502_end.pkl',
+                 'ugc_2698_finaltests_os3_10000000_8_0.02_1598987576.2494218_end.pkl',
+                 'ugc_2698_finaltests_fiducial_10000000_8_0.02_1598991563.9127946_end.pkl',
+                 'ugc_2698_finaltests_os6_10000000_8_0.02_1599013569.0664136_end.pkl',
+                 'ugc_2698_finaltests_os8_10000000_8_0.02_1599021614.7866514_end.pkl',
+                 'ugc_2698_finaltests_os10_10000000_8_0.02_1599027485.286418_end.pkl',
+                 'ugc_2698_finaltests_os12_10000000_8_0.02_1599039316.859327_end.pkl']
 
-os_parfiles = [#'ugc_2698/ugc_2698_exv_os1_baseline_rhe_orig_nog_out.txt',
-               'ugc_2698/ugc_2698_exv_os2_baseline_rhe_orig_nog_out.txt',
-               'ugc_2698/ugc_2698_exv_os3_baseline_rhe_orig_nog_out.txt',
-               'ugc_2698/ugc_2698_exv_os4_baseline_rhe_orig_nog_out.txt',
-               'ugc_2698/ugc_2698_exv_os6_baseline_rhe_orig_nog_out.txt',
-               'ugc_2698/ugc_2698_exv_os8_baseline_rhe_orig_nog_out.txt',
-               'ugc_2698/ugc_2698_exv_os10_baseline_rhe_orig_nog_out.txt',
-               'ugc_2698/ugc_2698_exv_os12_baseline_rhe_orig_nog_out.txt',
-               'ugc_2698/ugc_2698_exv_os14_baseline_rhe_orig_nog_out.txt',
-               'ugc_2698/ugc_2698_exv_os16_baseline_rhe_orig_nog_out.txt']
+os_parfiles = ['ugc_2698/ugc_2698_finaltests_os1_out.txt', 'ugc_2698/ugc_2698_finaltests_os2_out.txt',
+               'ugc_2698/ugc_2698_finaltests_os3_out.txt', 'ugc_2698/ugc_2698_finaltests_fiducial_out.txt',
+               'ugc_2698/ugc_2698_finaltests_os6_out.txt', 'ugc_2698/ugc_2698_finaltests_os8_out.txt',
+               'ugc_2698/ugc_2698_finaltests_os10_out.txt', 'ugc_2698/ugc_2698_finaltests_os12_out.txt']
 
 chisq_array = np.zeros(shape=(len(os_to_compare)))
 mbh_array = np.zeros(shape=(len(os_to_compare), 3))
@@ -105,13 +97,40 @@ for osf in range(len(os_to_compare)):
     os_order.append(params['os'])
 
 
+plt.figure(figsize=(8,6))
+plt.errorbar(os_order, mbh_array[:, 1]/1e9, yerr=[mbh_array[:, 0]/1e9, mbh_array[:, 2]/1e9], fmt='ko')
+plt.ylim(2, 3)
+#plt.yscale("log")
+plt.ylabel(r'Black Hole Mass [$\frac{M_{\odot}}{1e9}$]')
+plt.xlabel(r'Oversampling factor')
+plt.show()
+
+plt.figure(figsize=(8,6))
 plt.plot(os_order, chisq_array, 'ko')
 plt.ylabel(r'$\chi^2$')
 plt.xlabel(r'Oversampling factor')
 plt.show()
 
-plt.errorbar(os_order, mbh_array[:, 1], yerr=[mbh_array[:, 0], mbh_array[:, 2]], fmt='ko')
-plt.yscale("log")
-plt.ylabel(r'Black Hole Mass [M$_{\odot}$]')
-plt.xlabel(r'Oversampling factor')
-plt.show()
+'''  # 
+os_to_compare = [#'u2698_exv_os1_baseline_rhe_orig_nog_10000000_8_0.02_1594865056.9097123_end.pkl',
+                 'u2698_exv_os2_baseline_rhe_orig_nog_10000000_8_0.02_1593211158.390702_end.pkl',
+                 'u2698_exv_os3_baseline_rhe_orig_nog_10000000_8_0.02_1593216852.5147808_end.pkl',
+                 'u2698_exv_os4_baseline_rhe_orig_nog_10000000_8_0.02_1593211776.966962_end.pkl',
+                 'u2698_exv_os6_baseline_rhe_orig_nog_10000000_8_0.02_1593218525.8919191_end.pkl',
+                 'u2698_exv_os8_baseline_rhe_orig_nog_10000000_8_0.02_1593227152.5059612_end.pkl',
+                 'u2698_exv_os10_baseline_rhe_orig_nog_10000000_8_0.02_1593239740.6758_end.pkl',
+                 'u2698_exv_os12_baseline_rhe_orig_nog_10000000_8_0.02_1593265549.3681285_end.pkl',
+                 'u2698_exv_os14_baseline_rhe_orig_nog_10000000_8_0.02_1593261183.7849855_end.pkl',
+                 'u2698_exv_os16_baseline_rhe_orig_nog_10000000_8_0.02_1593336953.3834007_end.pkl']
+
+os_parfiles = [#'ugc_2698/ugc_2698_exv_os1_baseline_rhe_orig_nog_out.txt',
+               'ugc_2698/ugc_2698_exv_os2_baseline_rhe_orig_nog_out.txt',
+               'ugc_2698/ugc_2698_exv_os3_baseline_rhe_orig_nog_out.txt',
+               'ugc_2698/ugc_2698_exv_os4_baseline_rhe_orig_nog_out.txt',
+               'ugc_2698/ugc_2698_exv_os6_baseline_rhe_orig_nog_out.txt',
+               'ugc_2698/ugc_2698_exv_os8_baseline_rhe_orig_nog_out.txt',
+               'ugc_2698/ugc_2698_exv_os10_baseline_rhe_orig_nog_out.txt',
+               'ugc_2698/ugc_2698_exv_os12_baseline_rhe_orig_nog_out.txt',
+               'ugc_2698/ugc_2698_exv_os14_baseline_rhe_orig_nog_out.txt',
+               'ugc_2698/ugc_2698_exv_os16_baseline_rhe_orig_nog_out.txt']
+# '''  #
