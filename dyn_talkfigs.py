@@ -177,7 +177,8 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
 
     noise = []  # For large N, Variance ~= std^2
     for z in range(zrange[0], zrange[1]):  # for each relevant freq slice, calculte std (aka rms) ~variance
-        noise.append(np.std(noise_ds[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
+        noise.append(np.std(noise_ds[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)],
+                            ddof=1))
 
     # CALCULATE VELOCITY WIDTH  # vsys = 6454.9 estimated from various test runs; see eg. Week of 2020-05-04 on wiki
     v_width = 2.99792458e5 * (1 + (6454.9 / 2.99792458e5)) * fstep / f_0  # velocity width [km/s] = c*(1+v/c)*fstep/f0
@@ -832,7 +833,24 @@ class ModelGrid:
             # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
             vel = np.sqrt(self.G_pc * m_R / R + vg**2)  # Keplerian velocity vel at each point in the disk
 
-        '''  # CALCULATE VCIRC(R) DUE TO DIFFERENT COMPONENTS
+        '''  # CALCULATE VCIRC(R) OR MASS(R) DUE TO DIFFERENT COMPONENTS
+        # MASS(R)
+        rads_ac = np.logspace(-2, 0.5)
+        rads_pc = rads_ac * self.pc_per_ac
+        # m_star = vcstar**2 * R / G [v = sqrt(GM/R)]
+        m_star = v_c_r(rads_ac)**2 * rads_pc / self.G_pc  # (km/s)^2 * pc / [(km/s)^2 pc Msol^-1] = Msol
+        mbh = self.mbh + np.zeros(shape=len(rads_ac))
+        plt.figure(figsize=(8,6))
+        plt.plot(rads_ac, m_star, 'r--', label=r'M$_*$')
+        plt.plot(rads_ac, mbh, 'k-', label=r'M$_\bullet$')
+        plt.legend()
+        plt.xlabel(r'radius [arcsec]')
+        plt.ylabel(r'Enclosed mass [M$_\odot$]')
+        plt.yscale("log")
+        plt.show()
+        print(oop)
+        
+        # VCIRC(R)
         rads_ac = np.logspace(-2, 0.5)
         rads_pc = rads_ac * self.pc_per_ac
         plt.plot(rads_ac, v_c_r(rads_ac), 'r:', label=r'v$_{\rm{circ}}$(stars)')
@@ -1065,8 +1083,8 @@ class ModelGrid:
         ell_2 = ellipse_fitting(data_ds, self.rfit, self.xell / self.ds, self.yell / self.ds2,
                                 self.resolution * self.ds, self.theta_ell, self.q_ell)  # create ellipse mask
         '''  # PLOT ELLIPSES ON DOWN-SAMPLED FLUX MAP
-        fig = plt.figure(figsize=(8,6))
-        ax = plt.gca()
+        #fig = plt.figure(figsize=(8,6))
+        #ax = plt.gca()
         hdu_m = fits.open(self.data_mask)
         data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
         hdu_m.close()
@@ -1077,45 +1095,65 @@ class ModelGrid:
         collapse_flux_v = np.zeros(shape=(len(data_ds[0]), len(data_ds[0][0])))
         for zi in range(len(data_ds)):
             collapse_flux_v += data_ds[zi] * mask_ds[zi] * v_width
+        
         # SET UP OBSERVATION AXES: initialize x,y axes at 0., with lengths = sub_cube.shape
-        x_locvb = (self.x_loc - self.xyrange[0]) / self.ds  # x_loc - xi
-        y_locvb = (self.y_loc - self.xyrange[2]) / self.ds2  # y_loc - yi
-        y_obs_acvb = np.asarray([0.] * len(self.ell_ds))
-        x_obs_acvb = np.asarray([0.] * len(self.ell_ds[0]))
+        #x_locvb = (self.x_loc - self.xyrange[0]) / self.ds  # x_loc - xi
+        #y_locvb = (self.y_loc - self.xyrange[2]) / self.ds2  # y_loc - yi
+        #y_obs_acvb = np.asarray([0.] * len(self.ell_ds))
+        #x_obs_acvb = np.asarray([0.] * len(self.ell_ds[0]))
         # Define coordinates to be 0,0 at center of the observed axes (find the central pixel number along each axis)
-        for i in range(len(x_obs_acvb)):
-            x_obs_acvb[i] = self.resolution * (i - x_locvb) * self.ds  # (arcsec/pix) * N_pix = arcsec
-        for i in range(len(y_obs_acvb)):
-            y_obs_acvb[i] = self.resolution * (i - y_locvb) * self.ds2
-        extent = [x_obs_acvb[0], x_obs_acvb[-1], y_obs_acvb[0], y_obs_acvb[-1]]
-        plt.imshow(collapse_flux_v, origin='lower', extent=extent)  # ell_2
+        #for i in range(len(x_obs_acvb)):
+        #    x_obs_acvb[i] = self.resolution * (i - x_locvb) * self.ds  # (arcsec/pix) * N_pix = arcsec
+        #for i in range(len(y_obs_acvb)):
+        #    y_obs_acvb[i] = self.resolution * (i - y_locvb) * self.ds2
+        #extent = [x_obs_acvb[0], x_obs_acvb[-1], y_obs_acvb[0], y_obs_acvb[-1]]
+        fig = plt.figure(figsize=(8,6))
+        ax = plt.gca()
+        plt.imshow(collapse_flux_v, origin='lower')  #, extent=extent)  # ell_2
         #plt.colorbar()
         #plt.show()
         from matplotlib import patches
+
+        # WTFFFF IS GOING ON HERE? RE-DO THIS PLOT FROM SCRATCH IF PLOTTING AGAIN?!
+        elx = self.xell / self.ds
+        ely = self.yell / self.ds
+        un = self.resolution * self.ds # / self.ds  # arcsec / final_pix
         #e3 = patches.Ellipse((0, 0), 2 * 1.0, 2 * 1.0 * self.q_ell, angle=np.rad2deg(self.theta_ell),
         #                     linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
-        e3 = patches.Ellipse((0, 0), 2 * 0.3, 2 * 0.3 * self.q_ell, angle=np.rad2deg(self.theta_ell),
+#        e1 = patches.Ellipse((elx,ely), 2 * self.rfit / self.resolution,
+#                             2 * self.rfit / self.resolution * self.q_ell, angle=np.rad2deg(self.theta_ell),
+#                             linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
+        e3 = patches.Ellipse((elx,ely), 2 * 0.3 / un, 2 * 0.3 * self.q_ell / un, angle=np.rad2deg(self.theta_ell),
                              linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
-        e2 = patches.Ellipse((0, 0), 2 * 0.5, 2 * 0.5 * self.q_ell, angle=np.rad2deg(self.theta_ell),
+        e4 = patches.Ellipse((elx,ely), 2 * 0.4 / un, 2 * 0.4 * self.q_ell / un, angle=np.rad2deg(self.theta_ell),
                              linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
-        e1 = patches.Ellipse((0, 0), 2 * self.rfit, 2 * self.rfit * self.q_ell, angle=np.rad2deg(self.theta_ell),
+        e5 = patches.Ellipse((elx,ely), 2 * 0.5 / un, 2 * 0.5 * self.q_ell / un, angle=np.rad2deg(self.theta_ell),
+                             linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
+        e6 = patches.Ellipse((elx,ely), 2 * 0.6 / un, 2 * 0.6 * self.q_ell / un, angle=np.rad2deg(self.theta_ell),
+                             linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
+        e7 = patches.Ellipse((elx,ely), 2 * self.rfit / un, 2 * self.rfit * self.q_ell / un, angle=np.rad2deg(self.theta_ell),
+                             linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
+        e8 = patches.Ellipse((elx,ely), 2 * 0.8 / un, 2 * 0.8 * self.q_ell / un, angle=np.rad2deg(self.theta_ell),
                              linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
 #        e1 = patches.Ellipse((self.xell / self.ds, self.yell / self.ds2), 2 * self.rfit / self.resolution / self.ds,
 #                             2 * self.rfit / self.resolution * self.q_ell / self.ds2, angle=np.rad2deg(self.theta_ell),
 #                             linewidth=2, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
-        print(e1)
+        # print(e1)
         #e1.width /= self.ds
         #e1.height /= self.ds
         #e1.x /= self.ds
         #e1.y /= self.ds2
-        ax.add_patch(e1)
-        ax.add_patch(e2)
         ax.add_patch(e3)
-        print('ell2')
+        ax.add_patch(e4)
+        ax.add_patch(e5)
+        ax.add_patch(e6)
+        ax.add_patch(e7)
+        ax.add_patch(e8)
+
         #plt.plot(self.xell / self.ds, self.yell / self.ds, 'w*')
-        #plt.plot(self.xell, self.yell, 'w*')
-        plt.xlabel('x [arcsec]')
-        plt.ylabel('y [arcsec]')
+        #plt.plot(self.xell , self.yell, 'w*')
+        # plt.xlabel('x [arcsec]')
+        # plt.ylabel('y [arcsec]')
         plt.show()
         print(oop)
         # '''  #
@@ -1132,14 +1170,25 @@ class ModelGrid:
         cs = []  # initialize chi^2 per slice
         chi_2 = 0.  # BUCKET
 
+        chi_disk = np.zeros(shape=ap_ds[0].shape)
+
         z_ind = 0  # the actual index for the model-data comparison cubes
         for z in range(self.zrange[0], self.zrange[1]):  # for each relevant freq slice (ignore slices with only noise)
             chi_sq += np.sum((ap_ds[z_ind] - data_ds[z_ind])**2 / self.noise[z_ind]**2)  # calculate chisq!
             cs.append(np.sum((ap_ds[z_ind] - data_ds[z_ind])**2 / self.noise[z_ind]**2))  # chisq per slice
             # np.std(x) = sqrt(mean(abs(x - x.mean())**2))
             chi_2 += np.sum((ap_2[z_ind] - data_2[z_ind])**2 / self.noise[z_ind]**2)  # BUCKET
+            chi_disk += (ap_ds[z_ind] - data_ds[z_ind])**2 / self.noise[z_ind]**2
 
             z_ind += 1  # the actual index for the model-data comparison cubes
+
+        '''  # PLOT THE CHI^2 (OR REDUCED CHI^2) MAP
+        fig = plt.figure(figsize=(10,6))
+        plt.imshow(chi_disk / len(ap_ds), origin='lower')  # / len(ap_ds) for reduced chi^2
+        cbar = plt.colorbar()
+        cbar.set_label(r'$\chi^2_\nu$', rotation=0., labelpad=10.)  # $\chi^2$; or $\chi^2_\nu$ for reduced chi^2
+        plt.show()
+        # '''  #
 
         if not self.quiet:
             print(np.sum(self.ell_ds), len(self.z_ax), n_pts)
@@ -1218,7 +1267,7 @@ class ModelGrid:
                 if ii == 0:
                     dlabel = r'Data'
                     mlabel = r'Model'
-                norm = np.amax(data_ds[:, iy[ii], ix[ii]])
+                norm = 1e-3  # np.amax(data_ds[:, iy[ii], ix[ii]])
                 #resid=False
                 if resid:
                     leg = 'upper center'
@@ -1239,9 +1288,15 @@ class ModelGrid:
                     ax[ii].step(vel_ax, data_ds[:, iy[ii], ix[ii]] / norm, color='k', where='mid', label=dlabel)
                     ax[ii].step(vel_ax, ap_ds[:, iy[ii], ix[ii]] / norm, color='b', where='mid', label=mlabel)
                     # ax[ii].axvline(x=0., color='k', ls='--', label=r'v$_{\text{sys}}$')
-                    fig.text(0.04, 0.5, r'Flux Density [arbitrary]', va='center', rotation='vertical')
-                    ax[ii].text(-200, 0.9, r'x=' + str(xp) + r'", y=' + str(yp) + r'"')
-            ax[-1].set_xlabel(r'Line-of-sight velocity [km/s]')
+                    fig.text(0.04, 0.5, r'Flux Density [mJy beam$^{-1}$]', va='center', rotation='vertical', fontsize=12)  # arbitrary
+                    # ax[ii].text(-200, 0.9, r'x=' + str(xp) + r'", y=' + str(yp) + r'"')
+                    ax[ii].text(-200, 0.9*np.amax(data_ds[:, iy[ii], ix[ii]])*1e3, r'x=' + str(xp) + r'", y=' + str(yp) + r'"')
+            # ax[-1].set_xlabel(r'Line-of-sight velocity [km/s]')
+            import matplotlib as mpl
+            mpl.rcParams['font.size'] = 12
+            mpl.rcParams['text.usetex'] = True
+            mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']  # for \text command
+            ax[-1].set_xlabel(r'$v_{\text{LOS}} - v_{\text{sys}}$ [km/s]')
             # ax[1].set_ylabel(r'Flux Density [arbitrary]')  # [Jy/beam]
             ax[0].legend(loc=leg)
             # fig.text(0.04, 0.5, r'Flux Density [arbitrary]', va='center', rotation='vertical')
@@ -2316,7 +2371,7 @@ if __name__ == "__main__":
     ytest = [6, 5, 7, 9, 11, 11, 8]
     xtalk = [4, 7, 13, 16]
     ytalk = [6, 5, 11, 11]
-    #mg.line_profiles(xtalk, ytalk, resid=True)
+    mg.line_profiles(xtalk, ytalk, resid=False)
     #mg.vor_moms(incl_beam=True, snr=10)
     mg.vor_moms(incl_beam=False, snr=10)
     #mg.pvd()

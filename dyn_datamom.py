@@ -96,6 +96,10 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
         hdul1.writeto(lucy_mask)  # write out to mask file
         print('mask created!')
 
+
+    # MAKE ALMA BEAM  x_std=major; y_std=minor; rot=90-PA; auto-create the beam file lucy_b if it doesn't yet exist
+    beam = make_beam(grid_size=grid_size, res=res, x_std=x_std, y_std=y_std, rot=np.deg2rad(90. - pa), fits_name=lucy_b)
+
     # COLLAPSE THE DATA CUBE
     fluxes, freq_ax, f_0, input_data, fstep = get_fluxes(data, data_mask, write_name=lucy_in)
 
@@ -110,7 +114,8 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
 
     noise = []  # For large N, Variance ~= std^2
     for z in range(zrange[0], zrange[1]):  # for each relevant freq slice, calculte std (aka rms) ~variance
-        noise.append(np.std(noise_ds[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)]))
+        noise.append(np.std(noise_ds[z, int(xyerr[2]/ds2):int(xyerr[3]/ds2), int(xyerr[0]/ds):int(xyerr[1]/ds)],
+                            ddof=1))
 
     # CALCULATE VELOCITY WIDTH  # vsys = 6454.9 estimated from various test runs; see eg. Week of 2020-05-04 on wiki
     v_width = 2.99792458e5 * (1 + (6454.9 / 2.99792458e5)) * fstep / f_0  # velocity width [km/s] = c*(1+v/c)*fstep/f0
@@ -121,7 +126,7 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
         collapsed_fluxes_vel += input_data[zi] * fullmask[zi] * v_width
     # collapsed_fluxes_vel[collapsed_fluxes_vel < 0] = 0.  # ignore negative values? probably not?
 
-    return fluxes, freq_ax, f_0, fstep, input_data, noise
+    return fluxes, freq_ax, f_0, fstep, input_data, noise, beam
 
 
 def get_sig(r=None, sig0=1., r0=1., mu=1., sig1=0.):
@@ -229,6 +234,60 @@ def rebin(data, nr, nc, avg=True):
             rebinned.append(reshaped)  # reshaped.shape = (len(data[0]) / nr, len(data[0][0]) / nc)
 
     return np.asarray(rebinned)
+
+
+def make_beam(grid_size=99, res=1., amp=1., x0=0., y0=0., x_std=1., y_std=1., rot=0., fits_name=None):
+    """
+    Generate a beam spread function for the ALMA beam
+
+    :param grid_size: size of grid (must be odd!)
+    :param res: resolution of the grid (arcsec/pixel)
+    :param amp: amplitude of the 2d gaussian
+    :param x0: mean of x axis of 2d gaussian
+    :param y0: mean of y axis of 2d gaussian
+    :param x_std: FWHM of beam in x [beam major axis] (to use for standard deviation of Gaussian) (in arcsec)
+    :param y_std: FWHM of beam in y [beam minor axis] (to use for standard deviation of Gaussian) (in arcsec)
+    :param rot: rotation angle in radians
+    :param fits_name: this name will be the filename to which the beam fits file is written (if None, write no file)
+
+    :return the synthesized beam
+    """
+
+    # SET RESOLUTION OF BEAM GRID THE SAME AS FLUXES GRID
+    x_beam = [0.] * grid_size
+    y_beam = [0.] * grid_size
+
+    # set center of the beam grid axes (find the central pixel number along each axis: same for x_beam and y_beam)
+    ctr = (len(x_beam) + 1.) / 2.  # +1 bc python starts counting at 0, grid_size is odd
+
+    # grid_size must be odd, so fill in the axes with resolution * ((i+1) - ctr)!
+    for i in range(len(x_beam)):
+        x_beam[i] = res * ((i + 1) - ctr)  # (arcsec/pix) * N_pixels = arcsec
+        y_beam[i] = res * ((i + 1) - ctr)  # (arcsec/pix) * N_pixels = arcsec
+
+    # SET UP MESHGRID
+    xx, yy = np.meshgrid(x_beam, y_beam)
+
+    # SET UP PSF 2D GAUSSIAN VARIABLES
+    n = 2.35482  # Convert from FWHM to std_dev: http://mathworld.wolfram.com/GaussianFunction.html
+    x_std /= n
+    y_std /= n
+    a = np.cos(rot) ** 2 / (2 * x_std ** 2) + np.sin(rot) ** 2 / (2 * y_std ** 2)
+    b = -np.sin(2 * rot) / (4 * x_std ** 2) + np.sin(2 * rot) / (4 * y_std ** 2)
+    c = np.sin(rot) ** 2 / (2 * x_std ** 2) + np.cos(rot) ** 2 / (2 * y_std ** 2)
+
+    # CALCULATE PSF, NORMALIZE IT TO AMPLITUDE
+    synth_beam = np.exp(-(a * (xx - x0) ** 2 + 2 * b * (xx - x0) * (yy - y0) + c * (yy - y0) ** 2))
+    A = amp / np.amax(synth_beam)  # normalize it so the input amplitude is the real amplitude
+    synth_beam *= A
+
+    # IF write_fits, WRITE PSF TO FITS FILE
+    if not Path(fits_name).exists():
+        hdu = fits.PrimaryHDU(synth_beam)
+        hdul = fits.HDUList([hdu])
+        hdul.writeto(fits_name)
+
+    return synth_beam
 
 
 def map_averaging(m1, xpix, ypix, binNum, x_in, nPixels):
@@ -773,7 +832,7 @@ class ModelGrid:
             plt.show()
 
 
-    def pvd(self):
+    def pvd(self, fs=15):
         from pvextractor import pvextractor
         from pvextractor.geometry import path
         from pvextractor import extract_pv_slice
@@ -817,7 +876,8 @@ class ModelGrid:
         yf = yc + extend * np.sin(np.deg2rad(self.theta))
 
         path1 = path.Path([(x0, y0), (xf, yf)], width=self.pvd_width)
-        vel_ax = vel_ax[self.zrange[0]:self.zrange[1]]
+        print(len(self.freq_ax), len(vel_ax))
+        vel_ax = vel_ax[self.zrange[0]:self.zrange[1]]  # comment out (already done) if mg.vor_moms is run first!
         # '''  #
 
         '''  # SIMPLE DATA SUM
@@ -904,7 +964,8 @@ class ModelGrid:
         # '''  #
 
         pvd_dat, slice = extract_pv_slice(self.clipped_data, path1)  # self.input_data * data_mask
-        #pvd_dat, slice = extract_pv_slice(self.input_data, path1)  # self.input_data * data_mask
+
+        # pvd_dat, slice = extract_pv_slice(self.input_data, path1)  # self.input_data * data_mask
 
         fig, ax = plt.subplots(1, 1, figsize=(8,6))
         plt.subplots_adjust(hspace=0.02)
@@ -933,9 +994,13 @@ class ModelGrid:
         vmax = np.amax(slice)
         p1 = ax.pcolormesh(x_rad, vel_ax, slice, vmin=vmin, vmax=vmax, cmap='Greys')  # x_rad[0], x_rad[-1]
         cb = fig.colorbar(p1, ax=ax, pad=0.02)  # ticks=[-0.5, 0, 0.5, 1, 1.5],
-        cb.set_label(r'mJy beam$^{-1}$', rotation=270, labelpad=20.)
-        ax.set_ylabel('Velocity [km/s]')
-        plt.xlabel('Distance [arcsec]')
+        cb.set_label(r'mJy beam$^{-1}$', rotation=270, labelpad=20., fontsize=fs)
+        # ax.set_ylabel('Velocity [km/s]')
+        import matplotlib as mpl
+        mpl.rcParams['text.usetex'] = True
+        mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']  # for \text command
+        ax.set_ylabel(r'$v_{\text{LOS}} - v_{\text{sys}}$ [km s$^{-1}$]', fontsize=fs)
+        plt.xlabel('Distance [arcsec]', fontsize=fs)
         #plt.colorbar()
         plt.show()
         print(oop)
@@ -1231,7 +1296,7 @@ class ModelGrid:
         return xpix, ypix, binNum, x_in, nPixels
 
 
-    def vor_moms(self, incl_beam, snr=10):
+    def vor_moms(self, incl_beam, snr=10, fs=20):
         """
         Calculate moment maps, average them within voronoi bins
         # using equations from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
@@ -1305,10 +1370,16 @@ class ModelGrid:
             beam_overlay = np.zeros(shape=self.clipped_data[0].shape)  # overlay the beam on the same scale as the moment map
             # print(self.beam.shape, beam_overlay.shape)
             # beam_overlay[:self.beam.shape[0], (beam_overlay.shape[1] - self.beam.shape[1]):] = self.beam
-            beam_overlay[:self.beam.shape[0] - 6, (beam_overlay.shape[1] - self.beam.shape[1]) + 6:] = self.beam[6:,:-6]
+            #beam_overlay[:self.beam.shape[0] - 6, (beam_overlay.shape[1] - self.beam.shape[1]) + 6:] = self.beam[6:,:-6]
+            #print(beam_overlay.shape, self.beam.shape)
+            #beam_overlay *= np.amax(data_masked_m0) / np.amax(beam_overlay)  # scale so beam shows up well on colormap
+            #data_masked_m0 += beam_overlay  # display on the moment 0 data panel
+            ebeam = patches.Ellipse((0.65,-0.5), params['x_fwhm'], params['y_fwhm'],
+                                    angle=90 + params['PAbeam'], linewidth=2, edgecolor='w', fill=False)
+            # beam_overlay[:self.beam.shape[0] - 6, (beam_overlay.shape[1] - self.beam.shape[1]) + 6:] = self.beam[6:,:-6]
+            beam_overlay[:21, 63:] = self.beam[5:26, 5:26]
             print(beam_overlay.shape, self.beam.shape)
             beam_overlay *= np.amax(data_masked_m0) / np.amax(beam_overlay)  # scale so beam shows up well on colormap
-            data_masked_m0 += beam_overlay  # display on the moment 0 data panel
 
         # AVERAGE EACH MAP WITHING THE VORONOI BIN
         xpix, ypix, binNum, x_in, nPixels = self.just_the_bins(snr=snr)
@@ -1338,20 +1409,20 @@ class ModelGrid:
 
         # AVERAGE EACH MOMENT MAP WITHIN THE VORONOI BINS
         d0 = map_averaging(data_masked_m0, xpix, ypix, binNum, x_in, nPixels)
-        cbar_0 = r'mJy km/s beam$^{-1}$'  # same for data, model, residual for moment 0
+        cbar_0 = r'mJy km s$^{-1}$ beam$^{-1}$'  # same for data, model, residual for moment 0
         cmap_0 = 'viridis'  # same for data, model, residual for moment 0
         min0 = np.nanmin(d0)
         max0 = np.nanmax(d0)
 
         data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
         d1 = map_averaging(data_m1, xpix, ypix, binNum, x_in, nPixels)
-        cbar_1 = r'km/s'  # same for data, model, residual for moment 1
+        cbar_1 = r'km s$^{-1}$'  # same for data, model, residual for moment 1
         cmap_dm1 = 'RdBu_r'  # for data, model for moment 1
         min1 = np.nanmin(d1)
         max1 = np.nanmax(d1)
 
         d2 = map_averaging(data_m2, xpix, ypix, binNum, x_in, nPixels)
-        cbar_2 = r'km/s'  # same for data, model, residual for moment 2
+        cbar_2 = r'km s$^{-1}$'  # same for data, model, residual for moment 2
         cmap_2 = 'viridis'  # same for data, model, residual for moment 2
         min2 = np.nanmin(d2)
         max2 = np.nanmax(d2)
@@ -1375,15 +1446,18 @@ class ModelGrid:
 
         fig, ax = plt.subplots(3, 1, figsize=(16, 18))  # rows, cols, figsize=(width, height)
         plt.subplots_adjust(hspace=0.02, wspace=0.02)
+        plt.gca().set_aspect('equal', adjustable='box')
 
         # PLOT MOMENT 0
         imd0 = ax[0].imshow(d0, vmin=min0, vmax=max0, origin='lower', extent=extent, cmap=cmap_0)
         cbard0 = fig.colorbar(imd0, ax=ax[0], pad=0.02)
         cbard0.set_label(cbar_0, rotation=270, labelpad=20.)
+        if incl_beam:
+            ax[0].add_patch(ebeam)
 
         ax[0].set_xticklabels([])
         # ax[0].set_yticklabels([])
-        ax[0].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+        ax[0].set_ylabel(r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]
 
         # PLOT MOMENT 1
         imd1 = ax[1].imshow(d1, vmin=min1, vmax=max1, origin='lower', extent=extent, cmap=cmap_dm1)
@@ -1392,7 +1466,7 @@ class ModelGrid:
 
         ax[1].set_xticklabels([])
         # ax[1].set_yticklabels([])
-        ax[1].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+        ax[1].set_ylabel(r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]
 
         # PLOT MOMENT 2
         imd2 = ax[2].imshow(d2, vmin=min2, vmax=max2, origin='lower', extent=extent, cmap=cmap_2)
@@ -1401,8 +1475,8 @@ class ModelGrid:
 
         #ax[2].set_xticklabels([])
         #ax[2].set_yticklabels([])
-        ax[2].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
-        ax[2].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+        ax[2].set_xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)  # x [arcsec]
+        ax[2].set_ylabel(r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]
 
         plt.show()
 
@@ -1827,7 +1901,7 @@ if __name__ == "__main__":
                          zrange=[params['zi'], params['zf']], avg=avging, q_ell=params['q_ell'],
                          theta_ell=np.deg2rad(params['theta_ell']), xell=params['xell'], yell=params['yell'])
 
-    fluxes, freq_ax, f_0, fstep, input_data, noise = mod_ins
+    fluxes, freq_ax, f_0, fstep, input_data, noise, beam = mod_ins
 
     hduin = fits.open(params['lucy_in'])
     l_in = hduin[0].data
@@ -1849,7 +1923,7 @@ if __name__ == "__main__":
     mg = ModelGrid(resolution=params['resolution'], os=params['os'], x_loc=params['xloc'], y_loc=params['yloc'],
                    mbh=params['mbh'], inc=np.deg2rad(params['inc']), vsys=params['vsys'], dist=params['dist'],
                    theta=np.deg2rad(params['PAdisk']), input_data=input_data, lucy_out=None, out_name=out,
-                   beam=None, rfit=params['rfit'], enclosed_mass=params['mass'], ml_ratio=params['ml_ratio'],
+                   beam=beam, rfit=params['rfit'], enclosed_mass=params['mass'], ml_ratio=params['ml_ratio'],
                    sig_type=params['s_type'], zrange=[params['zi'], params['zf']], menc_type=params['mtype'],
                    sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], f_w=params['f'],
                    ds=params['ds'], ds2=params['ds2'], noise=noise, reduced=True, freq_ax=freq_ax, q_ell=params['q_ell'],
@@ -1857,14 +1931,14 @@ if __name__ == "__main__":
                    f_0=f_0, bl=params['bl'], xyrange=[params['xi'], params['xf'], params['yi'], params['yf']],
                    n_params=n_free, data_mask=params['mask'], incl_gas=params['incl_gas']=='True', vrad=params['vrad'],
                    kappa=params['kappa'], omega=params['omega'], co_rad=None, co_sb=None, avg=avging,
-                   pvd_width=params['x_fwhm'] / params['resolution'], vcg_func=None)
+                   pvd_width=0.142838 / params['resolution'], vcg_func=None)
 
     # x_fwhm=0.197045, y_fwhm=0.103544 -> geometric mean = sqrt(0.197045*0.103544) = 0.142838; regular mean = 0.1502945
     #mg.grids()
     #mg.convolution()
     #chi_sq = mg.chi2()
-    #mg.vor_moms(incl_beam=True, snr=10)
-    mg.pvd()
+    mg.pvd(fs=16)
+    # mg.vor_moms(incl_beam=True, snr=10, fs=12)
     #mg.vor_moms(incl_beam=False, snr=10)
 #    mg.just_the_bins(snr=10)
     print(oop)

@@ -18,6 +18,7 @@ from matplotlib import pyplot as plt
 
 # re-defining plotting defaults
 from matplotlib import rcParams
+''' #
 rcParams.update({'xtick.major.pad': '7.0'})
 rcParams.update({'xtick.major.size': '7.5'})
 rcParams.update({'xtick.major.width': '1.5'})
@@ -31,9 +32,10 @@ rcParams.update({'ytick.minor.pad': '7.0'})
 rcParams.update({'ytick.minor.size': '3.5'})
 rcParams.update({'ytick.minor.width': '1.0'})
 rcParams.update({'font.size': 15})
+# '''
 
 result = []
-with open('groupmtg/kinemetry_out_vorbin_avgdat_snr10.txt', 'r') as f:
+with open('groupmtg/kinemetry_out_vorbin_snr10_ring.txt', 'r') as f:
     for line in f:
         if not line.startswith('#'):
             cols = line.split()
@@ -69,6 +71,27 @@ for j in range(len(result)):
     elif 11 * interval <= j < 12 * interval:
         erk51.append(result[j])
 
+print(np.mean(q), np.median(q))
+
+fig, ax = plt.subplots(4, 1, sharex=True, figsize=(7,12))
+fig.subplots_adjust(hspace=0.)
+
+ax[0].errorbar(rad, pa, yerr=er_pa, fmt='ko')
+ax[0].set_ylabel('$\Gamma_k$ [deg]')
+
+ax[1].errorbar(rad, q, yerr=er_q, fmt='ko')
+ax[1].set_ylabel('q$_k$')
+
+ax[2].errorbar(rad, k1, yerr=erk1, fmt='ko')
+ax[2].set_ylabel(r'k$_1$ [km s$^{-1}$]')
+
+ax[3].errorbar(rad, k51, yerr=erk51, fmt='ko')
+ax[3].set_ylabel(r'k$_5$/k$_1$')
+ax[3].set_xlabel('Radius [arcsec]')
+plt.show()
+
+
+'''  # PLOT INDIVIDUALLY
 plt.errorbar(rad, pa, yerr=er_pa, fmt='ko')
 plt.xlabel('Radius [arcsec]')
 plt.ylabel('Position Angle [deg]')
@@ -89,3 +112,4 @@ plt.xlabel('Radius [arcsec]')
 plt.ylabel(r'k$_5$/k$_1$')
 plt.show()
 
+# '''  #

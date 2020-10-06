@@ -98,7 +98,7 @@ def mbh_relations(mbh, mbh_err, lum_k=None, mass_k=None, sigma=None, xerr=None, 
         for item in range(len(mbh)):
             #plt.errorbar(lum_k[item], mbh[item], yerr=[[mbh_err[item][0]], [mbh_err[item][1]]], fmt='bD')
             plt.errorbar(lum_k[item], mbh[item], yerr=[[mbh_err[item][0]], [mbh_err[item][1]]], xerr=xerr, color='b',
-                         marker=None)
+                         marker='D')
             plt.text(9.5e10, 2.3e9, 'U2698', color='b')
             # , assuming an H-K color of 0.2 (Vazdekis et al. 1996) and a K-band solar absolute magnitude of 3.29.
         plt.xscale('log')
@@ -152,7 +152,8 @@ def mbh_relations(mbh, mbh_err, lum_k=None, mass_k=None, sigma=None, xerr=None, 
             plt.text(245, 5.5e9, 'M1216', color='r')
 
         for item in range(len(mbh)):
-            plt.errorbar(sigma[item], mbh[item], yerr=[[mbh_err[item][0]], [mbh_err[item][1]]], xerr=xerr, color='bD')
+            plt.errorbar(sigma[item], mbh[item], yerr=[[mbh_err[item][0]], [mbh_err[item][1]]], xerr=xerr, color='b',
+                         marker='D')
             #plt.errorbar(sigma[item], mbh[item], yerr=[[mbh_err[item][0]], [mbh_err[item][1]]], xerr=xerr, color='b',
             #             marker=None)
             plt.text(310, 1.5e9, 'U2698', color='b')
@@ -169,27 +170,44 @@ def mbh_relations(mbh, mbh_err, lum_k=None, mass_k=None, sigma=None, xerr=None, 
         fig = plt.figure(figsize=(8,6))
         mass_x = np.logspace(8, 12.7)
         # TO DO: correct relations for mass!
-        kormendy_and_ho = 0.542e9 * (mass_x / 1e11) ** 1.21
-        kah_up = 0.611e9 * (mass_x / 1e11) ** 1.21  # 1.30
-        kah_down = 0.481e9 * (mass_x / 1e11) ** 1.21  # 1.12
+        kormendy_and_ho = 0.49e9 * (mass_x / 1e11) ** 1.17
+        saglia = 10 ** (0.846 * np.log10(mass_x) - 0.713)
+        mcconnell_and_ma = 10 ** (8.46 + 1.05 * np.log10(mass_x / 1e11))
+        sani = 10 ** (8.16 + 0.79 * np.log10(mass_x) - 11)
+        savorgnan = 10 ** (8.56 + 1.04 * np.log10(mass_x / (10 ** 10.81)))
+
+        plt.plot(mass_x, saglia, 'k-', label='Saglia et al. (2016)')
+        print(saglia * 10**.431)
+        print(saglia * 10**-.431)
+        plt.fill_between(mass_x, saglia * (10 ** 0.431), saglia * (10 ** -0.431), color='k', alpha=0.2)  # relations + intrinsic scatter  # CORRECT
+
+        plt.plot(mass_x, savorgnan, 'm-.', label='Savorgnan (2016)')
+
+        plt.plot(mass_x, kormendy_and_ho, 'g--', label='Kormendy \& Ho (2013)')
+
+        plt.plot(mass_x, mcconnell_and_ma, color='darkorange', linestyle=':', label='McConnell \& Ma (2013)')
+
+        # plt.plot(mass_x, sani, color='b', linestyle=(0, (3, 5, 1, 5, 1, 5)), label='Sani (2011)')  # dashdotdotted
 
         if incl_past:
-            plt.errorbar(1.6e11, 4.9e9, xerr=2.8e10, yerr=1.6e9, fmt='rs')  # NGC 1277  # TO DO: correct error
+            plt.errorbar(1.6e11, 4.9e9, yerr=1.6e9, fmt='rs')  # NGC 1277  # TO DO: correct error  # xerr=2.8e10,
             plt.text(1.2e11, 8e9, 'N1277', color='r')
-            plt.errorbar(1.0e11, 3e9, xerr=[[2.7e10], [2.7e10]], yerr=[[1.1e9], [1e9]], fmt='rs')  # N1271  # TO DO: correct error
+            plt.errorbar(1.0e11, 3e9, yerr=[[1.1e9], [1e9]], fmt='rs')  # N1271  # TO DO: correct error  # xerr=[[2.7e10], [2.7e10]],
             plt.text(1.3e10, 3.2e9, 'N1271', color='r')
             plt.errorbar(1.1e11, 4.9e9, xerr=[[0.9e11], [0.5e11]], yerr=1.7e9, fmt='rs')  # MARK 1216
             plt.text(3e10, 5.5e9, 'M1216', color='r')
 
         for item in range(len(mbh)):
-            plt.errorbar(lum_k[item], mbh[item], yerr=[[mbh_err[item][0]], [mbh_err[item][1]]], fmt='bD')
-            plt.text(8.5e10, 2.3e9, 'U2698', color='b')  # TO DO UPDATE
+            plt.errorbar(mass_k[item], mbh[item], yerr=[[mbh_err[item][0]], [mbh_err[item][1]]], fmt='bD')
+            plt.text(1.3e11, 2.3e9, 'U2698', color='b')
             # , assuming an H-K color of 0.2 (Vazdekis et al. 1996) and a K-band solar absolute magnitude of 3.29.
+        plt.xscale('log')
         plt.yscale('log')
         plt.xlabel(r'M$_{\rm{bulge}}$ [M$_{\odot}$]')
         plt.ylabel(r'M$_{\rm{BH}}$ [M$_{\odot}$]')
         import matplotlib.ticker as mticker
-        plt.xlim(50, 500)
+        plt.legend()
+        plt.xlim(1e8, 5e12)
         plt.ylim(1e6, 2.5e10)
         plt.show()
 
@@ -479,7 +497,7 @@ def get_fluxes(data_cube, data_mask, write_name=None):
 
     collapsed_fluxes[collapsed_fluxes < 0] = 0.
 
-    if not Path(write_name).exists():
+    if not Path(write_name).exists():  # if lucy_in file (flux map to be lucy-deconvolved) does not exist, create it!
         hdu = fits.PrimaryHDU(collapsed_fluxes)
         hdul = fits.HDUList([hdu])
         hdul.writeto(write_name)  # '/Users/jonathancohn/Documents/dyn_mod/' +
@@ -641,6 +659,14 @@ def gas_vel(resolution, co_rad, co_sb, dist, f_0, inc_fixed, zfixed=0.02152):
     # Interpolate CO surface brightness vs elliptical mean radii, to construct Sigma(rvals).
     # Units [Jy km/s/beam] * [Msol/(Jy km/s)] / [pc^2/beam] = [Msol/pc^2]
     sigr3_func_r = interpolate.interp1d(co_radii, co_sb, kind='quadratic', fill_value='extrapolate')
+
+    # ESTIMATE GAS MASS
+    #i1 = integrate.quad(sigr3_func_r, 0, rvals[-1])[0]
+    #print(i1)
+    #i1 *= np.cos(inc_fixed) * msol_per_jykms  # Jy km/s/beam * [Msol/(Jy km/s)]
+    #print(np.log10(i1))  # 8.736371904617355
+    #print(oop)
+    # END ESTIMATE GAS MASS
 
     # PYTHON INTEGRATION: calculate the inner integral (see eqn 2.157 from Binney & Tremaine)
     int1 = np.zeros(shape=len(avals))
@@ -828,6 +854,7 @@ class ModelGrid:
         subpix_deconvolved = subpix_deconvolved[self.os * self.xyrange[2]:self.os * self.xyrange[3],
                                                 self.os * self.xyrange[0]:self.os * self.xyrange[1]]  # stored: y,x
 
+
         self.z_ax = z_ax[self.zrange[0]:self.zrange[1]]
         self.freq_ax = self.freq_ax[self.zrange[0]:self.zrange[1]]
 
@@ -958,6 +985,14 @@ class ModelGrid:
         center = (R == 0.)  # Doing this is only relevant if we have pixel located exactly at the center
         v_los[center] = 0.  # if any point is at x_disk, y_disk = (0., 0.), set velocity there = 0.
 
+        #vkap = abs(self.kappa * vrad_sign * abs(vel * np.sin(alpha) * np.sin(self.inc)))
+        #print(vkap[R < 1.6], np.median(vkap), np.amax(vkap), np.amin(vkap))
+        #print(np.percentile(vkap, [0.15, 50., 99.85]))  #[16., 50., 84.]))
+        #plt.imshow(self.kappa * vrad_sign * abs(vel * np.sin(alpha) * np.sin(self.inc)), origin='lower')
+        #plt.colorbar()
+        #plt.show()
+        #print(oop)
+
         # CALCULATE VELOCITY PROFILES
         sigma = get_sig(r=R, sig0=self.sig_params[0], r0=self.sig_params[1], mu=self.sig_params[2],
                         sig1=self.sig_params[3])[self.sig_type]
@@ -1060,29 +1095,81 @@ class ModelGrid:
             return chi_sq  # Reduced or Not depending on reduced = True or False
 
 
-    def scaling_rels(self, rel=0):
+    def scaling_rels(self, rel=0, err_type='systematic'):
         """
         Print scaling relations!
         TO DO: add rel=2 (mbh-bulge mass relation)
         TO DO: move this to dynesty_out.py
 
         :param rel: which scaling relation! rel=0: mbh-sigma. rel=1: mbh-lum. rel=2: mbh-mass.
+        :param err_type: errors on UGC 2698 to plot ('systematic' or 'statistical')
         :return:
         """
-        lum_H = mge_sum(self.enclosed_mass, self.pc_per_ac)
-        # lum_H = 10**11.3348
-        # print(lum_H, np.log10(lum_H))
-        LKcorr = lum_H * 10 ** (0.4 * 0.2)
+
+        if err_type == 'statistical':
+            err_low = 5.5e7
+            err_hi = 5.6e7
+        else:
+            err_low = 0.80e9
+            err_hi = 0.70e9
+
         if rel == 0:
-            mbh_relations(self.mbh, [[5.5e7, 5.6e7]], sigma=[304], xerr=[[6], [6]])
+            mbh_relations([self.mbh], [[err_low, err_hi]], sigma=[304], xerr=[[6], [6]])
             # mbh_relations([10 ** 9.39], [[0.71e9, 0.7e9]], sigma=[304], xerr=[[6], [6]])
 
         elif rel == 1:
-            mbh_relations([10 ** 9.39], [[5.5e7, 5.6e7]], lum_k=[LKcorr])
+            lum_H = mge_sum(self.enclosed_mass, self.pc_per_ac)
+            # lum_H = 10**11.3348
+            LKcorr = lum_H * 10 ** (0.4 * 0.2)
+            mbh_relations([self.mbh], [[err_low, err_hi]], lum_k=[LKcorr])
             # mbh_relations([10 ** 9.39], [[0.71e9, 0.7e9]], lum_k=[LKcorr])
+        elif rel == 2:
+            lum_H = mge_sum(self.enclosed_mass, self.pc_per_ac)
+            M_H = lum_H * self.ml_ratio
+            mbh_relations([self.mbh], [[err_low, err_hi]], mass_k=[M_H])
+            print(M_H, self.ml_ratio)
+
         # def mbh_relations(mbh, mbh_err, lum_k=None, mass_k=None, sigma=None, incl_past=True):
         print('done')
 
+
+    def mge_sbprof(self):
+        """
+        Calculate mass profile of the MGE along the major axis
+
+        :param mge: MGE file, containing columns: j [component number], I [Lsol,H/pc^2], sigma[arcsec], q[unitless]
+        :param pc_per_ac: parsec per arcsec scaling
+        :return: the total luminosity from integrating the MGE
+        """
+
+        intensities = []
+        sigmas = []
+        qs = []
+        with open(self.enclosed_mass, 'r') as mfile:
+            for line in mfile:
+                if not line.startswith('#'):
+                    cols = line.split()
+                    intensities.append(float(cols[1]))  # cols[0] = component number, cols[1] = intensity[Lsol,H/pc^2]
+                    sigmas.append(float(cols[2]))  # cols[2] = sigma[arcsec]
+                    qs.append(float(cols[3]))  # cols[3] = qObs[unitless]
+
+        gaus = []
+
+        rad = np.logspace(-1., 0.5, 25)  # arcsec
+
+        for i in range(len(intensities)):
+            # volume under 2D gaussian function = 2 pi A sigma_x sigma_y
+            # gaus.append(2 * np.pi * intensities[i] * qs[i] * (self.pc_per_ac * sigmas[i]) ** 2)  # convert sigma to pc
+
+            area = np.pi * (rad * self.pc_per_ac)**2 * qs[i]  # pc^2
+            gaus.append(intensities[i] * np.exp(-rad**2 / (2 * sigmas[i]**2)) * self.ml_ratio * area)
+
+        for i in range(len(gaus)):
+            plt.plot(rad, gaus[i], 'k--')
+        plt.axhline(y=self.mbh)
+        plt.show()
+
+        print(oop)
 
     def line_profiles(self, ix, iy, show_freq=False):  # compare line profiles at the given indices ix, iy
         f_sys = self.f_0 / (1 + self.zred)
@@ -1162,7 +1249,11 @@ class ModelGrid:
             #plt.plot(vel_ax, ap_ds[:, iy, ix], color='r', marker='+', ls='none', label=r'Model')  # 'r+'
             plt.step(vel_ax, ap_ds[:, iy, ix], color='b', where='mid', label=r'Model')  # width=vel_ax[1] - vel_ax[0], alpha=0.5
             plt.axvline(x=0., color='k', ls='--', label=r'v$_{\text{sys}}$')
-            plt.xlabel(r'Line-of-sight velocity [km/s]')
+            # plt.xlabel(r'Line-of-sight velocity [km/s]')
+            import matplotlib as mpl
+            mpl.rcParams['text.usetex'] = True
+            mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']  # for \text command
+            plt.xlabel(r'Velocity $v_{\text{LOS}} - v_{\text{sys}}$ [km/s]')
         plt.legend()
         plt.ylabel(r'Flux Density [Jy/beam]')
         plt.show()
@@ -1240,7 +1331,10 @@ class ModelGrid:
         #ax[2].set_xticks([2, 27, 52, 77, 102])
         #ax[2].set_xticklabels([x_rad[2], x_rad[27], x_rad[52], x_rad[77], x_rad[102]])
 
-        ax[1].set_ylabel('Line-of-sight velocity [km/s]')
+        import matplotlib as mpl
+        mpl.rcParams['text.usetex'] = True
+        mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']  # for \text command
+        ax[1].set_ylabel(r'$v_{\text{LOS}} - v_{\text{sys}}$ [km s$^{-1}$]')
         plt.xlabel('Distance [arcsec]')
         #plt.colorbar()
         plt.show()
@@ -1331,7 +1425,7 @@ class ModelGrid:
         return xpix, ypix, binNum, x_in, nPixels
 
 
-    def vor_moms(self, incl_beam, snr=10, just_data=True):
+    def vor_moms(self, incl_beam, snr=10, just_data=False, fs=20):
         """
         Calculate moment maps, average them within voronoi bins
         # using equations from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
@@ -1356,8 +1450,13 @@ class ModelGrid:
         clipped_mask = data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
                                  self.xyrange[0]:self.xyrange[1]]
 
+        # CALCULATE MOMENT 0 for data, for voronoi-binned lucy-input flux map
+        data_lucy_flux = np.zeros(shape=self.convolved_cube[0].shape)
+        for z in range(len(vel_ax)):
+            data_lucy_flux += abs(self.fstep) * self.clipped_data[z] * clipped_mask[z]  # SUM_z data[z] * mask[z] * dz
+
         # CALCULATE MOMENT 0 for data, then for model
-        data_masked_m0 = np.zeros(shape=self.ell_mask.shape)
+        data_masked_m0 = np.zeros(shape=self.convolved_cube[0].shape)
         for z in range(len(vel_ax)):
             data_masked_m0 += abs(velwidth) * self.clipped_data[z] * clipped_mask[z]  # SUM_z data[z] * mask[z] * dz
 
@@ -1372,20 +1471,36 @@ class ModelGrid:
         subtr = 0.
         if incl_beam:  # if including beam overlay
             # TO DO: beam overlay not working right now?!
-            beam_overlay = np.zeros(shape=self.ell_mask.shape)  # overlay the beam on the same scale as the moment map
+            beam_overlay = np.zeros(shape=self.convolved_cube[0].shape)  # overlay the beam on the same scale as the moment map
             # print(self.beam.shape, beam_overlay.shape)
+            # print(self.beam.shape, self.convolved_cube.shape)
             # beam_overlay[:self.beam.shape[0], (beam_overlay.shape[1] - self.beam.shape[1]):] = self.beam
-            beam_overlay[:self.beam.shape[0] - 6, (beam_overlay.shape[1] - self.beam.shape[1]) + 6:] = self.beam[6:,:-6]
+            ebeam = patches.Ellipse((0.65,-0.5), params['x_fwhm'], params['y_fwhm'],
+                                    angle=90 + params['PAbeam'], linewidth=2, edgecolor='w', fill=False)
+            # beam_overlay[:self.beam.shape[0] - 6, (beam_overlay.shape[1] - self.beam.shape[1]) + 6:] = self.beam[6:,:-6]
+            beam_overlay[:21, 63:] = self.beam[5:26, 5:26]
             print(beam_overlay.shape, self.beam.shape)
             beam_overlay *= np.amax(data_masked_m0) / np.amax(beam_overlay)  # scale so beam shows up well on colormap
-            data_masked_m0 += beam_overlay  # display on the moment 0 data panel
-            subtr = beam_overlay
+            #data_masked_m0 += beam_overlay  # display on the moment 0 data panel
+            #subtr = beam_overlay
 
         # CALCULATE RESIDUAL
         residual_m0 = (data_masked_m0 - subtr) - model_masked_m0
 
         # AVERAGE EACH MAP WITHING THE VORONOI BIN -- CALCULATE THE VORONOI BINS!
         xpix, ypix, binNum, x_in, nPixels = self.just_the_bins(snr=snr)
+
+        # AVERAGE lucy-in fluxmap within voronoi bins
+        dlucy = map_averaging(data_lucy_flux, xpix, ypix, binNum, x_in, nPixels)
+        dlucy_full = np.zeros(shape=self.lucy_out.shape)
+        dlucy_full[self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]] = dlucy
+        dl_name = '/Users/jonathancohn/Documents/dyn_mod/ugc_2698/ugc_2698_fluxmap_20.3kms_strictmask2_voronoibin.fits'
+        if not Path(dl_name).exists():  # if voronoi-binned lucy_in file does not exist, create it!
+            hdu = fits.PrimaryHDU(dlucy_full)
+            hdul = fits.HDUList([hdu])
+            hdul.writeto(dl_name)
+            hdul.close()
+            print(oop)
 
         # CALCULATE NUMERATOR AND DENOMINATOR USED IN MOMENT 1 & 2, FOR MODEL THEN FOR DATA
         model_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
@@ -1427,17 +1542,19 @@ class ModelGrid:
         d0 = map_averaging(data_masked_m0, xpix, ypix, binNum, x_in, nPixels)
         m0 = map_averaging(model_masked_m0, xpix, ypix, binNum, x_in, nPixels)
         r0 = map_averaging(residual_m0, xpix, ypix, binNum, x_in, nPixels)
-        cbar_0 = r'mJy km/s beam$^{-1}$'  # same for data, model, residual for moment 0
+        cbar_0 = r'mJy km s$^{-1}$ beam$^{-1}$'  # same for data, model, residual for moment 0
         cmap_0 = 'viridis'  # same for data, model, residual for moment 0
         min0 = np.amin([np.nanmin(m0), np.nanmin(d0)])
         max0 = np.amax([np.nanmax(m0), np.nanmax(d0)])
+        #if incl_beam:
+        #    d0 += beam_overlay  # OPTION 1 (looks a bit too much like an extension of the galaxy)
 
         data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
         residual_m1 = (data_m1 - subtr) - model_m1  # calculate residual
         d1 = map_averaging(data_m1, xpix, ypix, binNum, x_in, nPixels)
         m1 = map_averaging(model_m1, xpix, ypix, binNum, x_in, nPixels)
         r1 = map_averaging(residual_m1, xpix, ypix, binNum, x_in, nPixels)
-        cbar_1 = r'km/s'  # same for data, model, residual for moment 1
+        cbar_1 = r'km s$^{-1}$'  # same for data, model, residual for moment 1
         cmap_dm1 = 'RdBu_r'  # for data, model for moment 1
         cmap_r1 = 'viridis'  # for residual for moment 1
         min1 = np.amin([np.nanmin(m1), np.nanmin(d1)])
@@ -1446,7 +1563,7 @@ class ModelGrid:
         d2 = map_averaging(data_m2, xpix, ypix, binNum, x_in, nPixels)
         m2 = map_averaging(model_m2, xpix, ypix, binNum, x_in, nPixels)
         r2 = map_averaging(residual_m2, xpix, ypix, binNum, x_in, nPixels)
-        cbar_2 = r'km/s'  # same for data, model, residual for moment 2
+        cbar_2 = r'km s$^{-1}$'  # same for data, model, residual for moment 2
         cmap_2 = 'viridis'  # same for data, model, residual for moment 2
         min2 = np.amin([np.nanmin(m2), np.nanmin(d2)])
         max2 = np.amax([np.nanmax(m2), np.nanmax(d2)])
@@ -1471,14 +1588,17 @@ class ModelGrid:
         if just_data:
             fig, ax = plt.subplots(3, 1, figsize=(6, 18))  # rows, cols, figsize=(width, height)
             plt.subplots_adjust(hspace=0.02, wspace=0.02)
+            plt.gca().set_aspect('equal', adjustable='box')
 
             # PLOT MOMENT 0
             imd0 = ax[0].imshow(d0, vmin=min0, vmax=max0, origin='lower', extent=extent, cmap=cmap_0)
             cbard0 = fig.colorbar(imd0, ax=ax[0], pad=0.02)
             cbard0.set_label(cbar_0, rotation=270, labelpad=20.)
+            if incl_beam:
+                ax[0][0].add_patch(ebeam)
 
             ax[0].set_xticklabels([])
-            ax[0].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+            ax[0].set_ylabel(r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]
 
             # PLOT MOMENT 1
             imd1 = ax[1].imshow(d1, vmin=min1, vmax=max1, origin='lower', extent=extent, cmap=cmap_dm1)
@@ -1486,27 +1606,30 @@ class ModelGrid:
             cbard1.set_label(cbar_1, rotation=270, labelpad=20.)
 
             ax[1].set_xticklabels([])
-            ax[1].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+            ax[1].set_ylabel(r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]
 
             # PLOT MOMENT 2
             imd2 = ax[2].imshow(d2, vmin=min2, vmax=max2, origin='lower', extent=extent, cmap=cmap_2)
             cbard2 = fig.colorbar(imd2, ax=ax[2], pad=0.02)
             cbard2.set_label(cbar_2, rotation=270, labelpad=20.)
 
-            ax[2].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
-            ax[2].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]
+            ax[2].set_xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)  # x [arcsec]
+            ax[2].set_ylabel(r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]
 
             plt.show()
 
         else:
             # START PLOTTING
-            fig, ax = plt.subplots(3, 3, figsize=(12,8))
+            fig, ax = plt.subplots(3, 3, figsize=(13,8))  # (12,8)
+            plt.gca().set_aspect('equal', adjustable='box')
             plt.subplots_adjust(hspace=0.02, wspace=0.02)
 
             # PLOT MOMENT 0
             imd0 = ax[0][0].imshow(d0, vmin=min0, vmax=max0, origin='lower', extent=extent, cmap=cmap_0)
             cbard0 = fig.colorbar(imd0, ax=ax[0][0], pad=0.02)
             # cbard0.set_label(cbar_0, rotation=270, labelpad=20.)
+            if incl_beam:
+                ax[0][0].add_patch(ebeam)
 
             imm0 = ax[0][1].imshow(m0, vmin=min0, vmax=max0, origin='lower', extent=extent, cmap=cmap_0)
             cbarm0 = fig.colorbar(imm0, ax=ax[0][1], pad=0.02)
@@ -1521,7 +1644,7 @@ class ModelGrid:
             ax[0][1].set_yticklabels([])
             ax[0][2].set_xticklabels([])  # xticks shared, yticks shared
             ax[0][2].set_yticklabels([])
-            ax[0][0].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]  # only label in first row is on y axis
+            ax[0][0].set_ylabel(r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]  # only label in first row is on y axis
 
             # PLOT MOMENT 1
             imd1 = ax[1][0].imshow(d1, vmin=min1, vmax=max1, origin='lower', extent=extent, cmap=cmap_dm1)
@@ -1541,7 +1664,7 @@ class ModelGrid:
             ax[1][1].set_yticklabels([])
             ax[1][2].set_xticklabels([])  # xticks shared, yticks shared
             ax[1][2].set_yticklabels([])
-            ax[1][0].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]  # only label in second row is on y axis
+            ax[1][0].set_ylabel(r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]  # only label in second row is on y axis
 
             # PLOT MOMENT 2
             imd2 = ax[2][0].imshow(d2, vmin=min2, vmax=max2, origin='lower', extent=extent, cmap=cmap_2)
@@ -1558,10 +1681,10 @@ class ModelGrid:
 
             ax[2][1].set_yticklabels([])  # xticks not shared, yticks shared!
             ax[2][2].set_yticklabels([])  # xticks not shared, yticks shared!
-            ax[2][0].set_ylabel(r'y [arcsec]', fontsize=20)  # y [arcsec]  # only left-most panel has y axis label
-            ax[2][0].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]  # all panels in bottom row have x axis label
-            ax[2][1].set_xlabel(r'x [arcsec]', fontsize=20)  # y [arcsec]
-            ax[2][2].set_xlabel(r'x [arcsec]', fontsize=20)  # x [arcsec]
+            ax[2][0].set_ylabel(r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]  # only left-most panel has y axis label
+            ax[2][0].set_xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)  # x [arcsec]  # all panels in bottom row have x axis label
+            ax[2][1].set_xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)  # y [arcsec]
+            ax[2][2].set_xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)  # x [arcsec]
 
             plt.show()
 
@@ -1588,7 +1711,7 @@ class ModelGrid:
         clipped_mask = data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
                                  self.xyrange[0]:self.xyrange[1]]
 
-        data_masked_m0 = np.zeros(shape=self.ell_mask.shape)
+        data_masked_m0 = np.zeros(shape=self.convolved_cube[0].shape)
         for z in range(len(vel_ax)):
             data_masked_m0 += abs(velwidth) * self.clipped_data[z] * clipped_mask[z]
 
@@ -1605,7 +1728,7 @@ class ModelGrid:
 
         subtr = 0.
         if incl_beam:
-            beam_overlay = np.zeros(shape=self.ell_mask.shape)
+            beam_overlay = np.zeros(shape=self.convolved_cube[0].shape)
             print(self.beam.shape, beam_overlay.shape)
             # beam_overlay[:self.beam.shape[0], (beam_overlay.shape[1] - self.beam.shape[1]):] = self.beam
             beam_overlay[:self.beam.shape[0] - 6, (beam_overlay.shape[1] - self.beam.shape[1]) + 6:] = self.beam[6:, :-6]
@@ -1723,7 +1846,7 @@ class ModelGrid:
             subtr = 0.
             if incl_beam:
                 d2 = np.nan_to_num(d2)
-                beam_overlay = np.zeros(shape=self.ell_mask.shape)
+                beam_overlay = np.zeros(shape=self.convolved_cube[0].shape)
                 beam_overlay[:self.beam.shape[0], (beam_overlay.shape[1] - self.beam.shape[1]):] = self.beam
                 print(beam_overlay.shape, self.beam.shape)
                 beam_overlay *= np.amax(d2) / np.amax(beam_overlay)
@@ -1783,7 +1906,7 @@ class ModelGrid:
 
             subtr = 0.
             if incl_beam:
-                beam_overlay = np.zeros(shape=self.ell_mask.shape)
+                beam_overlay = np.zeros(shape=self.convolved_cube[0].shape)
                 beam_overlay[:self.beam.shape[0], (beam_overlay.shape[1] - self.beam.shape[1]):] = self.beam
                 print(beam_overlay.shape, self.beam.shape)
                 beam_overlay *= np.amax(data_mom) / np.amax(beam_overlay)
@@ -1895,7 +2018,7 @@ if __name__ == "__main__":
         params['ds2'] = params['ds']
 
     # DECIDE HERE WHETHER TO AVG IN THE REBIN() FUNCTION (avging=True) OR SUM (avging=False)
-    avging = False
+    avging = True
 
     # CREATE THINGS THAT ONLY NEED TO BE CALCULATED ONCE (collapse fluxes, lucy, noise)
     mod_ins = model_prep(data=params['data'], ds=params['ds'], ds2=params['ds2'], lucy_out=params['lucy'],
@@ -1942,14 +2065,25 @@ if __name__ == "__main__":
                    f_0=f_0, bl=params['bl'], xyrange=[params['xi'], params['xf'], params['yi'], params['yf']],
                    n_params=n_free, data_mask=params['mask'], incl_gas=params['incl_gas']=='True', vrad=params['vrad'],
                    kappa=params['kappa'], omega=params['omega'], co_rad=co_ell_rad, co_sb=co_ell_sb, avg=avging,
-                   pvd_width=params['x_fwhm']/params['resolution'], vcg_func=vcg_in)
+                   pvd_width=0.142838/params['resolution'], vcg_func=vcg_in)
     # pvd_width = (params['x_fwhm']*params['y_fwhm'])/params['resolution']/2.
 
     # x_fwhm=0.197045, y_fwhm=0.103544 -> geometric mean = sqrt(0.197045*0.103544) = 0.142838; regular mean = 0.1502945
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()
-    #mg.pvd()
+    mg.pvd()
+    xtalk = [4, 7, 13, 16]
+    ytalk = [6, 5, 11, 11]
+    xtalk = 14
+    ytalk = 9
+    mg.line_profiles(xtalk, ytalk)
+    # mg.vor_moms(incl_beam=True, fs=12)
+    print(oop)
+    mg.mge_sbprof()
+    mg.scaling_rels(rel=2)
+    # mg.vor_moms(incl_beam=True)
+    # mg.pvd()
     # mg.line_profiles(5,6)
     #xtalk = [4, 7, 13, 16]
     #ytalk = [6, 5, 11, 11]
@@ -2024,3 +2158,30 @@ if __name__ == "__main__":
 
     print(time.time() - t0m, ' seconds')
     print('True Total time: ' + str(time.time() - t0_true) + ' seconds')  # ~1 second for a cube of 84x64x49
+
+'''
+        fig, ax = plt.subplots(1, 3)
+        hdu_m = fits.open('ugc_2698/ugc_2698_20.3_strict2_lucyout_n10.fits')
+        fiduciallucy = hdu_m[0].data
+        hdu_m.close()
+        im0 = ax[0].imshow(fiduciallucy, origin='lower')
+        cbar = fig.colorbar(im0, ax=ax[0], pad=0.02)
+        im1 = ax[1].imshow(self.lucy_out, origin='lower')
+        cbar = fig.colorbar(im1, ax=ax[1], pad=0.02)
+        im2 = ax[2].imshow(fiduciallucy - self.lucy_out, origin='lower')
+        cbar = fig.colorbar(im2, ax=ax[2], pad=0.02)
+        plt.show()
+        print(oop)
+'''
+
+'''
+    params, priors, n_free, qobs = par_dicts(args['parfile'], q=True)
+
+    # make sure inc prior does not conflict with q
+    print(priors['inc'])
+    qint_pri = np.amax(np.rad2deg(np.arccos(np.sqrt((400*qobs**2 - 1.)/399.))))
+    priors['inc'][0] = np.amax([priors['inc'][0], np.rad2deg(np.arccos(np.amin(qobs)))])
+    priors['inc'][0] = np.amax([priors['inc'][0], qint_pri])
+    print(priors['inc'])
+    print(oop)
+'''

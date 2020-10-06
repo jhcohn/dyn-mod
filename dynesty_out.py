@@ -34,6 +34,123 @@ rcParams.update({'ytick.minor.width': '1.0'})
 rcParams.update({'font.size': 15})
 
 
+def big_table(output_dicts, logged=False, avg=True):
+
+    texlines = '\\begin{table}\n    \\begin{center}\n    \\textbf{Table 3} \\\\\n    Model test results \\\\\n    ' +\
+               '\\begin{tabular}{ |l|r|r|r| }\n    \hline\n    Model & \multicolumn{1}{|l|}{$\chi^2_\\nu$}' +\
+               ' & \multicolumn{1}{|l|}{\mbh [$\\times10^9M_\odot$]} & $\Delta$\mbh \\\\\n    \hline\n    \hline\n'
+
+    direc = '/Users/jonathancohn/Documents/dyn_mod/nest_out/'
+    mbh_fiducial = 2461189947.064265 / 1e9
+
+    table_names = {'ahe': 'dust-corrected', 'dlogz0.001': 'dlogz = 0.001', 'ds48': 'ds $=4\\times8$',
+                   'ds510': 'ds $=5\\times10$', 'exp': 'expsig', 'fiducial': 'fiducial', 'fullpriors': 'wide priors',
+                   'gas': 'gas', 'kappa': '$\kappa$', 'lucyn5': 'Lucy n = 5', 'lucyn15': 'Lucy n = 15',
+                   'nlive1000': 'nlive = 1000', 'os1': '$s=1$', 'os2': '$s=2$', 'os3': '$s=3$', 'os6': '$s=6$',
+                   'os8': '$s=8$', 'os10': '$s=10$', 'os12': '$s=12$', 'rfit0.3': 'r$_{\\text{ell}}=0\\farcs{3}$',
+                   'rfit0.4': 'r$_{\\text{ell}}=0\\farcs{4}$', 'rfit0.5': 'r$_{\\text{ell}}=0\\farcs{5}$',
+                   'rfit0.6': 'r$_{\\text{ell}}=0\\farcs{6}$', 'rfit0.8': 'r$_{\\text{ell}}=0\\farcs{8}$',
+                   'rre': 'original $H$-band', 'vrad': 'v$_{\\text{rad}}$'}
+
+    for od in output_dicts:
+        thing = direc + output_dicts[od]['pkl']
+        parfile = output_dicts[od]['outpf']
+        model = output_dicts[od]['mod']
+        print(model)
+
+        params, priors, nfree, qobs = dm.par_dicts(parfile, q=True)  # get params and file names from output parfile
+
+        if 'ds2' not in params:
+            params['ds2'] = params['ds']
+
+        mod_ins = dm.model_prep(data=params['data'], ds=params['ds'], ds2=params['ds2'], lucy_out=params['lucy'],
+                                lucy_b=params['lucy_b'], lucy_mask=params['lucy_mask'], lucy_in=params['lucy_in'],
+                                lucy_it=params['lucy_it'], data_mask=params['mask'], grid_size=params['gsize'],
+                                res=params['resolution'], x_std=params['x_fwhm'], y_std=params['y_fwhm'], avg=avg,
+                                xyerr=[params['xerr0'], params['xerr1'], params['yerr0'], params['yerr1']],
+                                zrange=[params['zi'], params['zf']], theta_ell=np.deg2rad(params['theta_ell']),
+                                xell=params['xell'], yell=params['yell'], q_ell=params['q_ell'], pa=params['PAbeam'])
+
+        lucy_mask, lucy_out, beam, fluxes, freq_ax, f_0, fstep, input_data, noise, co_rad, co_sb = mod_ins
+        vrad = None
+        kappa = None
+        omega = None
+        if model == 'vrad':
+            vrad = params['vrad']
+        elif model == 'omega':
+            kappa = params['kappa']
+            omega = params['omega']
+        elif model == 'kappa':
+            kappa = params['kappa']
+
+        inc_fixed = np.deg2rad(67.7)  # based on fiducial model (67.68 deg)
+        vcg_in = None
+        if params['incl_gas'] == 'True':
+            vcg_in = dm.gas_vel(params['resolution'], co_rad, co_sb, params['dist'], f_0, inc_fixed, zfixed=0.02152)
+
+        mg = dm.ModelGrid(x_loc=params['xloc'], y_loc=params['yloc'], mbh=params['mbh'], ml_ratio=params['ml_ratio'],
+            inc=np.deg2rad(params['inc']), vsys=params['vsys'], theta=np.deg2rad(params['PAdisk']), vrad=vrad,
+            kappa=kappa, omega=omega, f_w=params['f'], os=params['os'], enclosed_mass=params['mass'],
+            sig_params=[params['sig0'], params['r0'], params['mu'], params['sig1']], resolution=params['resolution'],
+            lucy_out=lucy_out, out_name=None, beam=beam, rfit=params['rfit'], zrange=[params['zi'], params['zf']],
+            dist=params['dist'], input_data=input_data, sig_type=params['s_type'], menc_type=params['mtype'],
+            theta_ell=np.deg2rad(params['theta_ell']), xell=params['xell'],yell=params['yell'], q_ell=params['q_ell'],
+            ds=params['ds'], ds2=params['ds2'], reduced=True, f_0=f_0, freq_ax=freq_ax, noise=noise, bl=params['bl'],
+            fstep=fstep, xyrange=[params['xi'], params['xf'], params['yi'], params['yf']], n_params=nfree,
+            data_mask=params['mask'], incl_gas=params['incl_gas']=='True', co_rad=co_rad, co_sb=co_sb, vcg_func=vcg_in,
+            pvd_width=params['x_fwhm'] / params['resolution'], avg=avg, quiet=True)
+
+        mg.grids()
+        mg.convolution()
+        chi2, chi2_nu = mg.chi2()
+        # print(model)
+        print(chi2, chi2_nu)
+
+        fmt = "{{0:{0}}}".format('.2f').format
+        fmt3 = "{{0:{0}}}".format('.3f').format
+        chititle = r"${{{0}}}$".format(fmt3(chi2))
+        chinutitle = r"${{{0}}}$".format(fmt3(chi2_nu))
+        # texlines += '    ' + table_names[model] + ' & ' + chititle + ' (' + chinutitle + ') & '
+        texlines += '    ' + table_names[model] + ' & ' + chinutitle + ' & '
+
+        with open(thing, 'rb') as pk:
+            u = pickle._Unpickler(pk)
+            u.encoding = 'latin1'
+            dyn_res = u.load()  #
+            # dyn_res = pickle.load(pk)  #
+
+        weights = np.exp(dyn_res['logwt'] - dyn_res['logz'][-1])  # normalized weights
+
+        quants = [0.0015, 0.5, 0.9985]
+        if sig == 1 or sig == 'mod':
+            quants = [0.16, 0.5, 0.84]
+        elif sig == 2:
+            quants = [0.025, 0.5, 0.975]
+        elif sig == 3:
+            quants = [0.0015, 0.5, 0.9985]
+
+        mbh_q = dyfunc.quantile(dyn_res['samples'][:, 0], quants, weights=weights)
+        if logged:
+            q = np.log10(mbh_q)
+        else:
+            q = np.asarray(mbh_q) / 1e9
+
+        dmbh = 100 * (q[1] - mbh_fiducial) / mbh_fiducial
+
+        title = r"${{{0}}}_{{-{1}}}^{{+{2}}}$"
+        if sig == 'mod':
+            mod = (2*4597) ** (1/4)  # BUCKET 4606 changes if the fitting region changes
+            texlines += title.format(fmt(q[1]), fmt((q[1] - q[0]) * mod), fmt((q[2] - q[1]) * mod)) + ' & '
+        else:
+            texlines += title.format(fmt(q[1]), fmt(q[1] - q[0]), fmt(q[2] - q[1])) + ' & ' + fmt(dmbh) + '\% \\\\\n' +\
+                        '    \hline\n'
+
+    texlines += '    \end{tabular}\n    \end{center}\n    \caption{\\textbf{to do}}\n    \label{tab_compare}\n' +\
+                '\end{table}'
+
+    return texlines
+
+
 def table_it(things, parfiles, models, parlabels, sig=3, avg=True, logged=False, percent_diff=False):
 
     hdr = '| model | '
@@ -203,7 +320,7 @@ def my_own_thing(results, par_labels, ax_labels, quantiles, ax_lims=None, fs=12,
     plt.show()
 
 
-def output_dictionary(model, err):
+def output_dictionaries(err):
     fid_dict = {'pkl': 'ugc_2698_finaltests_fiducial_10000000_8_0.02_1598991563.9127946_end.pkl',
                 'name': 'finaltests/u2698_finaltests_fiducial_' + str(err) + 'sig.png',
                 'cornername': 'finaltests/u2698_finaltests_fiducial_corner_' + str(err) + 'sig.png',
@@ -372,32 +489,58 @@ def output_dictionary(model, err):
                 'outpf': 'ugc_2698/ugc_2698_finaltests_vrad_out.txt',
                 'mod': 'vrad', 'extra_params': [['vrad', 'km/s']]}
 
-    results_dict = {'ahe': ahe_dict,#
-                    'dlogz': dlz_dict,#
+    l05_dict = {'pkl': 'ugc_2698_finaltests_lucyn5_10000000_8_0.02_1599618047.3316298_end.pkl',
+                'name': 'finaltests/u2698_finaltests_lucyn5_' + str(err) + 'sig.png',
+                'cornername': 'finaltests/u2698_finaltests_lucyn5_corner_' + str(err) + 'sig.png',
+                'inpf': 'ugc_2698/ugc_2698_finaltests_lucyn5.txt',
+                'outpf': 'ugc_2698/ugc_2698_finaltests_lucyn5_out.txt',
+                'mod': 'lucyn5', 'extra_params': None}
+
+    l15_dict = {'pkl': 'ugc_2698_finaltests_lucyn15_10000000_8_0.02_1599615320.6710668_end.pkl',
+                'name': 'finaltests/u2698_finaltests_lucyn15_' + str(err) + 'sig.png',
+                'cornername': 'finaltests/u2698_finaltests_lucyn15_corner_' + str(err) + 'sig.png',
+                'inpf': 'ugc_2698/ugc_2698_finaltests_lucyn15.txt',
+                'outpf': 'ugc_2698/ugc_2698_finaltests_lucyn15_out.txt',
+                'mod': 'lucyn15', 'extra_params': None}
+
+    lvb_dict = {'pkl': 'ugc_2698_finaltests_lucyvb_10000000_8_0.02_1600323488.5804818_end.pkl',
+                'name': 'finaltests/u2698_finaltests_lucyvb_' + str(err) + 'sig.png',
+                'cornername': 'finaltests/u2698_finaltests_lucyvb_corner_' + str(err) + 'sig.png',
+                'inpf': 'ugc_2698/ugc_2698_finaltests_lucyvb.txt',
+                'outpf': 'ugc_2698/ugc_2698_finaltests_lucyvb_out.txt',
+                'mod': 'lucyvb', 'extra_params': None}
+
+    results_dict = {
+                    'fiducial': fid_dict,#
+                    'ahe': ahe_dict,#
+                    'rre': rre_dict,#
+                    'os1': s01_dict,  #
+                    'os2': s02_dict,  #
+                    'os3': s03_dict,  #
+                    'os6': s06_dict,  #
+                    'os8': s08_dict,  #
+                    'os10': s10_dict,  #
+                    'os12': s12_dict,  #
                     'ds48': d48_dict,#
                     'ds510': d51_dict,#
-                    'exp': exp_dict,#
-                    'fiducial': fid_dict,#
-                    'fullpriors': ful_dict,#
+                    'rfit0.3': r03_dict,  #
+                    'rfit0.4': r04_dict,  #
+                    'rfit0.5': r05_dict,  #
+                    'rfit0.6': r06_dict,  #
+                    'rfit0.8': r08_dict,  #
                     'gas': gas_dict,#
                     'kappa': kap_dict,#
+                    'vrad': vra_dict,
+                    'exp': exp_dict,#
+                    'lucyn5': l05_dict,#
+                    'lucyn15': l15_dict,#
+                    'lucyvb': lvb_dict,#
                     'nlive': nlv_dict,#
-                    'os1': s01_dict,#
-                    'os2': s02_dict,#
-                    'os3': s03_dict,#
-                    'os6': s06_dict,#
-                    'os8': s08_dict,#
-                    'os10': s10_dict,#
-                    'os12': s12_dict,#
-                    'rfit0.3': r03_dict,#
-                    'rfit0.4': r04_dict,#
-                    'rfit0.5': r05_dict,#
-                    'rfit0.6': r06_dict,#
-                    'rfit0.8': r08_dict,#
-                    'rre': rre_dict,#
-                    'vrad': vra_dict}#
+                    'dlogz': dlz_dict,#
+                    'fullpriors': ful_dict,#
+                    }
 
-    return results_dict[model]
+    return results_dict
 
 
 # DEFINE DIRECTORIES
@@ -406,16 +549,24 @@ grp = '/Users/jonathancohn/Documents/dyn_mod/groupmtg/'
 sig = 3  # 1 # 3  # show 1sigma errors or 3sigma errors
 
 # CHOOSE DICTIONARY
-dict = output_dictionary('rfit0.4', sig)
+dict = output_dictionaries(sig)['fiducial']
 
 if 'nobh' in dict['pkl']:
-    labels = np.array(['xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])
-    ax_lab = np.array(['pixels', 'pixels', 'km/s', 'deg', 'deg', 'km/s', r'M$_{\odot}$/L$_{\odot}$', 'unitless'])
+    # labels = np.array(['xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])
+    labels = np.array([r'$x_0$', r'$y_0$', r'$\sigma_0$', r'$\iota$', r'$\Gamma$', r'v$_{\text{sys}}$', r'$M/L$',
+                       r'$f_0$'])
+    ax_lab = np.array(['pixels', 'pixels', 'km $s^{-1}$', 'deg', 'deg', 'km $s^{-1}$', r'M$_{\odot}$/L$_{\odot}$',
+                       'unitless'])
     tablabs = np.array(['reduced chi^2', 'xloc [pix]', 'yloc [pix]', 'sig0 [km/s]', 'inc [deg]',
                         'PAdisk [deg]', 'vsys [km/s]', 'ml_ratio [Msol/Lsol]', 'f [unitless]'])
 else:
-    labels = np.array(['mbh', 'xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])
-    ax_lab = np.array([r'$\log_{10}$(M$_{\odot}$)', 'pixels', 'pixels', 'km/s', 'deg', 'deg', 'km/s',
+    # labels = np.array(['mbh', 'xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])
+    # labels = np.array([r'M$_{\text{BH}}$', r'$x_0$', r'$y_0$', r'$\sigma_0$', r'$\iota$', r'$\Gamma$',
+    labels = np.array([r'$\log_{10}(M_{\text{BH}})$', r'$x_0$', r'$y_0$', r'$\sigma_0$', r'$\iota$', r'$\Gamma$',
+                       r'v$_{\text{sys}}$', r'$M/L$', r'$f_0$'])
+    # ax_lab = np.array([r'$\log_{10}$(M$_{\odot}$)', 'pixels', 'pixels', 'km/s', 'deg', 'deg', 'km/s',
+    #                    r'M$_{\odot}$/L$_{\odot}$', 'unitless'])
+    ax_lab = np.array([r'$\log_{10}$(M$_{\odot}$)', 'pixels', 'pixels', 'km $s^{-1}$', 'deg', 'deg', 'km $s^{-1}$',
                        r'M$_{\odot}$/L$_{\odot}$', 'unitless'])
     tablabs = np.array(['chi^2' 'reduced chi^2', 'log10(mbh) [Msol]', 'xloc [pix]', 'yloc [pix]', 'sig0 [km/s]',
                         'inc [deg]', 'PAdisk [deg]', 'vsys [km/s]', 'ml_ratio [Msol/Lsol]', 'f [unitless]'])
@@ -429,6 +580,10 @@ print(labels)
 
 '''  #
 # ONLY table_it *AFTER* OUT FILE CREATED
+#tl = big_table(output_dictionaries(sig))
+#print(tl)
+#print(oop)
+
 hd, hl, li, tx = table_it([direc + dict['pkl']], [dict['outpf']], [dict['mod']], tablabs, sig=sig, logged=True,
                           percent_diff=True)
 print(hd)
@@ -508,7 +663,9 @@ elif sig == 3:
 logm = True
 if logm and 'nobh' not in dict['pkl']:
     dyn_res['samples'][:, 0] = np.log10(dyn_res['samples'][:, 0])
-    labels[0] = 'log mbh'  # r'log$_{10}$mbh'
+    # labels[0] = 'log mbh'  # r'log$_{10}$mbh'
+    # labels[0] = r'log$_{{10}}($M$_{\text{BH}})$'
+    # labels[0] = '$\\log_{10}(M_{\\text{BH}})$'
 
 ax_lims = None
 
@@ -528,8 +685,15 @@ else:
     ax_lims = [[8., 10.], [124., 128.], [148, 152], [0., 40.], [52.4, 89], [5., 35.], [6405, 6505], [0.3, 3.],
                [0.5, 1.5]]
 
+import matplotlib as mpl
+# mpl.rcParams['font.size'] = 20
+mpl.rcParams['text.usetex'] = True
+mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']  # for \text command
+mpl.rcParams['xtick.labelsize'] = 20
+mpl.rcParams['ytick.labelsize'] = 20
+
 # ELSE USE THIS
-my_own_thing(dyn_res['samples'], labels, ax_lab, sigs, ax_lims=ax_lims, savefig=grp + dict['name'])
+# my_own_thing(dyn_res['samples'], labels, ax_lab, sigs, ax_lims=ax_lims, savefig=grp + dict['name'])
 
 # plot initial run (res1; left)
 
@@ -544,12 +708,13 @@ whspace = 0.05  # size of width/height margin
 plotdim = factor * ndim + factor * (ndim - 1.) * whspace  # plot size
 dim = lbdim + plotdim + trdim  # total size
 fig, axes = plt.subplots(ndim, ndim, figsize=(1.7*dim, dim))
-fg, ax = dyplot.cornerplot(dyn_res, color='blue', show_titles=True, max_n_ticks=3, quantiles=qts, labels=labels,
-                           fig=(fig, axes))
-plt.savefig(grp + dict['cornername'])
+fg, ax = dyplot.cornerplot(dyn_res, color='blue', show_titles=True, title_kwargs={'fontsize': 30}, max_n_ticks=3,
+                           quantiles=qts, labels=labels, label_kwargs={'fontsize': 30}, fig=(fig, axes))
+# plt.savefig(grp + dict['cornername'])
+plt.savefig(grp + 'finaltests/u2698_finaltests_fiducial_corner_3sig_font30tick20.png')
 #plt.show()
 
-# '''  #
+'''  #
 # ONLY table_it *AFTER* OUT FILE CREATED
 hd, hl, li, tx = table_it([direc + dict['pkl']], [dict['outpf']], [dict['mod']], tablabs, sig=sig, logged=True,
                           percent_diff=True)
