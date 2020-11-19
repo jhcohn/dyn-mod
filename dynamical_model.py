@@ -1362,13 +1362,19 @@ class ModelGrid:
         plt.show()
 
 
-    def just_the_bins(self, snr):
+    def just_the_bins(self, snr, pars_backup=None):
         """
         Calculate voronoi bins from flux map
 
         :param snr: target Signal-to-Noise Ratio
         :return:
         """
+        try:
+            params
+        except NameError:
+            print("params is undefined!")
+            params = pars_backup
+        print(params, self.input_data.shape)
         hdu_m = fits.open(self.data_mask)
         data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
         hdu_m.close()
@@ -1425,7 +1431,7 @@ class ModelGrid:
         return xpix, ypix, binNum, x_in, nPixels
 
 
-    def vor_moms(self, incl_beam, snr=10, just_data=False, fs=20):
+    def vor_moms(self, incl_beam, snr=10, just_data=False, fs=20, pars_backup=None):
         """
         Calculate moment maps, average them within voronoi bins
         # using equations from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
@@ -1475,8 +1481,8 @@ class ModelGrid:
             # print(self.beam.shape, beam_overlay.shape)
             # print(self.beam.shape, self.convolved_cube.shape)
             # beam_overlay[:self.beam.shape[0], (beam_overlay.shape[1] - self.beam.shape[1]):] = self.beam
-            ebeam = patches.Ellipse((0.65,-0.5), params['x_fwhm'], params['y_fwhm'],
-                                    angle=90 + params['PAbeam'], linewidth=2, edgecolor='w', fill=False)
+            ebeam = patches.Ellipse((-0.65,-0.5), params['x_fwhm'], params['y_fwhm'],
+                                    angle=-(90 + params['PAbeam']), linewidth=2, edgecolor='w', fill=False)
             # beam_overlay[:self.beam.shape[0] - 6, (beam_overlay.shape[1] - self.beam.shape[1]) + 6:] = self.beam[6:,:-6]
             beam_overlay[:21, 63:] = self.beam[5:26, 5:26]
             print(beam_overlay.shape, self.beam.shape)
@@ -1488,7 +1494,7 @@ class ModelGrid:
         residual_m0 = (data_masked_m0 - subtr) - model_masked_m0
 
         # AVERAGE EACH MAP WITHING THE VORONOI BIN -- CALCULATE THE VORONOI BINS!
-        xpix, ypix, binNum, x_in, nPixels = self.just_the_bins(snr=snr)
+        xpix, ypix, binNum, x_in, nPixels = self.just_the_bins(snr=snr, pars_backup=pars_backup)
 
         # AVERAGE lucy-in fluxmap within voronoi bins
         dlucy = map_averaging(data_lucy_flux, xpix, ypix, binNum, x_in, nPixels)
@@ -1568,6 +1574,10 @@ class ModelGrid:
         min2 = np.amin([np.nanmin(m2), np.nanmin(d2)])
         max2 = np.amax([np.nanmax(m2), np.nanmax(d2)])
 
+        #print(np.nanmax(d1), np.nanmin(d1))
+        #print(np.nanmax(d2))
+        #print(oop)
+
         # CALCULATE SUB-CUBE ARCSEC EXTENT
         # RESCALE (x_loc, y_loc) AND (xell, yell) PIXEL VALUES TO CORRESPOND TO SUB-CUBE PIXEL LOCATIONS!
         x_locvb = self.x_loc - self.xyrange[0]  # x_loc - xi
@@ -1579,7 +1589,7 @@ class ModelGrid:
 
         # Define coordinates to be 0,0 at center of the observed axes (find the central pixel number along each axis)
         for i in range(len(x_obs_acvb)):
-            x_obs_acvb[i] = self.resolution * (i - x_locvb)  # (arcsec/pix) * N_pix = arcsec
+            x_obs_acvb[i] = -self.resolution * (i - x_locvb)  # (arcsec/pix) * N_pix = arcsec  # - bc RA increases left
         for i in range(len(y_obs_acvb)):
             y_obs_acvb[i] = self.resolution * (i - y_locvb)
 
@@ -1687,6 +1697,101 @@ class ModelGrid:
             ax[2][2].set_xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)  # x [arcsec]
 
             plt.show()
+
+
+    def vorm0(self, incl_beam=True, snr=10, params=None, beamloc=(-1., -1.), ymatch=32, xmatch=66, bcolor='w'):
+        """
+        Calculate moment0 data map, average it within voronoi bins
+        # using equations from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
+
+        :param incl_beam: True or False
+        :param snr: voronoi binning target signal-to-noise ratio
+        :return:
+        """
+        # OPEN STRICTMASK
+        hdu_m = fits.open(self.data_mask)
+        data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
+        hdu_m.close()
+
+        # CREATE VELOCITY AXIS FROM FREQUENCY AXIS
+        vel_ax = []
+        velwidth = self.c_kms * (1 + self.zred) * self.fstep / self.f_0
+        for v in range(len(self.freq_ax)):
+            vel_ax.append(self.c_kms * (1. - (self.freq_ax[v] / self.f_0) * (1 + self.zred)))
+
+        # full cube strictmask, clipped to the appropriate zrange
+        clipped_mask = data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
+                                 self.xyrange[0]:self.xyrange[1]]
+
+        # CALCULATE MOMENT 0 for data, for voronoi-binned lucy-input flux map
+        data_lucy_flux = np.zeros(shape=self.convolved_cube[0].shape)
+        for z in range(len(vel_ax)):
+            data_lucy_flux += abs(self.fstep) * self.clipped_data[z] * clipped_mask[z]  # SUM_z data[z] * mask[z] * dz
+
+        # CALCULATE MOMENT 0 for data, then for model
+        data_masked_m0 = np.zeros(shape=self.convolved_cube[0].shape)
+        for z in range(len(vel_ax)):
+            data_masked_m0 += abs(velwidth) * self.clipped_data[z] * clipped_mask[z]  # SUM_z data[z] * mask[z] * dz
+
+        # CONVERT TO mJy
+        data_masked_m0 *= 1e3
+
+        if incl_beam:  # if including beam overlay
+            beam_overlay = np.zeros(shape=self.convolved_cube[0].shape)  # overlay beam on the same scale as moment map
+            ebeam = patches.Ellipse(beamloc, params['x_fwhm'], params['y_fwhm'],  # 0.65,-0.5
+                                    angle=-(90 + params['PAbeam']), linewidth=1.5, edgecolor=bcolor, fill=False)
+            beam_overlay[:21, 63:] = self.beam[5:26, 5:26]
+            beam_overlay *= np.amax(data_masked_m0) / np.amax(beam_overlay)  # scale so beam shows up well on colormap
+        else:
+            ebeam = None
+
+        # AVERAGE EACH MAP WITHING THE VORONOI BIN -- CALCULATE THE VORONOI BINS!
+        xpix, ypix, binNum, x_in, nPixels = self.just_the_bins(snr=snr, pars_backup=params)
+
+        # AVERAGE lucy-in fluxmap within voronoi bins
+        dlucy = map_averaging(data_lucy_flux, xpix, ypix, binNum, x_in, nPixels)
+        dlucy_full = np.zeros(shape=self.lucy_out.shape)
+        dlucy_full[self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]] = dlucy
+
+        # AVERAGE EACH MOMENT MAP WITHIN THE VORONOI BINS
+        d0 = map_averaging(data_masked_m0, xpix, ypix, binNum, x_in, nPixels)
+        cbar_0 = r'mJy km s$^{-1}$ beam$^{-1}$'  # same for data, model, residual for moment 0
+        cmap_0 = 'viridis'  # same for data, model, residual for moment 0
+        min0 = np.nanmin(d0)
+        max0 = np.nanmax(d0)
+
+        # CALCULATE SUB-CUBE ARCSEC EXTENT
+        # RESCALE (x_loc, y_loc) AND (xell, yell) PIXEL VALUES TO CORRESPOND TO SUB-CUBE PIXEL LOCATIONS!
+        x_locvb = self.x_loc - self.xyrange[0]  # x_loc - xi
+        y_locvb = self.y_loc - self.xyrange[2]  # y_loc - yi
+
+        # SET UP OBSERVATION AXES: initialize x,y axes at 0., with lengths = sub_cube.shape
+        y_obs_acvb = np.asarray([0.] * len(d0))
+        x_obs_acvb = np.asarray([0.] * len(d0[0]))
+
+        print(x_locvb, y_locvb)  # 42.85356933052101 32.96256939040606
+        x_locvb = xmatch - self.xyrange[0]
+        y_locvb = ymatch - self.xyrange[2]
+
+        #x_locvb = xmatch - self.xyrange[0]
+
+        #x_locvb = 100 - 84  # 150 - 84
+        #y_locvb = 162 - 118  # 150 - 118
+
+        # Define coordinates to be 0,0 at center of the observed axes (find the central pixel number along each axis)
+        for i in range(len(x_obs_acvb)):
+            # -self.resolution * (i - x_locvb)
+            x_obs_acvb[i] = -self.resolution * (i - x_locvb)  # (arcsec/pix) * N_pix = arcsec  # - bc RA increases left
+        for i in range(len(y_obs_acvb)):
+            # self.resolution * (i - y_locvb)
+            y_obs_acvb[i] = self.resolution * (i - y_locvb)
+
+        extent = [x_obs_acvb[0], x_obs_acvb[-1], y_obs_acvb[0], y_obs_acvb[-1]]  # left right bottom top
+        # [1.32, -0.34, -0.64, 0.62]
+        print(extent, self.resolution)
+        # print(oop)
+
+        return d0, min0, max0, extent, cmap_0, ebeam
 
 
     def moment_0(self, abs_diff, incl_beam, norm, samescale=False):
@@ -2072,13 +2177,13 @@ if __name__ == "__main__":
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()
-    mg.pvd()
+    #mg.pvd()
     xtalk = [4, 7, 13, 16]
     ytalk = [6, 5, 11, 11]
     xtalk = 14
     ytalk = 9
-    mg.line_profiles(xtalk, ytalk)
-    # mg.vor_moms(incl_beam=True, fs=12)
+    #mg.line_profiles(xtalk, ytalk)
+    mg.vor_moms(incl_beam=True, fs=12, pars_backup=params)
     print(oop)
     mg.mge_sbprof()
     mg.scaling_rels(rel=2)
