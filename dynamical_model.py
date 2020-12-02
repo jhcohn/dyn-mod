@@ -103,7 +103,7 @@ def mbh_relations(mbh, mbh_err, lum_k=None, mass_k=None, sigma=None, xerr=None, 
             # , assuming an H-K color of 0.2 (Vazdekis et al. 1996) and a K-band solar absolute magnitude of 3.29.
         plt.xscale('log')
         plt.yscale('log')
-        plt.xlabel(r'log$_{10}$L$_{\rm{K,bul}}$ [L$_{\odot}$]')
+        plt.xlabel(r'L$_{\rm{K,bul}}$ [L$_{\odot}$]')
         plt.ylabel(r'M$_{\rm{BH}}$ [M$_{\odot}$]')
         plt.legend()
         plt.xlim(1e8, 2e12)
@@ -662,7 +662,7 @@ def gas_vel(resolution, co_rad, co_sb, dist, f_0, inc_fixed, zfixed=0.02152):
 
     # ESTIMATE GAS MASS
     #i1 = integrate.quad(sigr3_func_r, 0, rvals[-1])[0]
-    #print(i1)
+    #print(i1)  # 48.10314883101475
     #i1 *= np.cos(inc_fixed) * msol_per_jykms  # Jy km/s/beam * [Msol/(Jy km/s)]
     #print(np.log10(i1))  # 8.736371904617355
     #print(oop)
@@ -910,6 +910,7 @@ class ModelGrid:
         # CALCULATE THE RADIUS (R) OF EACH POINT (x_disk, y_disk) IN THE DISK [pc]
         R_ac = np.sqrt((y_disk_ac ** 2 / np.cos(self.inc) ** 2) + x_disk_ac ** 2)  # radius R [arcsec]
         R = np.sqrt((y_disk ** 2 / np.cos(self.inc) ** 2) + x_disk ** 2)  # radius of each pt in disk (2d array) [pc]
+        self.R = R
 
         # CALCULATE KEPLERIAN VELOCITY DUE TO ENCLOSED STELLAR MASS
         vg = 0  # default to ignoring the gas mass!
@@ -1299,22 +1300,78 @@ class ModelGrid:
             for i in range(len(slice[0])):
                 x_rad[i] = self.resolution * ((i + 1) - xr_c)
 
-        fig, ax = plt.subplots(3, 1, sharex=True, figsize=(6, 12))
-        plt.subplots_adjust(hspace=0.02)
-
         #from mpl_toolkits.axes_grid1 import make_axes_locatable
         #divider1 = make_axes_locatable(ax[0])
         # CONVERT FROM Jy/beam TO mJy/beam
         slice *= 1e3 * self.pvd_width
+        slice1 = slice
         slice2 *= 1e3 * self.pvd_width
         vmin = np.amin([slice, slice2])
         vmax = np.amax([slice, slice2])
+
+        '''  # RMS REGIONS
+        print(slice2.shape)  # 57, 79
+        regs = [[46, 56, 1, 11], [33, 43, 13, 23], [13, 23, 55, 65], [1, 11, 67, 77]]
+        #plt.imshow(slice, origin='lower')
+        #plt.plot([regs[3][0], regs[3][1]], [regs[3][2], regs[3][2]], 'k-')
+        #plt.plot([regs[3][0], regs[3][1]], [regs[3][3], regs[3][3]], 'k-')
+        #plt.plot([regs[3][0], regs[3][0]], [regs[3][2], regs[3][3]], 'k-')
+        #plt.plot([regs[3][1], regs[3][1]], [regs[3][2], regs[3][3]], 'k-')
+        #plt.show()
+        #print(oop)
+
+        rmsds = []  # CALCULATE RMS DEVIATION IN 4 NOISE REGIONS
+        for reg in regs:
+            print(reg, reg[0], reg[1], reg[2], reg[3])
+            noisereg = slice1[reg[0]:reg[1], reg[2]:reg[3]]
+            n = np.shape(noisereg)[0] * np.shape(noisereg)[1]
+            print(noisereg.shape, n)
+            rms = np.sqrt((1. / n) * (np.sum(noisereg ** 2)))
+            rms_deviation = np.sqrt((1. / n) * np.sum((np.mean(noisereg) - noisereg) ** 2))
+            print(rms, rms_deviation)
+            rmsds.append(rms_deviation)
+        rmsds = np.asarray(rmsds)
+        print(np.mean(rmsds))  # 2.15210524474533
+        # print(oop)
+
+        # MAX VELOCITIES DETECTED [detection = signal >= 3 * mean(rms deviation)]
+        vel_ax = np.asarray(vel_ax)
+        for col in range(20, 64):  #36 ;; 28, 53  # 79 cols -> midpoint 39.5 (39 = 40th index): 35,45 = 35,36,37,38,39,40,41,42,43,44
+            signal_where = np.where(slice[:, col] > 2*np.mean(rmsds))[0]
+            # print(signal_where, slice[:, col])
+            vel_max = vel_ax[signal_where]
+            # print(vel_ax)
+            # print(vel_max, signal_where, slice[:, col])
+            print(col, np.amax(vel_max), np.amin(vel_max), x_rad[col])
+        # max: 474.75214482, -479.95001906
+        print(oop)
+        
+        # RESIDUAL LEVELS
+        pvddatblah, slicemask = extract_pv_slice(self.convolved_cube, path1)  # path2
+        slicemask *= 1e3 * self.pvd_width
+        slicemask[slicemask < 2.] = 0.
+        print(np.percentile(slicemask[slicemask!=0.], [16., 50., 84.]))
+        slicemask[slicemask > 0.] = 1.
+        signal = slice * slicemask
+        print(np.percentile(signal[signal != 0], [16., 50., 84.]), 'hi')
+        sfrac = abs((slice - slice2) / slice)
+        print(np.amax(slice))
+        # sfrac[abs(sfrac) >= 100] = 0.
+        sfrac *= slicemask
+        print(np.percentile(sfrac[sfrac!=0.], [16., 50., 84.]))
+        plt.imshow(sfrac, origin='lower')
+        plt.colorbar()
+        plt.show()
+        print(oop)
+        # '''
+
+        fig, ax = plt.subplots(3, 1, sharex=True, figsize=(6, 12))
+        plt.subplots_adjust(hspace=0.02)
         p1 = ax[0].pcolormesh(x_rad, vel_ax, slice, vmin=vmin, vmax=vmax, cmap='Greys')  # x_rad[0], x_rad[-1]
         fig.colorbar(p1, ax=ax[0], pad=0.02)  # ticks=[-0.5, 0, 0.5, 1, 1.5],
         #ax[0].imshow(slice, origin='lower', extent=[x_rad[0], x_rad[-1], vel_ax[0], vel_ax[-1]])  # x_rad[0], x_rad[-1]
         #cax1 = divider1.append_axes('right', size='5%', pad=0.05)
         #fig.colorbar(im1, cax=cax1, orientation='vertical')
-
         p2 = ax[1].pcolormesh(x_rad, vel_ax, slice2, vmin=vmin, vmax=vmax, cmap='Greys')  # x_rad[0], x_rad[-1]
         cb2 = fig.colorbar(p2, ax=ax[1], pad=0.02)  # ticks=[-0.5, 0, 0.5, 1, 1.5],
         cb2.set_label(r'mJy beam$^{-1}$', rotation=270, labelpad=20.)
@@ -1431,7 +1488,7 @@ class ModelGrid:
         return xpix, ypix, binNum, x_in, nPixels
 
 
-    def vor_moms(self, incl_beam, snr=10, just_data=False, fs=20, pars_backup=None):
+    def vor_moms(self, incl_beam, snr=10, just_data=False, fs=20, pars_backup=None, frac=False):
         """
         Calculate moment maps, average them within voronoi bins
         # using equations from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
@@ -1492,6 +1549,7 @@ class ModelGrid:
 
         # CALCULATE RESIDUAL
         residual_m0 = (data_masked_m0 - subtr) - model_masked_m0
+        residual_frac_m0 = np.nan_to_num(((data_masked_m0 - subtr) - model_masked_m0) / data_masked_m0, nan=10.)
 
         # AVERAGE EACH MAP WITHING THE VORONOI BIN -- CALCULATE THE VORONOI BINS!
         xpix, ypix, binNum, x_in, nPixels = self.just_the_bins(snr=snr, pars_backup=pars_backup)
@@ -1543,11 +1601,13 @@ class ModelGrid:
         data_m2 = np.sqrt(d2_num / d2_den)
         data_m2 = np.nan_to_num(data_m2)
         residual_m2 = data_m2 - model_m2
+        residual_frac_m2 = np.nan_to_num((data_m2 - model_m2) / data_m2, nan=10.)
 
         # AVERAGE EACH MOMENT MAP WITHIN THE VORONOI BINS
         d0 = map_averaging(data_masked_m0, xpix, ypix, binNum, x_in, nPixels)
         m0 = map_averaging(model_masked_m0, xpix, ypix, binNum, x_in, nPixels)
         r0 = map_averaging(residual_m0, xpix, ypix, binNum, x_in, nPixels)
+        r0frac = map_averaging(residual_frac_m0, xpix, ypix, binNum, x_in, nPixels)
         cbar_0 = r'mJy km s$^{-1}$ beam$^{-1}$'  # same for data, model, residual for moment 0
         cmap_0 = 'viridis'  # same for data, model, residual for moment 0
         min0 = np.amin([np.nanmin(m0), np.nanmin(d0)])
@@ -1557,9 +1617,11 @@ class ModelGrid:
 
         data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
         residual_m1 = (data_m1 - subtr) - model_m1  # calculate residual
+        residual_frac_m1 = np.nan_to_num(((data_m1 - subtr) - model_m1) / data_m1, nan=10.)
         d1 = map_averaging(data_m1, xpix, ypix, binNum, x_in, nPixels)
         m1 = map_averaging(model_m1, xpix, ypix, binNum, x_in, nPixels)
         r1 = map_averaging(residual_m1, xpix, ypix, binNum, x_in, nPixels)
+        r1frac = map_averaging(residual_frac_m1, xpix, ypix, binNum, x_in, nPixels)
         cbar_1 = r'km s$^{-1}$'  # same for data, model, residual for moment 1
         cmap_dm1 = 'RdBu_r'  # for data, model for moment 1
         cmap_r1 = 'viridis'  # for residual for moment 1
@@ -1569,14 +1631,11 @@ class ModelGrid:
         d2 = map_averaging(data_m2, xpix, ypix, binNum, x_in, nPixels)
         m2 = map_averaging(model_m2, xpix, ypix, binNum, x_in, nPixels)
         r2 = map_averaging(residual_m2, xpix, ypix, binNum, x_in, nPixels)
+        r2frac = map_averaging(residual_frac_m2, xpix, ypix, binNum, x_in, nPixels)
         cbar_2 = r'km s$^{-1}$'  # same for data, model, residual for moment 2
         cmap_2 = 'viridis'  # same for data, model, residual for moment 2
         min2 = np.amin([np.nanmin(m2), np.nanmin(d2)])
         max2 = np.amax([np.nanmax(m2), np.nanmax(d2)])
-
-        #print(np.nanmax(d1), np.nanmin(d1))
-        #print(np.nanmax(d2))
-        #print(oop)
 
         # CALCULATE SUB-CUBE ARCSEC EXTENT
         # RESCALE (x_loc, y_loc) AND (xell, yell) PIXEL VALUES TO CORRESPOND TO SUB-CUBE PIXEL LOCATIONS!
@@ -1594,6 +1653,64 @@ class ModelGrid:
             y_obs_acvb[i] = self.resolution * (i - y_locvb)
 
         extent = [x_obs_acvb[0], x_obs_acvb[-1], y_obs_acvb[0], y_obs_acvb[-1]]  # left right bottom top
+
+        '''  #
+        r0frac[abs(r0frac) > .7] = 0.
+        r1frac[abs(r1frac) > .7] = 0.
+        r2frac[abs(r2frac) > .7] = 0.
+        #print(np.percentile(r0frac[r0frac != 0.], [16., 50., 84.]))
+        # print(np.percentile(r1frac[r1frac != 0.], [16., 50., 84.]))
+        #print(np.percentile(r2frac[r2frac != 0.], [16., 50., 84.]))
+        # 70% CUTOFF (ignoring large outliers) ||| NO CUTOFF
+        # [0.11095245 0.36982081 0.6115537 ]    ||| [0.11807345 0.42726565 0.73992959]  # (90% cutoff -> median 0.41)
+        # [-0.02858211  0.01388819  0.0806571 ] ||| [-0.02856374  0.01625211  0.12162416]
+        # [0.03480282 0.19415179 0.42092524]    ||| [-4.55112186e+306  1.53471847e-001  4.74627680e-001]
+        # print(oop)
+        #print(np.nanmax(d1), np.nanmin(d1))
+        #print(np.nanmax(d2))
+        # print(self.convolved_cube.shape)  # 57, 64, 84
+        # cubeR = self.R[self.xyrange[2]:self.xyrange[3], self.xyrange[0]:self.xyrange[1]]
+        # print(cubeR[34, 40], cubeR[34, 41], cubeR[35, 40], cubeR[35, 41])
+        # mom0 pc: 259.56308283369617 264.44614505943844 257.091046329428 261.98709015724785
+        # mom1 pc: [163.0853738  160.46565412 157.85176795 164.99981543 162.40552092
+        # 182.56246847 179.95691494 187.12025143 184.53206897 191.72944879
+        # 189.15849744 198.94669192 196.38644047 193.83252891 203.63162447
+        # 201.0879059  198.55080156 208.3582256  205.83079758 257.19277722
+        # 254.78244345 262.18831282 259.79095415]
+        # print(cubeR[25, 45], cubeR[26, 48])
+
+        # print(cubeR.shape)  # 64, 84 yay!
+        #print(cubeR[abs(r0frac) > 0.5])
+        #print(cubeR[abs(r1frac) > 0.5])
+        #print(cubeR[abs(r2frac) > 0.5])
+        #plt.imshow(r2frac, origin='lower')
+        #plt.colorbar()
+        #plt.show()
+        #print(oop)
+        
+        x_disk = -x_obs_acvb[None, :] * np.cos(self.theta) + y_obs_acvb[:, None] * np.sin(self.theta)  # arcsec
+        y_disk = y_obs_acvb[:, None] * np.cos(self.theta) + x_obs_acvb[None, :] * np.sin(self.theta)  # arcsec
+
+        short_R = np.sqrt((y_disk ** 2 / np.cos(self.inc) ** 2) + x_disk ** 2)  # arcsec
+        print(x_obs_acvb)
+        print(y_obs_acvb)
+
+        #totrad = np.zeros(shape=(len(x_obs_acvb), len(y_obs_acvb)))
+        #for x in range(len(x_obs_acvb)):
+        #    for y in range(len(y_obs_acvb)):
+        #        totrad[x, y] = np.sqrt(x_obs_acvb[x]**2 + y_obs_acvb[y]**2)
+        plt.imshow(r2frac, origin='lower')#, extent=extent)
+        plt.colorbar()
+        lvl = [0.1, 0.2, 0.3, 0.4, 0.5]
+        plt.contour(short_R, lvl, colors='w')
+        plt.show()
+        print(oop)
+
+        if frac:
+            r0 = r0frac
+            r1 = r1frac
+            r2 = r2frac
+        # '''
 
         if just_data:
             fig, ax = plt.subplots(3, 1, figsize=(6, 18))  # rows, cols, figsize=(width, height)
@@ -1630,6 +1747,7 @@ class ModelGrid:
 
         else:
             # START PLOTTING
+            rc('text', usetex=False)
             fig, ax = plt.subplots(3, 3, figsize=(13,8))  # (12,8)
             plt.gca().set_aspect('equal', adjustable='box')
             plt.subplots_adjust(hspace=0.02, wspace=0.02)
@@ -1649,12 +1767,13 @@ class ModelGrid:
             cbar2r0 = fig.colorbar(imr0, ax=ax[0][2], pad=0.02)
             cbar2r0.set_label(cbar_0, rotation=270, labelpad=20.)
 
+            # only label in first row is on y axis
             ax[0][0].set_xticklabels([])  # xticks shared, yticks not shared!
             ax[0][1].set_xticklabels([])  # xticks shared, yticks shared
             ax[0][1].set_yticklabels([])
             ax[0][2].set_xticklabels([])  # xticks shared, yticks shared
             ax[0][2].set_yticklabels([])
-            ax[0][0].set_ylabel(r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]  # only label in first row is on y axis
+            ax[0][0].set_ylabel('Moment 0\n' + '\n' + r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]
 
             # PLOT MOMENT 1
             imd1 = ax[1][0].imshow(d1, vmin=min1, vmax=max1, origin='lower', extent=extent, cmap=cmap_dm1)
@@ -1669,12 +1788,13 @@ class ModelGrid:
             cbarr1 = fig.colorbar(imr1, ax=ax[1][2], pad=0.02)
             cbarr1.set_label(cbar_1, rotation=270, labelpad=20.)
 
+            # only label in second row is on y axis
             ax[1][0].set_xticklabels([])  # xticks shared, yticks not shared!
             ax[1][1].set_xticklabels([])  # xticks shared, yticks shared
             ax[1][1].set_yticklabels([])
             ax[1][2].set_xticklabels([])  # xticks shared, yticks shared
             ax[1][2].set_yticklabels([])
-            ax[1][0].set_ylabel(r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]  # only label in second row is on y axis
+            ax[1][0].set_ylabel('Moment 1\n' + '\n' + r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]
 
             # PLOT MOMENT 2
             imd2 = ax[2][0].imshow(d2, vmin=min2, vmax=max2, origin='lower', extent=extent, cmap=cmap_2)
@@ -1689,12 +1809,17 @@ class ModelGrid:
             cbarr2 = fig.colorbar(imr2, ax=ax[2][2], pad=0.02)
             cbarr2.set_label(cbar_2, rotation=270, labelpad=20.)
 
+            # only left-most panel has y axis label, but all panels in bottom row have x axis label
             ax[2][1].set_yticklabels([])  # xticks not shared, yticks shared!
             ax[2][2].set_yticklabels([])  # xticks not shared, yticks shared!
-            ax[2][0].set_ylabel(r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]  # only left-most panel has y axis label
-            ax[2][0].set_xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)  # x [arcsec]  # all panels in bottom row have x axis label
+            ax[2][0].set_ylabel('Moment 2\n' + '\n' + r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]
+            ax[2][0].set_xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)  # x [arcsec]
             ax[2][1].set_xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)  # y [arcsec]
             ax[2][2].set_xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)  # x [arcsec]
+
+            ax[0][0].set_title(r'Data', fontsize=fs)
+            ax[0][1].set_title(r'Model', fontsize=fs)
+            ax[0][2].set_title(r'Residual', fontsize=fs)
 
             plt.show()
 
@@ -1884,7 +2009,7 @@ class ModelGrid:
         plt.show()
 
 
-    def moment_12(self, abs_diff, incl_beam, norm, mom, samescale=False):
+    def moment_12(self, abs_diff=False, incl_beam=False, norm=False, mom=1, samescale=False):
         """
         Create 1st or 2nd moment map
         :param abs_diff: True or False; if True, show absolute value of the residual
@@ -2177,13 +2302,15 @@ if __name__ == "__main__":
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()
+    mg.scaling_rels(rel=1)
+    #mg.vor_moms(incl_beam=True, fs=12, pars_backup=params, frac=True)
     #mg.pvd()
+    print(oop)
     xtalk = [4, 7, 13, 16]
     ytalk = [6, 5, 11, 11]
     xtalk = 14
     ytalk = 9
     #mg.line_profiles(xtalk, ytalk)
-    mg.vor_moms(incl_beam=True, fs=12, pars_backup=params)
     print(oop)
     mg.mge_sbprof()
     mg.scaling_rels(rel=2)
@@ -2199,7 +2326,7 @@ if __name__ == "__main__":
     #mg.moment_0(abs_diff=False, incl_beam=True, norm=False)
     #mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=1)
     #mg.moment_12(abs_diff=False, incl_beam=False, norm=False, mom=2)
-
+    # mg.moment_12(mom=1)
     mg.line_profiles(13, 8)
     mg.line_profiles(9, 7)
     mg.line_profiles(9, 8)

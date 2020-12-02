@@ -271,7 +271,7 @@ def table_it(things, parfiles, models, parlabels, sig=3, avg=True, logged=False,
     return hdr, hdrl, lines, texlines
 
 
-def my_own_thing(results, par_labels, ax_labels, quantiles, ax_lims=None, fs=12, savefig=None):
+def my_own_thing(results, par_labels, ax_labels, quantiles, ax_lims=None, fs=20, savefig=None):
     # results should be dyn_res['samples']
     roundto = 3  # 2  # 4
     npar = len(par_labels)
@@ -293,8 +293,8 @@ def my_own_thing(results, par_labels, ax_labels, quantiles, ax_lims=None, fs=12,
         axes_order = [[0, 0], [0, 1], [1, 0], [0, 2], [0, 3], [1, 1], [1, 2], [1, 3]]
     for i in range(len(results[0])):
         row, col = axes_order[i]
-        if par_labels[i] == 'mbh':  # or par_labels[i] == 'PAdisk':
-            bins = 400 #1000
+        if par_labels[i] == r'$\log_{10}(M_{\text{BH}}/$M$_{\odot})$':  # or par_labels[i] == 'PAdisk':
+            bins = 400  # 400 #1000
         else:
             bins = 100
         chain = results[:, i]
@@ -562,12 +562,12 @@ if 'nobh' in dict['pkl']:
 else:
     # labels = np.array(['mbh', 'xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])
     # labels = np.array([r'M$_{\text{BH}}$', r'$x_0$', r'$y_0$', r'$\sigma_0$', r'$\iota$', r'$\Gamma$',
-    labels = np.array([r'$\log_{10}(M_{\text{BH}})$', r'$x_0$', r'$y_0$', r'$\sigma_0$', r'$\iota$', r'$\Gamma$',
-                       r'v$_{\text{sys}}$', r'$M/L$', r'$f_0$'])
+    labels = np.array([r'$\log_{10}(M_{\text{BH}}/$M$_{\odot})$', r'$x_0$', r'$y_0$', r'$\sigma_0$', r'$\iota$',
+                       r'$\Gamma$', r'v$_{\text{sys}}$', r'$M/L$', r'$f_0$'])
     # ax_lab = np.array([r'$\log_{10}$(M$_{\odot}$)', 'pixels', 'pixels', 'km/s', 'deg', 'deg', 'km/s',
     #                    r'M$_{\odot}$/L$_{\odot}$', 'unitless'])
-    ax_lab = np.array([r'$\log_{10}$(M$_{\odot}$)', 'pixels', 'pixels', 'km $s^{-1}$', 'deg', 'deg', 'km $s^{-1}$',
-                       r'M$_{\odot}$/L$_{\odot}$', 'unitless'])
+    ax_lab = np.array([r'$\log_{10}$(M$_{\text{BH}}/$M$_{\odot}$)', 'pixels', 'pixels', 'km $s^{-1}$', 'deg', 'deg',
+                       'km $s^{-1}$', r'M$_{\odot}$/L$_{\odot}$', 'unitless'])
     tablabs = np.array(['chi^2' 'reduced chi^2', 'log10(mbh) [Msol]', 'xloc [pix]', 'yloc [pix]', 'sig0 [km/s]',
                         'inc [deg]', 'PAdisk [deg]', 'vsys [km/s]', 'ml_ratio [Msol/Lsol]', 'f [unitless]'])
 if dict['extra_params'] is not None:
@@ -682,8 +682,8 @@ elif 'kappa' in out_name:
     ax_lims = [[8., 10.], [124., 128.], [148, 152], [0., 40.], [52.4, 89], [5., 35.], [6405, 6505], [0.3, 3.],
                [0.5, 1.5], [-1., 1.]]
 else:
-    ax_lims = [[8., 10.], [124., 128.], [148, 152], [0., 40.], [52.4, 89], [5., 35.], [6405, 6505], [0.3, 3.],
-               [0.5, 1.5]]
+    ax_lims = [[9.15, 9.65], [124., 128.], [148, 152], [0., 40.], [52.4, 89], [5., 35.], [6405, 6505], [0.3, 3.],
+               [0.5, 1.5]]  # 8., 10.
 
 import matplotlib as mpl
 # mpl.rcParams['font.size'] = 20
@@ -693,7 +693,8 @@ mpl.rcParams['xtick.labelsize'] = 20
 mpl.rcParams['ytick.labelsize'] = 20
 
 # ELSE USE THIS
-# my_own_thing(dyn_res['samples'], labels, ax_lab, sigs, ax_lims=ax_lims, savefig=grp + dict['name'])
+my_own_thing(dyn_res['samples'], labels, ax_lab, one_sigs, ax_lims=ax_lims, savefig=grp + dict['name'])
+print(oop)
 
 # plot initial run (res1; left)
 
