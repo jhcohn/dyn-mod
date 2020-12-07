@@ -1222,7 +1222,7 @@ class ModelGrid:
 
         # Define coordinates to be 0,0 at center of the observed axes (find the central pixel number along each axis)
         for i in range(len(x_obs_acvb)):
-            x_obs_acvb[i] = self.resolution * (i - x_locvb) * self.ds  # (arcsec/pix) * N_pix = arcsec
+            x_obs_acvb[i] = -self.resolution * (i - x_locvb) * self.ds  # (arcsec/pix) * N_pix = arcsec
         for i in range(len(y_obs_acvb)):
             y_obs_acvb[i] = self.resolution * (i - y_locvb) * self.ds2
 
@@ -1277,7 +1277,7 @@ class ModelGrid:
                     ax[ii].axhline(y=0., color='k', linestyle='--')
                     ax[ii].fill_between(vel_ax, -z0, z0, color='k', step='mid', alpha=0.2, label='Noise')
                     fig.text(0.004, 0.5, r'$\Delta$ Flux Density [arbitrary]', va='center', rotation='vertical')
-                    ax[ii].text(rls[ii][0], rls[ii][1], r'x=' + str(xp) + r'", y=' + str(yp) + r'"')
+                    ax[ii].text(rls[ii][0], rls[ii][1], r'x = ' + str(xp) + r'", y = ' + str(yp) + r'"')
 
                 else:
                     leg = 'upper right'
@@ -1290,7 +1290,7 @@ class ModelGrid:
                     # ax[ii].axvline(x=0., color='k', ls='--', label=r'v$_{\text{sys}}$')
                     fig.text(0.04, 0.5, r'Flux Density [mJy beam$^{-1}$]', va='center', rotation='vertical', fontsize=12)  # arbitrary
                     # ax[ii].text(-200, 0.9, r'x=' + str(xp) + r'", y=' + str(yp) + r'"')
-                    ax[ii].text(-200, 0.9*np.amax(data_ds[:, iy[ii], ix[ii]])*1e3, r'x=' + str(xp) + r'", y=' + str(yp) + r'"')
+                    ax[ii].text(-250, 0.9*np.amax(data_ds[:, iy[ii], ix[ii]])*1e3, r'x = ' + str(xp) + r'", y = ' + str(yp) + r'"')
             # ax[-1].set_xlabel(r'Line-of-sight velocity [km/s]')
             import matplotlib as mpl
             mpl.rcParams['font.size'] = 12
@@ -2373,7 +2373,7 @@ if __name__ == "__main__":
     ytalk = [6, 5, 11, 11]
     mg.line_profiles(xtalk, ytalk, resid=False)
     #mg.vor_moms(incl_beam=True, snr=10)
-    mg.vor_moms(incl_beam=False, snr=10)
+    # mg.vor_moms(incl_beam=False, snr=10)
     #mg.pvd()
     print(oop)
     #mg.moment_0(abs_diff=False, incl_beam=True, norm=False)
