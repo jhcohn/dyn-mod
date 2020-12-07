@@ -2302,9 +2302,9 @@ if __name__ == "__main__":
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()
-    mg.scaling_rels(rel=1)
+    # mg.scaling_rels(rel=1)
     #mg.vor_moms(incl_beam=True, fs=12, pars_backup=params, frac=True)
-    #mg.pvd()
+    mg.pvd()
     print(oop)
     xtalk = [4, 7, 13, 16]
     ytalk = [6, 5, 11, 11]
