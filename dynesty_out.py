@@ -396,8 +396,10 @@ def mycorn(results, span=None, quantiles=[0.025, 0.5, 0.975], color='black', smo
     print(samples.shape)
     print(np.median(samples[:,3]))
     samples[:,3] += 90.  # MODIFY PA!
-    samples[:, 6] = raf(samples[:, 6])  # MODIFY RA
-    samples[:, 7] = decf(samples[:, 7])  # MODIFY DEC
+    # samples[:, 6] = raf(samples[:, 6])  # MODIFY RA
+    # samples[:, 7] = decf(samples[:, 7])  # MODIFY DEC
+    samples[:, 6] = (samples[:, 6] - 125.565) * 0.02  # MODIFY RA
+    samples[:, 7] = (samples[:, 7] - 149.912) * 0.02  # MODIFY DEC
     #print(oop)
 
     # Deal with 1D results. A number of extra catches are also here
@@ -858,12 +860,16 @@ def table_it(things, parfiles, models, parlabels, sig=3, avg=True, logged=False,
                 q = np.asarray(q) / 1e9
                 q1 = np.asarray(q1) / 1e9
                 q3 = np.asarray(q3) / 1e9
-            if tabpars[i].srartswith(r'\xloc\ '):
-                q1 = raf(np.asarray(q1))[::-1]
-                q3 = raf(np.asarray(q3))[::-1]
+            if tabpars[i].startswith(r'\xloc\ '):
+                # q1 = raf(np.asarray(q1))[::-1]
+                # q3 = raf(np.asarray(q3))[::-1]
+                q1 = (np.asarray(q1)[::-1] - 125.565) * 0.02
+                q3 = (np.asarray(q3)[::-1] - 125.565) * 0.02
             elif tabpars[i].startswith(r'\yloc\ '):
-                q1 = decf(np.asarray(q1))
-                q3 = decf(np.asarray(q3))
+                # q1 = decf(np.asarray(q1))
+                # q3 = decf(np.asarray(q3))
+                q1 = (np.asarray(q1) - 149.912) * 0.02
+                q3 = (np.asarray(q3) - 149.912) * 0.02
             if tabpars[i] == r'\pa\ [$^\circ$]':
                 q1 = np.asarray(q1) + 90
                 q3 = np.asarray(q3) + 90
@@ -908,7 +914,6 @@ def table_it(things, parfiles, models, parlabels, sig=3, avg=True, logged=False,
         lines += '\n| '
         texlines += '\n| '
         # newlines += '\\\\ \n'
-
 
     return hdr, hdrl, lines, texlines, newlines
 
@@ -1188,7 +1193,7 @@ def output_dictionaries(err):
 # DEFINE DIRECTORIES
 direc = '/Users/jonathancohn/Documents/dyn_mod/nest_out/'
 grp = '/Users/jonathancohn/Documents/dyn_mod/groupmtg/'
-sig = 3  # 1 # 3  # show 1sigma errors or 3sigma errors
+sig = 1  # 1 # 3  # show 1sigma errors or 3sigma errors
 
 # CHOOSE DICTIONARY
 dict = output_dictionaries(sig)['fiducial']
@@ -1243,27 +1248,43 @@ hdra = hdua[0].header
 hdua.close()
 ras = []
 decs = []
+rasfull = []
+decsfull = []
 scale = 3600.  # 3600 if want arcsec units, 1 if want deg units
 for xx in range(hdra['NAXIS1']):
-    # ras.append(((xx - (hdra['CRPIX1']-1)) * hdra['CDELT1'] + hdra['CRVAL1']) * scale)  # CRPIX-1 bc python starts at 0
+    rasfull.append(((xx - (hdra['CRPIX1']-1)) * hdra['CDELT1'] + hdra['CRVAL1']) * scale)  # CRPIX-1 bc python starts at 0
     ras.append(((xx - (hdra['CRPIX1']-1)) * hdra['CDELT1']) * scale)  # CRPIX-1 bc python starts at 0; OFFSET from 150
 for yy in range(hdra['NAXIS2']):
-    # decs.append(((yy - (hdra['CRPIX2']-1)) * hdra['CDELT2'] + hdra['CRVAL2']) * scale)  # CRPIX-1 bc python starts at 0
+    decsfull.append(((yy - (hdra['CRPIX2']-1)) * hdra['CDELT2'] + hdra['CRVAL2']) * scale)  # CRPIX-1 bc python starts at 0
     decs.append(((yy - (hdra['CRPIX2']-1)) * hdra['CDELT2']) * scale)  # CRPIX-1 bc python starts at 0; OFFSET from 150
 from scipy import interpolate
 ra_func = interpolate.interp1d(range(len(ras)), ras, kind='quadratic', fill_value='extrapolate')
 dec_func = interpolate.interp1d(range(len(decs)), decs, kind='quadratic', fill_value='extrapolate')
+rafull_func = interpolate.interp1d(range(len(rasfull)), rasfull, kind='quadratic', fill_value='extrapolate')
+decfull_func = interpolate.interp1d(range(len(decsfull)), decsfull, kind='quadratic', fill_value='extrapolate')
 print(ra_func(126.85457), ra_func(150))
 print(dec_func(150.96257), dec_func(150))
-pris[1] = ra_func(pris[1])
-pris[2] = dec_func(pris[2])
+# pris[1] = ra_func(pris[1])
+# pris[2] = dec_func(pris[2])
+pris[1] = (pris[1] - 125.565) * 0.02  # MODIFY RA
+pris[2] = (pris[2] - 149.912) * 0.02  # MODIFY DEC
 ###
 
-'''  #
+# '''  #
 # ONLY table_it *AFTER* OUT FILE CREATED
 #tl = big_table(output_dictionaries(sig))
 #print(tl)
 #print(oop)
+
+dictr0 = output_dictionaries(sig)['lucyn5']  # rfit0.5  # ds48  # nlive  # lucyn5  # lucyn15
+dictr1 = output_dictionaries(sig)['lucyvb']  # rfit0.8  # ds510  # dlogz  # fullpriors  # lucyvb
+
+hd, hl, li, tx, nl = table_it([direc + dict['pkl'], direc+dictr0['pkl'], direc+dictr1['pkl']],
+                              [dict['outpf'], dictr0['outpf'], dictr1['outpf']],
+                              [dict['mod'], dictr0['mod'], dictr1['mod']], tablabs, sig=sig, logged=True,
+                              percent_diff=True, pris=pris, tabpars=tabpars, raf=ra_func, decf=dec_func)
+print(li)
+print(oop)
 
 hd, hl, li, tx, nl = table_it([direc + dict['pkl']], [dict['outpf']], [dict['mod']], tablabs, sig=sig, logged=True,
                               percent_diff=True, pris=pris, tabpars=tabpars, raf=ra_func, decf=dec_func)
@@ -1382,6 +1403,7 @@ mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']  # for \text com
 
 # TO EDIT SOURCE CODE: open /Users/jonathancohn/anaconda3/envs/three/lib/python3.6/site-packages/dynesty/plotting.py
 
+# '''  # UNCOMMENT FOR CORNERFIG!
 # MAKE CORNER PLOT
 ndim = len(labels)
 factor = 2.0  # size of side of one panel
@@ -1413,8 +1435,9 @@ fg, ax = mycorn(dyn_res, color='blue', show_titles=True, title_kwargs={'fontsize
                 quantiles=qts, labels=cornerax, label_kwargs={'fontsize': 35}, fig=(fig, axes), shortlabs=labels,
                 raf=ra_func, decf=dec_func)
 # plt.savefig(grp + dict['cornername'])
-plt.savefig(grp + 'finaltests/fiducial_corner_radec_rc35.png')
+plt.savefig(grp + 'finaltests/fiducial_corner_radec_rc35_xycentroidoffset.png')
 plt.show()
+# '''  #
 
 '''  #
 # ONLY table_it *AFTER* OUT FILE CREATED

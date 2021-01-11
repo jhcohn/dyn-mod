@@ -47,6 +47,119 @@ def mge_sum(mge, pc_per_ac):
     return sum
 
 
+def mbh_relation_full(mbhs, mbh_errs, lum_ks, lum_errs, masses, mass_errs, sigmas, sigma_errs, galaxies, fmts, ml_locs,
+                      msig_locs, mm_locs, savefig=None):
+    """
+    Calculate MBH relations
+
+    :param mbhs: array of black hole mass measurements
+    :param mbh_errs: array of uncertainties on the black hole mass measurements [[low_0, hi_0], [low_1, high_1], ...]
+    :param lum_ks: array (same length as mbhs) of luminosities (K-band)
+    :param lum_errs: array of uncertainties on the luminosities (K-band) [[low_0, hi_0], [low_1, high_1], ...]
+    :param masses: array (same length as mbhs) of masses (H-band luminosity * M/L_H)
+    :param mass_errs: array of uncertainties on the masses [[low_0, hi_0], [low_1, high_1], ...]
+    :param sigmas: array (same length as mbhs) of sigmas (assuming full galaxies = bulge)
+    :param sigma_errs: array of uncertainties on the sigmas [[low_0, hi_0], [low_1, high_1], ...]
+    :param: galaxies: array (same length as mbhs) of galaxy labels, eg ['UGC 2698', 'NGC 1277', 'NGC 1271', 'MRK 1216']
+    :param: fmts: array (same length as mbhs) of colors and symbols for each galaxy, eg ['bD', 'rs', 'rs', 'rs']
+    :param: ml_locs: array (same length as mbhs) of [x,y] text locations on M-L for each galaxy, eg [[1.2e11, 5e9], ...]
+    :param: msig_locs: same as ml_locs, but for text locations on M-sigma
+    :param: mm_locs: same as ml_locs, but for text locations on M-M
+    :param: savefig: file save name for .png image
+    :return:
+    """
+
+    # initialize figure
+    fig, ax = plt.subplots(3, 1, figsize=(10, 20))  # subplots(rows, cols); ax [0,1,2] -> [M-sig, M-L, M-M]
+    plt.subplots_adjust(hspace=0.125)
+
+    # SET UP M-SIG PANEL, RELATIONS
+    sig_x = np.logspace(1.7, 2.7)  # ~50 - ~500 km/s
+    kormendy_and_ho = 0.310e9 * (sig_x / 200) ** 4.38  # 0.309e9
+    saglia = 10 ** (4.868 * np.log10(sig_x) - 2.827)  # log MBH = a * log sigma + ZP (CorePowerEClassPC) -> scatter=0.38
+    # CorePowerEClassPC = Core & power-law ellipticals, classical bulges, & classical component (Saglia+16 Table 8)
+    # Saglia relations, scatter: pg54-55 https://arxiv.org/pdf/1304.7762.pdf
+    vdbosch = 10 ** (-4.00 + 5.35 * np.log10(sig_x))
+    mcconnell_and_ma = 10 ** (8.32 + 5.64 * np.log10(sig_x / 200.))
+
+    # relations + intrinsic scatter
+    ax[0].fill_between(sig_x, saglia * (10 ** 0.38), saglia * (10 ** -0.38), color='k', alpha=0.2)
+    ax[0].plot(sig_x, saglia, 'k-', label='Saglia et al. (2016)')  # (CorePowerEClassPC) -> scatter=0.38
+    ax[0].plot(sig_x, kormendy_and_ho, 'g--', label='Kormendy \& Ho (2013)')
+    ax[0].plot(sig_x, vdbosch, 'm-.', label='van den Bosch (2016)')  # scatter 0.49 dex
+    ax[0].plot(sig_x, mcconnell_and_ma, color='darkorange', linestyle=':', label='McConnell \& Ma (2013)')
+
+    # SET UP M-LUM PANEL, RELATIONS
+    lum_x = np.logspace(7., 13.)
+    kormendy_and_ho = 0.544e9 * (lum_x / 1e11) ** 1.22  # 0.542, 1.21
+    lasker = 10 ** (8.56 + 0.75 * (np.log10(lum_x) - 11.))  # intrinsic scatter = 0.46
+
+    # include relations + intrinsic scatter
+    ax[1].plot(lum_x, lasker, 'k-', label='Lasker et al. (2014)')  # plot the lasker relation
+    ax[1].fill_between(lum_x, lasker * (10 ** .46), lasker * (10 ** -.46), color='k', alpha=0.2)
+    ax[1].plot(lum_x, kormendy_and_ho, 'g--', label='Kormendy \& Ho (2013)')  # plot the KH13 relation
+    ax[1].fill_between(lum_x, kormendy_and_ho * (10 ** (-0.33)), kormendy_and_ho * (10 ** 0.33), color='g', alpha=0.2)
+    # 10^(.4*.31)-1 (https://faculty.virginia.edu/skrutskie/astr3130.s16/notes/astr3130_lec12.pdf)
+
+    # SET UP M-M PANEL, RELATIONS     # TO DO: correct relations for mass?!!!!!?!?!
+    mass_x = np.logspace(8, 12.7)
+    kormendy_and_ho = 0.49e9 * (mass_x / 1e11) ** 1.17
+    saglia = 10 ** (0.846 * np.log10(mass_x) - 0.713)
+    mcconnell_and_ma = 10 ** (8.46 + 1.05 * np.log10(mass_x / 1e11))
+    sani = 10 ** (8.16 + 0.79 * np.log10(mass_x) - 11)
+    savorgnan = 10 ** (8.56 + 1.04 * np.log10(mass_x / (10 ** 10.81)))
+
+    # relations + intrinsic scatter
+    ax[2].plot(mass_x, saglia, 'k-', label='Saglia et al. (2016)')
+    #print(saglia * 10 ** .431)
+    #print(saglia * 10 ** -.431)
+    ax[2].fill_between(mass_x, saglia * (10 ** 0.431), saglia * (10 ** -0.431), color='k', alpha=0.2)
+    ax[2].plot(mass_x, savorgnan, 'm-.', label='Savorgnan (2016)')
+    ax[2].plot(mass_x, kormendy_and_ho, 'g--', label='Kormendy \& Ho (2013)')
+    ax[2].plot(mass_x, mcconnell_and_ma, color='darkorange', linestyle=':', label='McConnell \& Ma (2013)')
+
+    # PLOT MBHs!
+    for i in range(len(mbhs)):
+        ax[0].errorbar(sigmas[i], mbhs[i], xerr=[[sigma_errs[i][0]], [sigma_errs[i][1]]],
+                       yerr=[[mbh_errs[i][0]], [mbh_errs[i][1]]], fmt=fmts[i])
+        ax[0].text(msig_locs[i][0], msig_locs[i][1], galaxies[i], color=fmts[i][0])
+        ax[1].errorbar(lum_ks[i], mbhs[i], xerr=[[lum_errs[i][0]], [lum_errs[i][1]]],
+                       yerr=[[mbh_errs[i][0]], [mbh_errs[i][1]]], fmt=fmts[i])
+        ax[1].text(ml_locs[i][0], ml_locs[i][1], galaxies[i], color=fmts[i][0])
+        ax[2].errorbar(masses[i], mbhs[i], xerr=[[mass_errs[i][0]], [mass_errs[i][1]]],
+                       yerr=[[mbh_errs[i][0]], [mbh_errs[i][1]]], fmt=fmts[i])
+        ax[2].text(mm_locs[i][0], mm_locs[i][1], galaxies[i], color=fmts[i][0])
+
+    # SET AXIS DETAILS
+    ax[0].set_xscale('log')
+    ax[0].set_yscale('log')
+    ax[0].set_xlabel(r'$\sigma_{\star}$ [km/s]')
+    ax[0].set_ylabel(r'M$_{\rm{BH}}$ [M$_{\odot}$]')
+    ax[0].legend()
+    ax[0].set_xlim(50, 500)
+    ax[0].set_ylim(1e6, 2.5e10)
+
+    ax[1].set_xscale('log')
+    ax[1].set_yscale('log')
+    ax[1].set_xlabel(r'L$_{\rm{K,bul}}$ [L$_{\odot}$]')
+    ax[1].set_ylabel(r'M$_{\rm{BH}}$ [M$_{\odot}$]')
+    ax[1].legend()
+    ax[1].set_xlim(1e8, 2e12)
+    ax[1].set_ylim(1e6, 2.5e10)
+
+    ax[2].set_xscale('log')
+    ax[2].set_yscale('log')
+    ax[2].set_xlabel(r'M$_{\rm{bul}}$ [M$_{\odot}$]')
+    ax[2].set_ylabel(r'M$_{\rm{BH}}$ [M$_{\odot}$]')
+    ax[2].legend()
+    ax[2].set_xlim(1e8, 5e12)
+    ax[2].set_ylim(1e6, 2.5e10)
+
+    plt.savefig('/Users/jonathancohn/Documents/dyn_mod/groupmtg/finaltests/' + savefig)
+
+    plt.show()
+
+
 def mbh_relations(mbh, mbh_err, lum_k=None, mass_k=None, sigma=None, xerr=None, incl_past=True):
     """
     Calculate MBH relations
@@ -99,7 +212,7 @@ def mbh_relations(mbh, mbh_err, lum_k=None, mass_k=None, sigma=None, xerr=None, 
             #plt.errorbar(lum_k[item], mbh[item], yerr=[[mbh_err[item][0]], [mbh_err[item][1]]], fmt='bD')
             plt.errorbar(lum_k[item], mbh[item], yerr=[[mbh_err[item][0]], [mbh_err[item][1]]], xerr=xerr, color='b',
                          marker='D')
-            plt.text(9.5e10, 2.3e9, 'U2698', color='b')
+        plt.text(9.5e10, 2.3e9, 'U2698', color='b')
             # , assuming an H-K color of 0.2 (Vazdekis et al. 1996) and a K-band solar absolute magnitude of 3.29.
         plt.xscale('log')
         plt.yscale('log')
@@ -663,6 +776,7 @@ def gas_vel(resolution, co_rad, co_sb, dist, f_0, inc_fixed, zfixed=0.02152):
     # ESTIMATE GAS MASS
     #i1 = integrate.quad(sigr3_func_r, 0, rvals[-1])[0]
     #print(i1)  # 48.10314883101475
+    #print(i1 * np.cos(inc_fixed))
     #i1 *= np.cos(inc_fixed) * msol_per_jykms  # Jy km/s/beam * [Msol/(Jy km/s)]
     #print(np.log10(i1))  # 8.736371904617355
     #print(oop)
@@ -810,6 +924,7 @@ class ModelGrid:
         self.convolved_cube = None  # the model cube: create from convolving the intrinsic model cube with the ALMA beam
         self.ell_mask = None  # mask defined by the elliptical fitting region, before downsampling
         self.ell_ds = None  # mask defined by the elliptical fitting region, created on ds x ds down-sampled pixels
+        self.sqrt2n = False
     """
     Build grid for dynamical modeling!
     
@@ -934,6 +1049,7 @@ class ModelGrid:
 
             # CALCULATE KEPLERIAN VELOCITY OF ANY POINT (x_disk, y_disk) IN THE DISK WITH RADIUS R (km/s)
             vel = np.sqrt((self.G_pc * self.mbh / R) + v_c_r(R_ac)**2 + vg**2)  # G_pc -> use R [pc], v_c_r needs R [ac]
+
         elif self.menc_type == 1:  # elif using a file with v_circ(R) due to stellar mass
             if not self.quiet:
                 print('v(r)')
@@ -1077,6 +1193,8 @@ class ModelGrid:
 
             z_ind += 1  # the actual index for the model-data comparison cubes
 
+        if self.sqrt2n:
+            chi_sq /= np.sqrt(2. * n_pts)
 
         if n_pts == 0.:  # PROBLEM WARNING
             print(self.resolution, self.xell, self.yell, self.theta_ell, self.q_ell, self.rfit)
@@ -1107,11 +1225,38 @@ class ModelGrid:
         :return:
         """
 
+        lum_H = mge_sum(self.enclosed_mass, self.pc_per_ac)
+        LKcorr = lum_H * 10 ** (0.4 * 0.2)
+        Mgal = lum_H * self.ml_ratio
+
+        # '''  #
+        mbh_relation_full(mbhs=[self.mbh, 4.9e9, 3e9, 4.9e9],
+                          sigmas=[304, 317, 295, 308],
+                          lum_ks=[2.5e11, 7.7e10, 8.1e10, 1.3e11],  # [LKcorr, 7.7e10, 7.2e10, 9.6e10],  # 7.7e10, 4.6e10, 9.6e10],
+                          masses=[3.8e11, 1.3e11, 1.1e11, 2.2e11],  # [Mgal, 1.6e11, 1.0e11, 1.6e11]  # 1.6e11, 1.0e11, 1.1e11]
+                          mbh_errs=[[0.78e9, 0.70e9], [1.6e9, 1.6e9], [1.1e9, 1e9], [1.7e9, 1.7e9]],
+                          sigma_errs=[[6, 6], [5, 5], [6, 6], [7, 7]],
+                          lum_errs=[[0.,0.], [0,0], [0,0], [0,0]],  # [2.8e10, 2.8e10], [2.7e10, 2.7e10], [7.9e10, 4.6e10]],  # TO DO FIX 0s!
+                          mass_errs=[[0.,0.], [0.,0.], [0.,0.], [0,0]],  # [0.9e11, 0.5e11]],  # TO DO FIX 0s!
+                          galaxies=['U2698', 'N1277', 'N1271', 'M1216'], fmts=['bD', 'rs', 'rs', 'rs'],
+                          msig_locs=[[310, 1.5e9], [318, 6.5e9], [247, 3.2e9], [257, 5.4e9]],
+                          ml_locs=[[1.15e11, 2.3e9], [1.4e11, 5.5e9], [4e10, 2e9], [3.5e10, 5.5e9]],
+                          mm_locs=[[1.6e11, 2.3e9], [2.4e11, 5e9], [4.8e10, 3.1e9], [5.5e10, 5.5e9]],
+                          savefig='scaling_rels_10_20.png')
+        # mbhs, mbh_errs, lum_ks, lum_errs, masses, mass_errs, sigmas, sigma_errs, galaxies, fmts, ml_locs, msig_locs, mm_locs
+        print(oop)
+
+        # msig_locs=[[310, 1.5e9], [318, 6.5e9], [247, 3.2e9], [257, 5.4e9]],
+        # ml_locs=[[1.15e11, 2.3e9], [1.4e11, 5.5e9], [4e10, 2e9], [3.5e10, 5.5e9]],
+        # mm_locs=[[1.6e11, 2.3e9], [2.4e11, 5e9], [4.8e10, 3.1e9], [5.5e10, 5.5e9]],
+
+        # '''  #
+
         if err_type == 'statistical':
             err_low = 5.5e7
             err_hi = 5.6e7
         else:
-            err_low = 0.80e9
+            err_low = 0.78e9
             err_hi = 0.70e9
 
         if rel == 0:
@@ -1122,6 +1267,7 @@ class ModelGrid:
             lum_H = mge_sum(self.enclosed_mass, self.pc_per_ac)
             # lum_H = 10**11.3348
             LKcorr = lum_H * 10 ** (0.4 * 0.2)
+            # print(lum_H, LKcorr)
             mbh_relations([self.mbh], [[err_low, err_hi]], lum_k=[LKcorr])
             # mbh_relations([10 ** 9.39], [[0.71e9, 0.7e9]], lum_k=[LKcorr])
         elif rel == 2:
@@ -2301,10 +2447,10 @@ if __name__ == "__main__":
     # x_fwhm=0.197045, y_fwhm=0.103544 -> geometric mean = sqrt(0.197045*0.103544) = 0.142838; regular mean = 0.1502945
     mg.grids()
     mg.convolution()
-    chi_sq = mg.chi2()
-    # mg.scaling_rels(rel=1)
+    chi_sq = mg.chi2()  # 6495.965711236455 (1.2275067481550368)  # 6498.030199144044 (1.227896863027975)
+    mg.scaling_rels(rel=2)
     #mg.vor_moms(incl_beam=True, fs=12, pars_backup=params, frac=True)
-    mg.pvd()
+    # mg.pvd()
     print(oop)
     xtalk = [4, 7, 13, 16]
     ytalk = [6, 5, 11, 11]
