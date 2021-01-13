@@ -119,14 +119,20 @@ def mbh_relation_full(mbhs, mbh_errs, lum_ks, lum_errs, masses, mass_errs, sigma
     ax[2].plot(mass_x, mcconnell_and_ma, color='darkorange', linestyle=':', label='McConnell \& Ma (2013)')
 
     # PLOT MBHs!
+    #lumxerrs = [1e11, 1e11, 3e10, 5e10]
+    #massxerrs = [1e11, 7e10, 3e10, 7e10]
     for i in range(len(mbhs)):
         ax[0].errorbar(sigmas[i], mbhs[i], xerr=[[sigma_errs[i][0]], [sigma_errs[i][1]]],
                        yerr=[[mbh_errs[i][0]], [mbh_errs[i][1]]], fmt=fmts[i])
         ax[0].text(msig_locs[i][0], msig_locs[i][1], galaxies[i], color=fmts[i][0])
-        ax[1].errorbar(lum_ks[i], mbhs[i], xerr=[[lum_errs[i][0]], [lum_errs[i][1]]],
+        # ax[1].errorbar(lum_ks[i], mbhs[i], xerr=[[lum_errs[i][0]], [lum_errs[i][1]]],
+        #                yerr=[[mbh_errs[i][0]], [mbh_errs[i][1]]], fmt=fmts[i])
+        ax[1].errorbar(lum_ks[i], mbhs[i], xuplims=np.array([True]), xerr=[0.2*lum_ks[i]],
                        yerr=[[mbh_errs[i][0]], [mbh_errs[i][1]]], fmt=fmts[i])
         ax[1].text(ml_locs[i][0], ml_locs[i][1], galaxies[i], color=fmts[i][0])
-        ax[2].errorbar(masses[i], mbhs[i], xerr=[[mass_errs[i][0]], [mass_errs[i][1]]],
+        # ax[2].errorbar(masses[i], mbhs[i], xerr=[[mass_errs[i][0]], [mass_errs[i][1]]],
+        #                yerr=[[mbh_errs[i][0]], [mbh_errs[i][1]]], fmt=fmts[i])
+        ax[2].errorbar(masses[i], mbhs[i], xuplims=np.array([True]), xerr=[0.2*masses[i]],
                        yerr=[[mbh_errs[i][0]], [mbh_errs[i][1]]], fmt=fmts[i])
         ax[2].text(mm_locs[i][0], mm_locs[i][1], galaxies[i], color=fmts[i][0])
 
@@ -1228,21 +1234,47 @@ class ModelGrid:
         lum_H = mge_sum(self.enclosed_mass, self.pc_per_ac)
         LKcorr = lum_H * 10 ** (0.4 * 0.2)
         Mgal = lum_H * self.ml_ratio
+        #print(LKcorr, Mgal)
+        #print(oop)
+
+        #print(mge_sum('mge_mrk1216.txt', 94e6 / 206265), 'mrk1216')  # 117014480545.67628
+        #print(mge_sum('mge_ngc1271.txt', 80e6 / 206265), 'ngc1271')  # 70176058033.44998
+        #print(mge_sum('mge_ngc1277.txt', 71e6 / 206265), 'ngc1277')  # 17491088092.82888 # -> lum_H = 2.77e11
+        #print(oop)
+        # pc_per_ac = self.dist * 1e6 / self.arcsec_per_rad
+        # take dists from Yildirim+2017 Table 1: MRK1216 d=94Mpc. NGC1271 d=80Mpc. NGC1277 d=71Mpc.
+
+        # FROM WALSH+2017:
+        # (Conclusion): MRK 1216 total lum L_K = 1.4e11, total stellar mass = 1.6e11
+        # (Sec7): NGC 1277 total lum L_V = 1.7e10 (L_K=, total stellar mass = 1.6e11
+        # (Sec7): NGC 1271 total lum L_H = 7.2e10, total stellar mass = 1.0e11
+
 
         # '''  #
+        # Take V - K = 3.0
+        # H - K = 0.2
+        lum_H1271 = 7.2e10
+        lum_V1277 = 1.7e10
+        LK_fromV1277 = lum_V1277 * 10 ** (0.4 * 3.)  # K-V = 3.0
+        # print(LK_fromV1277, lum_V1277 * 10 ** (0.4 * 3.1))  # 269431842718.3894 295426140887.394
+        LK_fromH1271 = lum_H1271 * 10 ** (0.4 * 0.2)  # H-K = 0.2
+        # print(LK_fromH1271)  # 86563039292.45374
         mbh_relation_full(mbhs=[self.mbh, 4.9e9, 3e9, 4.9e9],
                           sigmas=[304, 317, 295, 308],
-                          lum_ks=[2.5e11, 7.7e10, 8.1e10, 1.3e11],  # [LKcorr, 7.7e10, 7.2e10, 9.6e10],  # 7.7e10, 4.6e10, 9.6e10],
-                          masses=[3.8e11, 1.3e11, 1.1e11, 2.2e11],  # [Mgal, 1.6e11, 1.0e11, 1.6e11]  # 1.6e11, 1.0e11, 1.1e11]
+                          lum_ks=[LKcorr, LK_fromV1277, LK_fromH1271, 1.4e11],  # [2.5e11, 7.7e10, 8.1e10, 1.3e11]  # 7.7e10, 4.6e10, 9.6e10],
+                          masses=[Mgal, 1.6e11, 1.0e11, 1.6e11],  # [3.8e11, 1.3e11, 1.1e11, 2.2e11],  # 1.6e11, 1.0e11, 1.1e11]
                           mbh_errs=[[0.78e9, 0.70e9], [1.6e9, 1.6e9], [1.1e9, 1e9], [1.7e9, 1.7e9]],
                           sigma_errs=[[6, 6], [5, 5], [6, 6], [7, 7]],
                           lum_errs=[[0.,0.], [0,0], [0,0], [0,0]],  # [2.8e10, 2.8e10], [2.7e10, 2.7e10], [7.9e10, 4.6e10]],  # TO DO FIX 0s!
                           mass_errs=[[0.,0.], [0.,0.], [0.,0.], [0,0]],  # [0.9e11, 0.5e11]],  # TO DO FIX 0s!
-                          galaxies=['U2698', 'N1277', 'N1271', 'M1216'], fmts=['bD', 'rs', 'rs', 'rs'],
+                          galaxies=['U2698', 'N1277', 'N1271', 'M1216'],
+                          fmts=['bD', 'rs', 'rs', 'rs'],  # ['bD', 'rs', 'mo', 'k*'],  # ['bD', 'rs', 'rs', 'rs'],
                           msig_locs=[[310, 1.5e9], [318, 6.5e9], [247, 3.2e9], [257, 5.4e9]],
-                          ml_locs=[[1.15e11, 2.3e9], [1.4e11, 5.5e9], [4e10, 2e9], [3.5e10, 5.5e9]],
-                          mm_locs=[[1.6e11, 2.3e9], [2.4e11, 5e9], [4.8e10, 3.1e9], [5.5e10, 5.5e9]],
-                          savefig='scaling_rels_10_20.png')
+                          ml_locs=[[1.2e11, 1.6e9], [2e11, 7e9], [3.9e10, 3.45e9], [6.5e10, 5.65e9]],
+                          # [[1.2e11, 2.8e9], [2e11, 5.65e9], [3.9e10, 3.45e9], [7e10, 5.65e9]],  # [1.15e11, 2.3e9], [1.4e11, 5.5e9], [4e10, 2e9], [3.5e10, 5.5e9]
+                          mm_locs=[[1.7e11, 2.7e9], [1.8e11, 5e9], [4.5e10, 1.9e9], [6.5e10, 5.65e9]],
+                          # [[1.7e11, 2.8e9], [1.8e11, 5e9], [4.9e10, 1.9e9], [7.5e10, 5.65e9]],
+                          savefig='scaling_rels_10_20_uplims_a.png')
         # mbhs, mbh_errs, lum_ks, lum_errs, masses, mass_errs, sigmas, sigma_errs, galaxies, fmts, ml_locs, msig_locs, mm_locs
         print(oop)
 
