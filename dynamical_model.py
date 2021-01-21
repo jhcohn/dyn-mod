@@ -18,6 +18,32 @@ import mge_vcirc_mine as mvm  # import mge_vcirc code
 from scipy.interpolate import UnivariateSpline as unsp
 
 
+def projected_distance(ra1, ra2, dec1, dec2, dist1, dist2):
+    """
+
+    :param ra1: RA position of object 1 [deg]
+    :param ra2: RA position of object 2 [deg]
+    :param dec1: DEC position of object 1 [deg]
+    :param dec2: DEC position of object 1 [deg]
+    :param dist1: Distance to object 1 [pc]
+    :param dist2: Distance to object 2 [pc]
+    :return: angle of separation [rad], angle of separation [deg], distances of separation [pc] (at dist of each object)
+    """
+
+    ra1 = np.deg2rad(ra1)
+    ra2 = np.deg2rad(ra2)
+    dec1 = np.deg2rad(dec1)
+    dec2 = np.deg2rad(dec2)
+
+    sep_rad = np.arccos(np.sin(dec1) * np.sin(dec2) + np.cos(dec1) * np.cos(dec2) * np.cos(ra1 - ra2))  # radians
+    sep_deg = np.rad2deg(np.arccos(np.sin(dec1) * np.sin(dec2) + np.cos(dec1) * np.cos(dec2) * np.cos(ra1 - ra2)))
+
+    d_sep1 = dist1 * sep_rad  # pc
+    d_sep2 = dist2 * sep_rad  # pc
+
+    return sep_rad, sep_deg, d_sep1, d_sep2
+
+
 def mge_sum(mge, pc_per_ac):
     """
     Calculate total Luminosity of the MGE
@@ -502,7 +528,9 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
         collapsed_fluxes_vel += input_data[zi] * fullmask[zi] * v_width
 
     # DEFINE SEMI-MAJOR AXES FOR SAMPLING, THEN CALCULATE THE MEAN SURFACE BRIGHTNESS INSIDE ELLIPTICAL ANNULI
-    semi_major = np.linspace(0., 100., num=85)  # [pix]
+    semi_major = np.linspace(0., 100., num=85)  # [pix]  # num=66)
+    #semi_major = np.linspace(0., 85., num=1000)  # [pix]  # np.linspace(0., 100., num=85.)
+    #semi_major = np.linspace(0., 85., num=5000)  # [pix]
     co_surf, co_errs = annuli_sb(collapsed_fluxes_vel, semi_major, theta_ell, q_ell, xell, yell)  # CO [Jy km/s beam^-1]
     co_ell_sb = np.asarray(co_surf)  # put the output list of mean CO surface brightnesses in an array
     co_ell_rad = (2. * semi_major[1:] + q_ell * semi_major[1:]) / 3.  # mean_ellipse_radius = (2a + b)/3
@@ -723,13 +751,16 @@ def annuli_sb(flux_map, semi_major_axes, position_angle, axis_ratio, x_center, y
     annuli = []
     average_co = []
     errs_co = np.zeros(shape=(2, len(ellipses) - 1))
+    ns = []
     for e in range(len(ellipses) - 1):  # because indexed to e+1
         annuli.append(ellipses[e+1] - ellipses[e])
         npix = np.sum(annuli[e])
+        annuli[e][annuli[e] == 0] = np.nan  # turn mask into 1s and NaNs instead of 1s and 0s, so that 0s in flux = ok
         annulus_flux = annuli[e] * flux_map
-        annulus_flux[annulus_flux == 0] = np.nan  # set 0s equal to NaNs
+        #annulus_flux[annulus_flux == 0] = np.nan  # set 0s equal to NaNs
         average_co.append(np.nanmean(annulus_flux))  # calculate the mean, ignoring NaNs
         errs_co[:, e] = np.nanpercentile(annulus_flux, [16., 84.]) / npix  # use 68% confidence interval as errors
+        ns.append(npix)
 
     return average_co, errs_co
 
@@ -779,12 +810,33 @@ def gas_vel(resolution, co_rad, co_sb, dist, f_0, inc_fixed, zfixed=0.02152):
     # Units [Jy km/s/beam] * [Msol/(Jy km/s)] / [pc^2/beam] = [Msol/pc^2]
     sigr3_func_r = interpolate.interp1d(co_radii, co_sb, kind='quadratic', fill_value='extrapolate')
 
+    #plt.errorbar(co_radii, co_sb, fmt='ko')#, yerr=errs_co)
+    #plt.plot(np.linspace(0,750), sigr3_func_r(np.linspace(0,750)), 'b--')
+    #plt.show()
+
+    # 1277 RA, DEC: 49.964542	41.573528
+    # 1271 RA, DEC: 49.797000	41.353250
+    # 1275 RA, DEC: 49.950667	41.511696
+    # 2698 RA, DEC: 50.512000	40.863889
+
     # ESTIMATE GAS MASS
-    #i1 = integrate.quad(sigr3_func_r, 0, rvals[-1])[0]
-    #print(i1)  # 48.10314883101475
+    #i1 = integrate.quad(sigr3_func_r, 0, np.inf)[0]
+    #print(i1)  # 47.448953273905644
+    #i1 = 2 * np.pi * integrate.quad(sigr3_func_r, 0, rvals[-1])[0]  # 45.47 * 2pi!
+    #print(0.04879794212243681 * np.cos(inc_fixed) * msol_per_jykms)  # 552840.5698900325
+    #print(1.190971117285626 * np.cos(inc_fixed) * msol_per_jykms)  # 13492723.720823068
+    # SHOULD THIS BE 2*pi*integrate.quad(sigr3_func_r, 0, rvals[-1])[0]
+    # i2 = integrate.quadrature(sigr3_func_r, 0, rvals[-1])[0]  # 45.50
+    # i3 = integrate.romb(co_sb, dx=co_radii[2]-co_radii[1])  # 44.66 (use linspace with num=66 -> 65 samples (1+2^n)
+    #print(i1)  # 283.7109152673565 TADA
+    # 48.10314883101475
     #print(i1 * np.cos(inc_fixed))
+    #print(28.27 * np.cos(inc_fixed) * msol_per_jykms)  # 320275860.64137024
+    #print(282.720 * np.cos(inc_fixed) * msol_per_jykms)  # 3202985189.9726987 -> log10(M) = 9.50555493
+    # ^without inc: 8440988792.877579 -> log10(M) = 9.92639332
     #i1 *= np.cos(inc_fixed) * msol_per_jykms  # Jy km/s/beam * [Msol/(Jy km/s)]
-    #print(np.log10(i1))  # 8.736371904617355
+    #print(np.log10(i1))  # 9.507074443222836
+    # 8.736371904617355
     #print(oop)
     # END ESTIMATE GAS MASS
 
@@ -853,7 +905,7 @@ class ModelGrid:
                  enclosed_mass=None, menc_type=0, ml_ratio=1., sig_type='flat', sig_params=None, f_w=1., noise=None,
                  ds=None, ds2=None, zrange=None, xyrange=None, reduced=False, freq_ax=None, f_0=0., fstep=0., opt=True,
                  quiet=False, n_params=8, data_mask=None, avg=True, f_he=1.36, r21=0.7, alpha_co10=3.1, incl_gas=False,
-                 co_rad=None, co_sb=None, z_fixed=0.02152, pvd_width=None, vcg_func=None):
+                 co_rad=None, co_sb=None, z_fixed=0.02152, pvd_width=None, vcg_func=None, sqrt2n=False):
         # Astronomical Constants:
         self.c = 2.99792458 * 10 ** 8  # [m / s]
         self.pc = 3.086 * 10 ** 16  # [m / pc]
@@ -921,6 +973,7 @@ class ModelGrid:
         self.incl_gas = incl_gas  # if True, include gas mass in calculations
         self.pvd_width = pvd_width  # width (in pixels) for the PVD extraction
         self.vcg_func = vcg_func  # gas circular velocity interpolation function, returns v_c,gas(R) in units of km/s
+        self.sqrt2n = sqrt2n  # divide chi^2 by sqrt(2N) for stat things that don't really apply to this work anyway
         # Parameters to be built in create_grid(), convolve_cube(), or chi2 functions inside the class
         self.z_ax = None  # velocity axis, constructed from freq_ax, f_0, and vsys, based on opt
         self.weight = None  # 2D weight map, constructed from lucy_output (the deconvolved fluxmap)
@@ -930,7 +983,6 @@ class ModelGrid:
         self.convolved_cube = None  # the model cube: create from convolving the intrinsic model cube with the ALMA beam
         self.ell_mask = None  # mask defined by the elliptical fitting region, before downsampling
         self.ell_ds = None  # mask defined by the elliptical fitting region, created on ds x ds down-sampled pixels
-        self.sqrt2n = False
     """
     Build grid for dynamical modeling!
     
@@ -1220,7 +1272,7 @@ class ModelGrid:
             return chi_sq  # Reduced or Not depending on reduced = True or False
 
 
-    def scaling_rels(self, rel=0, err_type='systematic'):
+    def scaling_rels(self, rel=0, err_type='systematic', magsolH=3.37, magsolK=3.27, magsolV=4.87, HK=0.2, VK=3.1):
         """
         Print scaling relations!
         TO DO: add rel=2 (mbh-bulge mass relation)
@@ -1228,14 +1280,24 @@ class ModelGrid:
 
         :param rel: which scaling relation! rel=0: mbh-sigma. rel=1: mbh-lum. rel=2: mbh-mass.
         :param err_type: errors on UGC 2698 to plot ('systematic' or 'statistical')
+        :param magsolH: assumed absolute magnitude of the Sun in the H-band
+        :param magsolK: assumed absolute magnitude of the Sun in the K-band
+        :param magsolV: assumed absolute magnitude of the Sun in the V-band
+        :param HK: assumed H-K for the galaxy
+        :param VK: assumed V-K for the galaxy
         :return:
         """
 
+        # UGC 2698 calculations
         lum_H = mge_sum(self.enclosed_mass, self.pc_per_ac)
-        LKcorr = lum_H * 10 ** (0.4 * 0.2)
+        abs_H = magsolH - 2.5 * np.log10(lum_H)  # MsolH = 3.37
+        abs_K = abs_H - HK  # H-K = 0.2 -> K = H-0.2
+        lum_K = 10 ** (0.4 * (magsolK - abs_K))  # LK / Lsol = 10^(.4(MsolK - MK))
+        LK_fromH = lum_H * 10 ** (0.4 * (HK + magsolK - magsolH))
         Mgal = lum_H * self.ml_ratio
-        #print(LKcorr, Mgal)
-        #print(oop)
+        # MsolK: 3.27, MsolH: 3.37,
+        # print(lum_K, lum_H, self.ml_ratio, Mgal)  # 237030217843.6 216174127928.3 1.7034101349154922 368233200419.5
+        # print(oop)
 
         #print(mge_sum('mge_mrk1216.txt', 94e6 / 206265), 'mrk1216')  # 117014480545.67628
         #print(mge_sum('mge_ngc1271.txt', 80e6 / 206265), 'ngc1271')  # 70176058033.44998
@@ -1251,18 +1313,57 @@ class ModelGrid:
 
 
         # '''  #
-        # Take V - K = 3.0
+        # OLD
+        # lum_H1271 = 7.2e10
+        # lum_V1277 = 1.7e10
+        # lum_K1216 = 1.4e11
+
+        # L_V 1277: 0.18147530956875887 e11
+        # L_H 1271: 0.7476219879607321 e11
+        # L_H 1216: 1.225292156991971 e11
+        # Take V - K = 3.1
         # H - K = 0.2
-        lum_H1271 = 7.2e10
-        lum_V1277 = 1.7e10
-        LK_fromV1277 = lum_V1277 * 10 ** (0.4 * 3.)  # K-V = 3.0
+
+        lum_H1271 = 7.476219879607321e10
+        lum_V1277 = 1.8147530956875887e10
+        lum_H1216 = 1.225292156991971e11
+        #LK_fromV1277 = lum_V1277 * 10 ** (0.4 * 3.)  # V-K = 3.0
         # print(LK_fromV1277, lum_V1277 * 10 ** (0.4 * 3.1))  # 269431842718.3894 295426140887.394
-        LK_fromH1271 = lum_H1271 * 10 ** (0.4 * 0.2)  # H-K = 0.2
-        # print(LK_fromH1271)  # 86563039292.45374
+        #LK_fromH1271 = lum_H1271 * 10 ** (0.4 * 0.2)  # H-K = 0.2
+
+        abs_H1216 = magsolH - 2.5 * np.log10(lum_H1216)  # MsolH = 3.37
+        abs_K1216 = abs_H1216 - HK  # H-K = 0.2 -> K = 0.2-H
+        lum_K1216 = 10 ** (0.4 * (magsolK - abs_K1216))  # LK / Lsol = 10^(.4(MsolK - MK))
+        LK_fromH1216 = lum_H1216 * 10 ** (0.4 * (HK + magsolK - magsolH))
+
+        # abs_mag_H = abs_mag_sun_H - 2.5 D * alog10(totlum_H)
+        abs_H1271 = magsolH - 2.5 * np.log10(lum_H1271)  # MsolH = 3.37
+        abs_K1271 = abs_H1271 - HK  # H-K = 0.2 -> K = 0.2-H
+        lum_K1271 = 10 ** (0.4 * (magsolK - abs_K1271))  # LK / Lsol = 10^(.4(MsolK - MK))
+        LK_fromH1271 = lum_H1271 * 10 ** (0.4 * (HK + magsolK - magsolH))
+
+        abs_V1277 = magsolV - 2.5 * np.log10(lum_V1277)  # MsolV = 4.83
+        abs_K1277 = abs_V1277 - VK  # V-K = 3.0
+        lum_K1277 = 10 ** (0.4 * (magsolK - abs_K1277))  # MsolK = 3.27
+        LK_fromV1277 = lum_V1277 * 10 ** (0.4 * (VK + magsolK - magsolV))  # for LK = 1e11, need x~3.484
+        # need (V-K) + magsolK - magsolV ~= 1.924
+        # NOTE: actual Mass 1277 = 1.581e11
+        # NOTE: Based on total LK, MRK 1216 total LH = 1.06200861e11, with M/L = 1.3. Hmm need LH~1.23e11
+        ## 1.23e11 * 10^(0.4(0.2 + 3.27-3.37)) = 1.349e11 = LK.
+        ## Using LK = 1.4e11, get LH = 1.28e11
+        # print(lum_K/1e11, lum_K1277/1e11, lum_K1271/1e11)
+        # print(LK_fromH/1e11, LK_fromV1277/1e11, LK_fromH1271/1e11)
+
+        #print(lum_K/1e11, lum_K1216/1e11, lum_K1277/1e11, lum_K1271/1e11)  # 2.370302178436111 1.3435061340469487 0.7224662201773862 0.8197512087561656
+        #print(LK_fromH/1e11, LK_fromH1216/1e11, LK_fromV1277/1e11, LK_fromH1271/1e11)  # 2.370302178436111 1.3435061340469487 0.7224662201773862 0.8197512087561656
+        #print(oop)
+        # print(LK_fromH1271)  # 86563039292.45374mge_sum
         mbh_relation_full(mbhs=[self.mbh, 4.9e9, 3e9, 4.9e9],
                           sigmas=[304, 317, 295, 308],
-                          lum_ks=[LKcorr, LK_fromV1277, LK_fromH1271, 1.4e11],  # [2.5e11, 7.7e10, 8.1e10, 1.3e11]  # 7.7e10, 4.6e10, 9.6e10],
-                          masses=[Mgal, 1.6e11, 1.0e11, 1.6e11],  # [3.8e11, 1.3e11, 1.1e11, 2.2e11],  # 1.6e11, 1.0e11, 1.1e11]
+                          lum_ks=[lum_K, lum_K1277, lum_K1271, LK_fromH1216],  # [lum_K, lum_K1277, lum_K1271, 1.4e11],  # [2.5e11, 7.7e10, 8.1e10, 1.3e11]  # 7.7e10, 4.6e10, 9.6e10],
+                          masses=[Mgal, 1.68772037899e11, 1.04667078315e11, 1.59287980409e11],
+                          # [Mgal, 1.67e11, 1.0e11, 1.6e11],  # [Mgal, 1.6e11, 1.0e11, 1.6e11]
+                          # [3.8e11, 1.3e11, 1.1e11, 2.2e11],  # 1.6e11, 1.0e11, 1.1e11]
                           mbh_errs=[[0.78e9, 0.70e9], [1.6e9, 1.6e9], [1.1e9, 1e9], [1.7e9, 1.7e9]],
                           sigma_errs=[[6, 6], [5, 5], [6, 6], [7, 7]],
                           lum_errs=[[0.,0.], [0,0], [0,0], [0,0]],  # [2.8e10, 2.8e10], [2.7e10, 2.7e10], [7.9e10, 4.6e10]],  # TO DO FIX 0s!
@@ -1270,11 +1371,10 @@ class ModelGrid:
                           galaxies=['U2698', 'N1277', 'N1271', 'M1216'],
                           fmts=['bD', 'rs', 'rs', 'rs'],  # ['bD', 'rs', 'mo', 'k*'],  # ['bD', 'rs', 'rs', 'rs'],
                           msig_locs=[[310, 1.5e9], [318, 6.5e9], [247, 3.2e9], [257, 5.4e9]],
-                          ml_locs=[[1.2e11, 1.6e9], [2e11, 7e9], [3.9e10, 3.45e9], [6.5e10, 5.65e9]],
-                          # [[1.2e11, 2.8e9], [2e11, 5.65e9], [3.9e10, 3.45e9], [7e10, 5.65e9]],  # [1.15e11, 2.3e9], [1.4e11, 5.5e9], [4e10, 2e9], [3.5e10, 5.5e9]
-                          mm_locs=[[1.7e11, 2.7e9], [1.8e11, 5e9], [4.5e10, 1.9e9], [6.5e10, 5.65e9]],
+                          ml_locs=[[1.1e11, 1.6e9], [3.4e10, 5.65e9], [3.9e10, 2e9], [1.4e11, 5.8e9]],
+                          mm_locs=[[1.7e11, 2.7e9], [1.85e11, 5.2e9], [4.5e10, 2e9], [6.75e10, 5.65e9]],
                           # [[1.7e11, 2.8e9], [1.8e11, 5e9], [4.9e10, 1.9e9], [7.5e10, 5.65e9]],
-                          savefig='scaling_rels_10_20_uplims_a.png')
+                          savefig='new_mge_calcs.png')  #  'scaling_rels_10_20_uplims_a.png')  # _b.png'
         # mbhs, mbh_errs, lum_ks, lum_errs, masses, mass_errs, sigmas, sigma_errs, galaxies, fmts, ml_locs, msig_locs, mm_locs
         print(oop)
 
@@ -2075,6 +2175,7 @@ class ModelGrid:
         print(x_locvb, y_locvb)  # 42.85356933052101 32.96256939040606
         x_locvb = xmatch - self.xyrange[0]
         y_locvb = ymatch - self.xyrange[2]
+        # print(xmatch, ymatch, self.x_loc, self.y_loc)  # 118, 160, 126.85, 150.96
 
         #x_locvb = xmatch - self.xyrange[0]
 
@@ -2425,6 +2526,13 @@ if __name__ == "__main__":
     if 'ds2' not in params:
         params['ds2'] = params['ds']
 
+    if 'sqrt2n' not in params:
+        params['sqrt2n'] = False
+    elif params['sqrt2n'] == 1:
+        params['sqrt2n'] = True
+    else:
+        params['sqrt2n'] = False
+
     # DECIDE HERE WHETHER TO AVG IN THE REBIN() FUNCTION (avging=True) OR SUM (avging=False)
     avging = True
 
@@ -2454,6 +2562,15 @@ if __name__ == "__main__":
     #print(oop)
     # ig = params['incl_gas'] == 'True'
 
+    # Calculate projected distance if you want
+    # 1277 RA, DEC: 49.964542	41.573528
+    # 1271 RA, DEC: 49.797000	41.353250
+    # 1275 RA, DEC: 49.950667	41.511696
+    # 2698 RA, DEC: 50.512000	40.863889
+    # dists = projected_distance(50.512000, 49.950667, 40.863889, 41.511696, 91e6, 76e6)  # UGC 2698 vs NGC 1275
+    # print(dists)  # (0.01349781247173701, 0.7733676872895765, 1228300.934928068, 1025833.7478520127)
+    # print(oop)
+
     # CREATE MODEL CUBE!
     inc_fixed = np.deg2rad(67.7)  # based on fiducial model (67.68 deg)
     vcg_in = None
@@ -2473,15 +2590,16 @@ if __name__ == "__main__":
                    f_0=f_0, bl=params['bl'], xyrange=[params['xi'], params['xf'], params['yi'], params['yf']],
                    n_params=n_free, data_mask=params['mask'], incl_gas=params['incl_gas']=='True', vrad=params['vrad'],
                    kappa=params['kappa'], omega=params['omega'], co_rad=co_ell_rad, co_sb=co_ell_sb, avg=avging,
-                   pvd_width=0.142838/params['resolution'], vcg_func=vcg_in)
+                   pvd_width=0.142838/params['resolution'], vcg_func=vcg_in, sqrt2n=params['sqrt2n'])
     # pvd_width = (params['x_fwhm']*params['y_fwhm'])/params['resolution']/2.
 
     # x_fwhm=0.197045, y_fwhm=0.103544 -> geometric mean = sqrt(0.197045*0.103544) = 0.142838; regular mean = 0.1502945
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()  # 6495.965711236455 (1.2275067481550368)  # 6498.030199144044 (1.227896863027975)
+    # mg.moment_0(False, False, False)
     mg.scaling_rels(rel=2)
-    #mg.vor_moms(incl_beam=True, fs=12, pars_backup=params, frac=True)
+    # mg.vor_moms(incl_beam=True, fs=12, pars_backup=params, frac=True)
     # mg.pvd()
     print(oop)
     xtalk = [4, 7, 13, 16]

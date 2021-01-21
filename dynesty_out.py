@@ -774,6 +774,12 @@ def table_it(things, parfiles, models, parlabels, sig=3, avg=True, logged=False,
 
         if 'ds2' not in params:
             params['ds2'] = params['ds']
+        if 'sqrt2n' not in params:
+            params['sqrt2n'] = False
+        elif params['sqrt2n'] == 1:
+            params['sqrt2n'] = True
+        else:
+            params['sqrt2n'] = False
 
         mod_ins = dm.model_prep(data=params['data'], ds=params['ds'], ds2=params['ds2'], lucy_out=params['lucy'],
                                 lucy_b=params['lucy_b'], lucy_mask=params['lucy_mask'], lucy_in=params['lucy_in'],
@@ -1157,6 +1163,13 @@ def output_dictionaries(err):
                 'outpf': 'ugc_2698/ugc_2698_finaltests_lucyvb_out.txt',
                 'mod': 'lucyvb', 'extra_params': None}
 
+    s2n_dict = {'pkl': 'ugc_2698_finaltests_sqrt2n2_10000000_8_0.005_1610753327.9514349_end.pkl',  # 'ugc_2698_finaltests_sqrt2n_10000000_8_0.02_1610680380.9737492_end.pkl',
+                'name': 'finaltests/u2698_finaltests_sqrt2n2_' + str(err) + 'sig.png',
+                'cornername': 'finaltests/u2698_finaltests_sqrt2n2_corner_' + str(err) + 'sig.png',
+                'inpf': 'ugc_2698/ugc_2698_finaltests_sqrt2n2.txt',
+                'outpf': 'ugc_2698/ugc_2698_finaltests_sqrt2n2_out.txt',
+                'mod': 'sqrt2n', 'extra_params': None}
+
     results_dict = {
                     'fiducial': fid_dict,#
                     'ahe': ahe_dict,#
@@ -1185,6 +1198,7 @@ def output_dictionaries(err):
                     'nlive': nlv_dict,#
                     'dlogz': dlz_dict,#
                     'fullpriors': ful_dict,#
+                    'sqrt2n': s2n_dict,
                     }
 
     return results_dict
@@ -1196,7 +1210,7 @@ grp = '/Users/jonathancohn/Documents/dyn_mod/groupmtg/'
 sig = 1  # 1 # 3  # show 1sigma errors or 3sigma errors
 
 # CHOOSE DICTIONARY
-dict = output_dictionaries(sig)['fiducial']
+dict = output_dictionaries(sig)['sqrt2n']
 
 if 'nobh' in dict['pkl']:
     # labels = np.array(['xloc', 'yloc', 'sig0', 'inc', 'PAdisk', 'vsys', 'ml_ratio', 'f'])
@@ -1270,12 +1284,14 @@ pris[1] = (pris[1] - 125.565) * 0.02  # MODIFY RA
 pris[2] = (pris[2] - 149.912) * 0.02  # MODIFY DEC
 ###
 
-# '''  #
+'''  #
 # ONLY table_it *AFTER* OUT FILE CREATED
-#tl = big_table(output_dictionaries(sig))
-#print(tl)
-#print(oop)
+tl = big_table(output_dictionaries(sig))
+print(tl)
+print(oop)
+# '''  #
 
+'''  #
 dictr0 = output_dictionaries(sig)['lucyn5']  # rfit0.5  # ds48  # nlive  # lucyn5  # lucyn15
 dictr1 = output_dictionaries(sig)['lucyvb']  # rfit0.8  # ds510  # dlogz  # fullpriors  # lucyvb
 
@@ -1285,13 +1301,15 @@ hd, hl, li, tx, nl = table_it([direc + dict['pkl'], direc+dictr0['pkl'], direc+d
                               percent_diff=True, pris=pris, tabpars=tabpars, raf=ra_func, decf=dec_func)
 print(li)
 print(oop)
+# '''  #
 
+#'''  #
 hd, hl, li, tx, nl = table_it([direc + dict['pkl']], [dict['outpf']], [dict['mod']], tablabs, sig=sig, logged=True,
                               percent_diff=True, pris=pris, tabpars=tabpars, raf=ra_func, decf=dec_func)
-print(nl)
+#print(nl)
 #print(hd)
 #print(hl)
-#print(li)
+print(li)
 #print(tx)
 print(oop)
 # '''  #
@@ -1434,8 +1452,8 @@ cornerax = cornerax[re_order]
 fg, ax = mycorn(dyn_res, color='blue', show_titles=True, title_kwargs={'fontsize': 35}, max_n_ticks=3, tickfs=35,
                 quantiles=qts, labels=cornerax, label_kwargs={'fontsize': 35}, fig=(fig, axes), shortlabs=labels,
                 raf=ra_func, decf=dec_func)
-# plt.savefig(grp + dict['cornername'])
-plt.savefig(grp + 'finaltests/fiducial_corner_radec_rc35_xycentroidoffset.png')
+plt.savefig(grp + dict['cornername'])
+# plt.savefig(grp + 'finaltests/fiducial_corner_radec_rc35_xycentroidoffset.png')
 plt.show()
 # '''  #
 
