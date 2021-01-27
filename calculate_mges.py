@@ -52,6 +52,14 @@ def print_new_mge(oldmge, newmge, newintensities, msolold, msolnew):
             nfile.write(str(newintensities[l]) + ' ' + str(sigmas[l]) + ' ' + str(qs[l]) + '\n')
             print(str(newintensities[l]) + ' | ' + str(sigmas[l]) + ' | ' + str(qs[l]))
 
+
+def just_print_mge(mgefile):
+    with open(mgefile, 'r') as nfile:
+        print('I [Lsol/pc^2] sigma [arcsec] q')
+        for line in nfile:
+            cols = line.split()
+            print(cols[1] + ' | ' + cols[2] + ' | ' + cols[3])
+
 # I = (64800/np.pi)**2 * 10 ** (0.4 * (msol - mu))
 # mu  = msol - 2.5 * np.log10(I * (np.pi/64800)**2)
 
@@ -91,6 +99,9 @@ pc_per_ac_1216 = 94e6 / 206265.
 pc_per_ac_2698 = 91e6 / 206265.
 
 pwd = '/Users/jonathancohn/Documents/dyn_mod/'
+
+just_print_mge(pwd+'ugc_2698/ugc_2698_rhe_mge.txt')
+print(oop)
 
 i1277 = i_to_mu_to_i2(msol_v_new, msol_v_old1277, pwd+'ngc_1277_mge.txt')
 i1271 = i_to_mu_to_i2(msol_h_new, msol_h_old1271, pwd+'ngc_1271_mge.txt')
