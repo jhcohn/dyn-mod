@@ -1,73 +1,6 @@
 # basic numeric setup
 import numpy as np
 
-# SETTINGS / CHOICES
-galaxy = '384'  # 2698, 11179, 384
-pri = 'priset3'  # 'wide', 'mid', 'narrow', 'priset2', 'priset3'
-masktype = 'baseline'  # 'strict'  # 'lax'  # 'baseline'
-mgetype = 'rhe'  # 'rhe'  # 'ahe'  # 'rhe'  # 'rre'  # 'akin'
-os = 4  # 1 2 3 4 6 8 10 12 14 16
-gs = 31  # beam grid size
-sigtype = 'flat'  # flat, exp, gauss
-rfit = 0.7
-vrad = False  # include radial velocity
-kappa = False  # include radial velocity with kappa
-omega = False  # include radial velocity with sub-Keplerian motion
-gas = False  # incl_gas
-zi = 25  # 29
-zf = 82  # 78
-# total pixels in xi:xf must be divisible by ds2; total pixels in yi:yf must be divisible by ds (same for xerr & yerr)
-ds = 4
-ds2 = 4
-####### ds = #4x4  #8x4  #10x5 #6x3  #10x10
-xerr0 = 144  # 144 # 144 # 141 # 144 # 141
-xerr1 = 168  # 168 # 168 # 171 # 168 # 171
-yerr0 = 96   # 96  # 96  # 95  # 96  # 93
-yerr1 = 120  # 120 # 120 # 120 # 120 # 123
-xi = 84      # 84  # 82  # 81  # 84  # 81
-xf = 168     # 168 # 170 # 171 # 168 # 171
-yi = 118     # 118 # 118 # 115 # 117 # 115
-yf = 182     # 182 # 182 # 185 # 183 # 185
-# ds=4x4 -> xi=84,xf=168, yi=118,yf=182. ds=8x4 -> xi=82,xf=170, yi=118,yf=182. ds=10x5 -> xi=81,xf=171, yi=115,yf=185.
-# ds=6x3 -> xi=84,xf=168, yi=117,yf=183. ds=10x10 -> xi=81,xf=171, yi=115, yf=185
-# ds=4x4 OR =8x4 OR =6x3 -> xerr0=144,xerr1=168, yerr0=96,yerr1=120. ds=10x5 -> xerr0=141,xerr1=171, yerr0=95,yerr1=120.
-# ds=10x10 -> xerr0=141,xerr1=171, yerr0=93,yerr1=123.
-# confirmed: this error region has no overlap with the strictmask
-nlive = 250  # 250
-dlogz = 0.02  # 0.02  # 0.001
-
-if masktype == 'ext2582':
-    zi = 25
-    zf = 82
-elif masktype == 'ext2285':
-    zi = 22
-    zf = 85
-
-gas_label = 'nog'
-if gas:
-    gas_label = 'gas'
-
-vtype = 'orig'  # orig, vrad, omega, kappa
-if vrad:
-    vtype = 'vrad'  # orig, vrad, omega, kappa
-elif omega:
-    vtype = 'omega'  # orig, vrad, omega, kappa
-elif kappa:
-    vtype = 'kappa'  # orig, vrad, omega, kappa
-
-# run_type = sigtype + 'sig_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
-# run_type = 'rfit10_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
-# run_type = masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
-# run_type = 'exv_' + 'os' + str(os) + '_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
-# run_type = 'exv_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
-# run_type = 'exv_ds' + str(ds) + str(ds2) + '_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
-# run_type = 'exv_n' + str(nlive) + '_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
-# run_type = 'exv_dlz' + str(dlogz) + '_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
-# run_type  = 'os' + str(os) + '_d91_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
-# run_type  = 'os' + str(os) + '_' + masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
-    # 'b' + str(gs) + '_d85_' +  masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
-run_type = masktype + '_' + mgetype + '_' + vtype + '_' + gas_label
-
 
 def write_runfile(run_base, galaxy='2698', folder='ugc_2698'):
     """
@@ -178,328 +111,558 @@ def write_newpar(parname, copyf, priors, fixed, files):
     return parname
 
 
-dm = '/Users/jonathancohn/Documents/dyn_mod/'
-dc = '/scratch/user/joncohn/dyn_cluster'
-clusterpars = dm + 'dyn_cluster/param_files/'
+def cube_regions(ds, ds2, gal='2698'):
+    """
 
-if galaxy == '2698':
-    cube = 'UGC2698_C4_CO21_bri_20.3kms.pbcor.fits'
-    folder = 'ugc_2698'
+    :param ds: down-sampling factor (x)
+    :param ds2: down-sampling factor (y)
+    :param gal: galaxy keyword
+    :return: [error region xi, xf, yi, yf], [sub-cube region xi, xf, yi, yf]
+    """
+    # 2698 fiducial: xi = 84 xf = 168 yi = 118 yf = 182
+    # Try to make these ranges divisible by 4, 5, and 10 (e.g. xf-xi=80, 100, 120, 140, 160)
+    # 11179: xerr0 = 190 xerr1 = 214 yerr0 = 102 yerr1 = 126
+    # 11179: xi = 104  # 108 xf = 204  # 208 yi = 80  # 92 yf = 240  # 232
+    # 384: xerr0 = 248 xerr1 = 272 yerr0 = 143 yerr1 = 167
+    # 384: xi = 150  # 158 xf = 270  # 262 yi = 132  # 142 yf = 252  # 242
 
-    masks = {'baseline': 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmask2.fits',
-             'strict': 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmaskstrict.fits',
-             'lax': 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmasklax.fits',
-             'ext2582': 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmaskext2582.fits',
-             'ext2285': 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmaskext2285.fits'}
+    err_dict = {'2698': {'44': [144, 168, 96, 120],  # [xerr0, xerr1, yerr0, yerr1]
+                         '84': [144, 168, 96, 120],
+                         '105': [141, 171, 95, 120],
+                         '63': [144, 168, 96, 120]},
+                '11179': {'44': [190, 214, 102, 126],
+                          '84': [190, 214, 102, 126],
+                          '105': [187, 217, 101, 126],
+                          '63': [190, 214, 102, 126]},
+                '384': {'44': [248, 272, 143, 167],
+                        '84': [248, 272, 143, 167],
+                        '105': [245, 275, 142, 167],
+                        '63': [248, 272, 143, 167]}
+                }
+    sub_dict = {'2698': {'44': [84, 168, 118, 182],  # [xi, xf, yi, yf]
+                         '84': [82, 170, 118, 182],
+                         '105': [81, 171, 115, 185],
+                         '63': [84, 168, 117, 183]},
+                '11179': {'44': [104, 204, 80, 240],
+                          '84': [102, 206, 80, 240],
+                          '105': [104, 204, 80, 240],
+                          '63': [103, 205, 79, 241]},
+                '384': {'44': [150, 270, 132, 252],
+                        '84': [150, 270, 132, 252],
+                        '105': [150, 270, 132, 252],
+                        '63': [150, 270, 132, 252]}
+                }
 
-    lucys = {'baseline': 'ugc_2698_20.3_strict2_lucyout_n10.fits',
-             'strict': 'ugc_2698_20.3_strictstrict_lucyout_n10.fits',
-             'lax': 'ugc_2698_20.3_strictlax_lucyout_n10.fits',
-             'ext2582': 'ugc_2698_20.3_strict2582_lucyout_n10.fits',
-             'ext2285': 'ugc_2698_20.3_strict2285_lucyout_n10.fits'}
+    return err_dict[gal][str(ds2) + str(ds)], sub_dict[gal][str(ds2) + str(ds)]
 
+
+def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, vrad, kappa, omega, gas, ds, ds2, nlive,
+                   dlogz, lucyn, lucyvb=False):
+    """
+    Main function for handling parameter input options! Functions to write out parameter files and lsf files are called
+        inside this function.
+
+    :param galaxy: galaxy keyword ('2698', '384', '11179')
+    :param base_id: base id for the run name (e.g. 'finaltests', 'preliminary', etc.)
+    :param pri: priorset keyword ('priset3', etc.)
+    :param masktype: mask keyword ('baseline', etc.)
+    :param mgetype: mge keyword ('rhe', etc.)
+    :param os: pixel oversampling factor (4, etc.)
+    :param gs: beam grid size (create beam on a grid of gs x gs pixels)
+    :param sigtype: sigma type ('flat', 'exp', 'gauss')
+    :param vrad: True or False (if True: including radial velocity component as a free parameter, constant with radius)
+    :param kappa: True or False (if True: including radial velocity component with kappa)
+    :param omega: True or False (if True: including radial velocity component with omega; also uses kappa, although the
+        keyword kappa should be kept False)
+    :param gas: True or False (if True: include a calculation of the gas mass)
+    :param ds: down-sampling factor (ds x ds2 block-averaging) in the x-direction (4, etc.)
+    :param ds2: down-sampling factor (ds x ds2 block-averaging) in the y-direction (4, etc.)
+    :param nlive: number of live points to use in the dynesty fit (250, etc.)
+    :param dlogz: convergence threshold to use in dynesty (0.02, etc.)
+    :param lucyn: number of iterations to use in the lucy-richardson deconvolution
+    :param lucyvb: True if this is the model where the lucy-input fluxmap has been voronoi-binned before deconvolution
+    :return:
+    """
+
+    # OLD PARAMS NOW ASSIGNED BY GALAXY
+    # :param rfit: fitting ellipse semi-major axis [arcsec] (0.7, etc.)
+    # :param zi: first frequency slice index in the subcube [included; start counting at 0] (25, etc.)
+    # :param zf: final frequency slice index in the subcube [not included; start counting at 0] (82, etc.)
+
+    # if masktype == 'ext2582':
+    #     zi = 25
+    #     zf = 82
+    # elif masktype == 'ext2285':
+    #     zi = 22
+    #     zf = 85
+
+    gas_label = 'nog'
+    if gas:
+        gas_label = 'gas'
+
+    vtype = 'orig'  # orig, vrad, omega, kappa
+    if vrad:
+        vtype = 'vrad'  # orig, vrad, omega, kappa
+    elif omega:
+        vtype = 'omega'  # orig, vrad, omega, kappa
+    elif kappa:
+        vtype = 'kappa'  # orig, vrad, omega, kappa
+
+    err_region, sub_cube = cube_regions(ds, ds2, gal=galaxy)
+    xerr0, xerr1, yerr0, yerr1 = err_region
+    xi, xf, yi, yf = sub_cube
+
+    dm = '/Users/jonathancohn/Documents/dyn_mod/'
+    dc = '/scratch/user/joncohn/dyn_cluster'
+    clusterpars = dm + 'dyn_cluster/param_files/'
+
+    if galaxy == '2698':
+
+        zi = 25  # 29
+        zf = 82  # 78
+
+        cube = 'UGC2698_C4_CO21_bri_20.3kms.pbcor.fits'
+        folder = 'ugc_2698'
+
+        masks = {'baseline': 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmask2.fits',
+                 'strict': 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmaskstrict.fits',
+                 'lax': 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmasklax.fits',
+                 'ext2582': 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmaskext2582.fits',
+                 'ext2285': 'UGC2698_C4_CO21_bri_20.3kms_jonathan_casaimviewhand_strictmaskext2285.fits'}
+
+        if lucyvb:
+            lucys = {'baseline': 'ugc_2698_20.3_strict2_voronoibin_lucyout_n' + str(lucyn) + '.fits'}
+        else:
+            lucys = {'baseline': 'ugc_2698_20.3_strict2_lucyout_n' + str(lucyn) + '.fits',
+                     'strict': 'ugc_2698_20.3_strictstrict_lucyout_n' + str(lucyn) + '.fits',
+                     'lax': 'ugc_2698_20.3_strictlax_lucyout_n' + str(lucyn) + '.fits',
+                     'ext2582': 'ugc_2698_20.3_strict2582_lucyout_n' + str(lucyn) + '.fits',
+                     'ext2285': 'ugc_2698_20.3_strict2285_lucyout_n' + str(lucyn) + '.fits'}
+
+        if gs != 31:
+            lucys = {'baseline': 'ugc_2698_20.3_strict2_lucyout_g' + str(gs) + '_n' + str(lucyn) + '.fits',
+                     'strict': 'ugc_2698_20.3_strictstrict_lucyout_g' + str(gs) + '_n' + str(lucyn) + '.fits',
+                     'lax': 'ugc_2698_20.3_strictlax_lucyout_g' + str(gs) + 'n' + str(lucyn) + '.fits',
+                     'ext2582': 'ugc_2698_20.3_strict2582_lucyout_g' + str(gs) + '_n' + str(lucyn) + '.fits',
+                     'ext2285': 'ugc_2698_20.3_strict2285_lucyout_g' + str(gs) + '_n' + str(lucyn) + '.fits'}
+
+        lucy_masks = {'baseline': 'ugc_2698_collapsemask_20.3kms_jonathan_casaimview_strictmask2.fits',
+                      'strict': 'ugc_2698_collapsemask_20.3kms_jonathan_casaimview_strictmaskstrict.fits',
+                      'lax': 'ugc_2698_collapsemask_20.3kms_jonathan_casaimview_strictmasklax.fits',
+                      'ext2582': 'ugc_2698_collapsemask_20.3kms_jonathan_casaimview_strictmask2582.fits',
+                      'ext2285': 'ugc_2698_collapsemask_20.3kms_jonathan_casaimview_strictmask2285.fits'}
+
+        if lucyvb:
+            fluxmaps = {'baseline': 'ugc_2698_fluxmap_20.3kms_strictmask2_voronoibin.fits'}
+        else:
+            fluxmaps = {'baseline': 'ugc_2698_fluxmap_20.3kms_jonathan_casaimview_strictmask2.fits',
+                        'strict': 'ugc_2698_fluxmap_20.3kms_jonathan_casaimview_strictmask2strict.fits',
+                        'lax': 'ugc_2698_fluxmap_20.3kms_jonathan_casaimview_strictmasklax.fits',
+                        'ext2582': 'ugc_2698_fluxmap_20.3kms_jonathan_casaimview_strictmask2582.fits',
+                        'ext2285': 'ugc_2698_fluxmap_20.3kms_jonathan_casaimview_strictmask2285.fits'}
+
+        mges = {'ahe': 'ugc_2698_ahe_mge.txt', 'rhe': 'ugc_2698_rhe_mge.txt', 'rre': 'ugc_2698_rre_mge.txt',
+                'ahepsf': 'ugc_2698_ahepsf_mge.txt', 'rhepsf': 'ugc_2698_rhepsf_mge.txt',
+                'rrepsf': 'ugc_2698_rrepsf_mge.txt',
+                'akin': 'yildirim_table_2698.txt'}
+
+        xell = 126.85
+        yell = 150.9
+        xrange = [116, 140]
+        yrange = [140, 160]
+        theta_ell = 19.
+        parange = [0, 35]
+        q_ell = 0.38
+        rfit = 0.7
+
+        # HEADER INFO & DISTANCE
+        resolution = 0.02  # arcsec/pix
+        x_fwhm = 0.197045  # arcsec
+        y_fwhm = 0.103544  # arcsec
+        PAbeam = 9.271  # deg
+        dist = 91.  # Mpc
+        vsysrange = [6405, 6505]
+
+    elif galaxy == '11179':  # BUCKET: UPDATE  (done): masks (baseline), lucys (baseline), lucy_masks (baseline),
+        # fluxmaps (baseline), mges (akin)
+        cube = 'PGC11179_C4_CO21_bri_MS_20kms.pbcor.fits'
+        folder = 'pgc_11179'
+
+        zi = 6  # ~4 slices before first with emission
+        zf = 56  # ~4 slices after last with emission
+
+        masks = {'baseline': 'PGC11179_C4_CO21_bri_MS_20kms_jonathan_casaimviewhand_strictmask.fits',
+                 'strict': 'PGC11179_C4_CO21_bri_MS_20kms_jonathan_casaimviewhand_strictmaskstrict.fits',
+                 'lax': 'PGC11179_C4_CO21_bri_MS_20kms_jonathan_casaimviewhand_strictmasklax.fits',
+                 'ext0756': 'PGC11179_C4_CO21_bri_MS_20kms_jonathan_casaimviewhand_strictmaskext0756.fits'}
+
+        lucys = {'baseline': 'pgc_11179_20_strict_lucyout_n' + str(lucyn) + '.fits',
+                 'strict': 'pgc_11179_20_strictstrict_lucyout_n' + str(lucyn) + '.fits',
+                 'lax': 'pgc_11179_20_strictlax_lucyout_n' + str(lucyn) + '.fits',
+                 'ext0756': 'pgc_11179_20_strict0756_lucyout_n' + str(lucyn) + '.fits'}
+
+        if gs != 31:
+            lucys = {'baseline': 'pgc_11179_20_strict_lucyout_g' + str(gs) + '_n' + str(lucyn) + '.fits',
+                     'strict': 'pgc_11179_20_strictstrict_lucyout_g' + str(gs) + '_n' + str(lucyn) + '.fits',
+                     'lax': 'pgc_11179_20_strictlax_lucyout_g' + str(gs) + '_n' + str(lucyn) + '.fits',
+                     'ext0756': 'pgc_11179_20_strict0756_lucyout_g' + str(gs) + '_n' + str(lucyn) + '.fits'}
+
+        lucy_masks = {'baseline': 'pgc_11179_collapsemask_20kms_jonathan_casaimview_strictmask.fits',
+                      'strict': 'pgc_11179_collapsemask_20kms_jonathan_casaimview_strictmaskstrict.fits',
+                      'lax': 'pgc_11179_collapsemask_20kms_jonathan_casaimview_strictmasklax.fits',
+                      'ext0756': 'pgc_11179_collapsemask_20kms_jonathan_casaimview_strictmask0756.fits'}
+
+        fluxmaps = {'baseline': 'pgc_11179_fluxmap_20kms_jonathan_casaimview_strictmask.fits',
+                    'strict': 'pgc_11179_fluxmap_20kms_jonathan_casaimview_strictmaskstrict.fits',
+                    'lax': 'pgc_11179_fluxmap_20kms_jonathan_casaimview_strictmasklax.fits',
+                    'ext0756': 'pgc_11179_fluxmap_20kms_jonathan_casaimview_strictmask0756.fits'}
+
+        mges = {'ahe': 'pgc_11179_ahe_mge.txt', 'rhe': 'pgc_11179_rhe_mge.txt', 'rre': 'pgc_11179_rre_mge.txt',
+                'ahepsf': 'pgc_11179_ahepsf_mge.txt', 'rhepsf': 'pgc_11179_rhepsf_mge.txt',
+                'rrepsf': 'pgc_11179_rrepsf_mge.txt',
+                'akin': 'pgc_11179_mge_akin.txt'}  # 'yildirim_table_11179.txt'}
+
+        xell = 153.  # pix
+        yell = 160.  # pix
+        xrange = [140., 160.]
+        yrange = [150., 170.]
+        theta_ell = 70.  # ellipse PA [deg] (counter-clockwise from x)
+        parange = [60., 90.]
+        q_ell = 0.35  # akin MGE min q=0.2793 -> arccos(sqrt((400*.2793^2 - 1.)/399.)) = 74.03 deg ;; take i~80. deg
+        rfit = 1.8
+
+        # HEADER INFO & DISTANCE
+        resolution = 0.03  # arcsec/pix
+        x_fwhm = 0.29  # arcsec
+        y_fwhm = 0.16  # arcsec
+        PAbeam = 86.78  # PA of beam [deg] (as defined in casa/the ALMA data)
+        dist = 98.  # Mpc
+        # https://ned.ipac.caltech.edu/byname?objname=PGC%2011179&hconst=67.8&omegam=0.308&omegav=0.692&wmap=4&corr_z=1
+        vsysrange = [6600, 7000]
+
+    elif galaxy == '384':  # BUCKET: UPDATE (done): masks (baseline), lucys (baseline), lucy_masks (baseline), fluxmaps
+        # (baseline), mges (akin)
+        cube = 'NGC384_C4_CO21_bri_20kms.pbcor.fits'
+        folder = 'ngc_384'
+
+        zi = 40  # ~4 slices before first with emission
+        zf = 83  # ~4 slices after last with emission
+
+        masks = {'baseline': 'NGC384_C4_CO21_bri_MS_20kms_jonathan_casaimviewhand_strictmask.fits',
+                 'strict': 'NGC384_C4_CO21_bri_MS_20kms_jonathan_casaimviewhand_strictmaskstrict.fits',
+                 'lax': 'NGC384_C4_CO21_bri_MS_20kms_jonathan_casaimviewhand_strictmasklax.fits',
+                 'ext3983': 'NGC384_C4_CO21_bri_MS_20kms_jonathan_casaimviewhand_strictmaskext3983.fits'}
+
+        lucys = {'baseline': 'ngc_384_20_strict_lucyout_n' + str(lucyn) + '.fits',
+                 'strict': 'ngc_384_20_strictstrict_lucyout_n' + str(lucyn) + '.fits',
+                 'lax': 'ngc_384_20_strictlax_lucyout_n' + str(lucyn) + '.fits',
+                 'ext3983': 'ngc_384_20_strict3983_lucyout_n' + str(lucyn) + '.fits'}
+
+        if gs != 31:
+            lucys = {'baseline': 'ngc_384_20_strict_lucyout_g' + str(gs) + '_n' + str(lucyn) + '.fits',
+                     'strict': 'ngc_384_20_strictstrict_lucyout_g' + str(gs) + '_n' + str(lucyn) + '.fits',
+                     'lax': 'ngc_384_20_strictlax_lucyout_g' + str(gs) + '_n' + str(lucyn) + '.fits',
+                     'ext3983': 'ngc_384_20_strict3983_lucyout_g' + str(gs) + '_n' + str(lucyn) + '.fits'}
+
+        lucy_masks = {'baseline': 'ngc_384_collapsemask_20kms_jonathan_casaimview_strictmask.fits',
+                      'strict': 'ngc_384_collapsemask_20kms_jonathan_casaimview_strictmaskstrict.fits',
+                      'lax': 'ngc_384_collapsemask_20kms_jonathan_casaimview_strictmasklax.fits',
+                      'ext3983': 'ngc_384_collapsemask_20kms_jonathan_casaimview_strictmask3983.fits'}
+
+        fluxmaps = {'baseline': 'ngc_384_fluxmap_20kms_jonathan_casaimview_strictmask.fits',
+                    'strict': 'ngc_384_fluxmap_20kms_jonathan_casaimview_strictmaskstrict.fits',
+                    'lax': 'ngc_384_fluxmap_20kms_jonathan_casaimview_strictmasklax.fits',
+                    'ext3983': 'ngc_384_fluxmap_20kms_jonathan_casaimview_strictmask3983.fits'}
+
+        mges = {'ahe': 'ngc_384_ahe_mge.txt', 'rhe': 'ngc_384_rhe_mge.txt', 'rre': 'ngc_384_rre_mge.txt',
+                'ahepsf': 'ngc_384_ahepsf_mge.txt', 'rhepsf': 'ngc_384_rhepsf_mge.txt',
+                'rrepsf': 'ngc_384_rrepsf_mge.txt',
+                'akin': 'ngc_384_mge_akin.txt'}  # 'yildirim_table_384.txt'}
+
+        xell = 208.  # pix
+        yell = 193.  # pix
+        xrange = [200., 220.]
+        yrange = [180., 210.]
+        theta_ell = 43.  # ellipse PA [deg] (counter-clockwise from x)
+        parange = [15., 75.]
+        q_ell = 0.50  # akin mge min_q=0.5361 -> 57.7 deg -> take inc=60 deg, q~.50
+        rfit = 1.8
+
+        # HEADER INFO & DISTANCE
+        resolution = 0.04  # arcsec/pix
+        x_fwhm = 0.301921666  # arcsec
+        y_fwhm = 0.161281541  # arcsec
+        PAbeam = 16.17017173767  # deg
+        dist = 61.  # Mpc
+        # https://ned.ipac.caltech.edu/byname?objname=NGC%20384&hconst=67.8&omegam=0.308&omegav=0.692&wmap=4&corr_z=1
+        vsysrange = [4000, 4500]
+
+    # CREATE FILE/MODEL RUN NAME
+    dfid = ''  # difference from fiducial model!
+    if pri != 'priset3':
+        dfid += '_' + pri
+    if masktype != 'baseline':
+        dfid += '_' + masktype
+    if mgetype != 'rhe':
+        dfid += '_' + mgetype
+    if os != 4:
+        dfid += '_os' + str(os)
     if gs != 31:
-        lucys = {'baseline': 'ugc_2698_20.3_strict2_lucyout_g' + str(gs) + '_n10.fits',
-                 'strict': 'ugc_2698_20.3_strictstrict_lucyout_g' + str(gs) + '_n10.fits',
-                 'lax': 'ugc_2698_20.3_strictlax_lucyout_g' + str(gs) + 'n10.fits',
-                 'ext2582': 'ugc_2698_20.3_strict2582_lucyout_g' + str(gs) + '_n10.fits',
-                 'ext2285': 'ugc_2698_20.3_strict2285_lucyout_g' + str(gs) + '_n10.fits'}
-
-    lucy_masks = {'baseline': 'ugc_2698_collapsemask_20.3kms_jonathan_casaimview_strictmask2.fits',
-                  'strict': 'ugc_2698_collapsemask_20.3kms_jonathan_casaimview_strictmaskstrict.fits',
-                  'lax': 'ugc_2698_collapsemask_20.3kms_jonathan_casaimview_strictmasklax.fits',
-                  'ext2582': 'ugc_2698_collapsemask_20.3kms_jonathan_casaimview_strictmask2582.fits',
-                  'ext2285': 'ugc_2698_collapsemask_20.3kms_jonathan_casaimview_strictmask2285.fits'}
-
-    fluxmaps = {'baseline': 'ugc_2698_fluxmap_20.3kms_jonathan_casaimview_strictmask2.fits',
-                'strict': 'ugc_2698_fluxmap_20.3kms_jonathan_casaimview_strictmask2strict.fits',
-                'lax': 'ugc_2698_fluxmap_20.3kms_jonathan_casaimview_strictmasklax.fits',
-                'ext2582': 'ugc_2698_fluxmap_20.3kms_jonathan_casaimview_strictmask2582.fits',
-                'ext2285': 'ugc_2698_fluxmap_20.3kms_jonathan_casaimview_strictmask2285.fits'}
-
-    mges = {'ahe': 'ugc_2698_ahe_mge.txt', 'rhe': 'ugc_2698_rhe_mge.txt', 'rre': 'ugc_2698_rre_mge.txt',
-            'ahepsf': 'ugc_2698_ahepsf_mge.txt', 'rhepsf': 'ugc_2698_rhepsf_mge.txt',
-            'rrepsf': 'ugc_2698_rrepsf_mge.txt',
-            'akin': 'yildirim_table_2698.txt'}
-
-elif galaxy == '11179':
-    cube = 'PGC11179_C4_CO21_bri_MS_20kms.pbcor.fits'
-    folder = 'pgc_11179'
-
-    xerr0 = 190
-    xerr1 = 214
-    yerr0 = 102
-    yerr1 = 126
-    xi = 108
-    xf = 208
-    yi = 92
-    yf = 232
-
-    masks = {'baseline': 'PGC11179_C4_CO21_bri_MS_20kms_jonathan_casaimviewhand_strictmask2.fits',
-             'strict': 'PGC11179_C4_CO21_bri_MS_20kms_jonathan_casaimviewhand_strictmaskstrict.fits',
-             'lax': 'PGC11179_C4_CO21_bri_MS_20kms_jonathan_casaimviewhand_strictmasklax.fits',
-             'ext0756': 'PGC11179_C4_CO21_bri_MS_20kms_jonathan_casaimviewhand_strictmaskext0756.fits'}
-
-    lucys = {'baseline': 'pgc_11179_20_strict2_lucyout_n10.fits',
-             'strict': 'pgc_11179_20_strictstrict_lucyout_n10.fits',
-             'lax': 'pgc_11179_20_strictlax_lucyout_n10.fits',
-             'ext0756': 'pgc_11179_20_strict0756_lucyout_n10.fits'}
-
+        dfid += '_' + str(gs)
+    if sigtype != 'flat':
+        dfid += '_' + sigtype
+    if rfit != 1.8:  # != 0.7: (for UGC 2698); != 1.8: (for NGC 384 and PGC 11179)
+        dfid += '_rfit' + str(rfit)
+    if vtype != 'orig':
+        dfid += '_' + vtype
+    if gas_label != 'nog':
+        dfid += '_' + gas_label
+    if ds != 4 or ds2 != 4:
+        dfid += '_ds' + str(ds) + str(ds2)
+    if dlogz != 0.02:
+        dfid += '_dlogz' + str(dlogz)
+    if nlive != 250:
+        dfid += '_nlive' + str(nlive)
     if gs != 31:
-        lucys = {'baseline': 'pgc_11179_20_strict2_lucyout_g' + str(gs) + '_n10.fits',
-                 'strict': 'pgc_11179_20_strictstrict_lucyout_g' + str(gs) + '_n10.fits',
-                 'lax': 'pgc_11179_20_strictlax_lucyout_g' + str(gs) + '_n10.fits',
-                 'ext0756': 'pgc_11179_20_strict0756_lucyout_g' + str(gs) + '_n10.fits'}
+        dfid += '_gs' + str(gs)
+    if lucyn != 10:
+        dfid += '_lucyn' + str(lucyn)
+    if lucyvb:
+        dfid += '_lucyvb'
 
-    lucy_masks = {'baseline': 'pgc_11179_collapsemask_20kms_jonathan_casaimview_strictmask2.fits',
-                  'strict': 'pgc_11179_collapsemask_20kms_jonathan_casaimview_strictmaskstrict.fits',
-                  'lax': 'pgc_11179_collapsemask_20kms_jonathan_casaimview_strictmasklax.fits',
-                  'ext0756': 'pgc_11179_collapsemask_20kms_jonathan_casaimview_strictmask0756.fits'}
+    if dfid == '':
+        dfid += '_fiducial'
+    run_type = base_id + dfid
 
-    fluxmaps = {'baseline': 'pgc_11179_fluxmap_20kms_jonathan_casaimview_strictmask2.fits',
-                'strict': 'pgc_11179_fluxmap_20kms_jonathan_casaimview_strictmask2strict.fits',
-                'lax': 'pgc_11179_fluxmap_20kms_jonathan_casaimview_strictmasklax.fits',
-                'ext0756': 'pgc_11179_fluxmap_20kms_jonathan_casaimview_strictmask0756.fits'}
+    # SET PARAM FILE LOCATIONS
+    localpars = dm + folder + '/'
+    clusterloc = dc + '/' + folder + '/'
 
-    mges = {'ahe': 'pgc_11179_ahe_mge.txt', 'rhe': 'pgc_11179_rhe_mge.txt', 'rre': 'pgc_11179_rre_mge.txt',
-            'ahepsf': 'pgc_11179_ahepsf_mge.txt', 'rhepsf': 'pgc_11179_rhepsf_mge.txt',
-            'rrepsf': 'pgc_11179_rrepsf_mge.txt',
-            'akin': 'yildirim_table_11179.txt'}
+    # BUCKET: UPDATE BELOW FOR 2698, 384, AND 11179
 
-elif galaxy == '384':
-    cube = 'NGC384_C4_CO21_bri_20kms.pbcor.fits'
-    folder = 'ngc_384'
+    # FIXED PARAMS
+    # DYNESTY PARAMS
+    dyn_pars = {'nlive': ['int', nlive], 'nprocs': ['int', 8], 'maxc': ['int', 10000000], 'thresh': ['float', dlogz]}
 
-    xerr0 = 248
-    xerr1 = 272
-    yerr0 = 143
-    yerr1 = 167
-    xi = 158
-    xf = 262
-    yi = 142
-    yf = 242
+    fixed_str = {  # OUTPUT RUN BASE NAME & OTHER FIXED STRINGS
+        'outname': folder + '_' + run_type,  # 'u2698_'
+        's_type': sigtype,
+        'vtype': vtype,  # orig, vrad, omega, kappa
+        'incl_gas': str(gas)}
 
-    masks = {'baseline': 'NGC384_C4_CO21_bri_MS_20kms_jonathan_casaimviewhand_strictmask2.fits',
-             'strict': 'NGC384_C4_CO21_bri_MS_20kms_jonathan_casaimviewhand_strictmaskstrict.fits',
-             'lax': 'NGC384_C4_CO21_bri_MS_20kms_jonathan_casaimviewhand_strictmasklax.fits',
-             'ext3983': 'NGC384_C4_CO21_bri_MS_20kms_jonathan_casaimviewhand_strictmaskext3983.fits'}
+    fixed = {  # FIXED FLOATS: ELLIPTICAL REGION PARS, HEADER INFO, ETC.
+        'xell': xell, 'yell': yell, 'theta_ell': theta_ell, 'q_ell': q_ell, 'rfit': rfit,
+        # yell between 150.8~few to 150.9; could do 150.85; or round so xell 127, yell 151, qell .36-.38, adjust rfit?
+        # theta_ell 18.88 : 19.19 ;; q_ell cos(67.7 deg) ;; rfit arcsec
+        # HEADER INFO & DISTANCE
+        'resolution': resolution,  # arcsec/pix
+        'x_fwhm': x_fwhm,
+        'y_fwhm': y_fwhm,
+        'PAbeam': PAbeam,
+        'dist': dist,  # 91.  # 85.29,  #89.,  # Mpc'
+        }
 
-    lucys = {'baseline': 'ngc_384_20_strict2_lucyout_n10.fits',
-             'strict': 'ngc_384_20_strictstrict_lucyout_n10.fits',
-             'lax': 'ngc_384_20_strictlax_lucyout_n10.fits',
-             'ext3983': 'ngc_384_20_strict3983_lucyout_n10.fits'}
+    fixed_int = {  # FIXED INTs
+        'zi': zi,  # cube range: zi:zf,
+        'zf': zf,
+        'xi': xi,  # 84
+        'xf': xf,  # 168
+        'yi': yi,  # 118
+        'yf': yf,  # 182
+        'xerr0': xerr0,  # 144 # xerr & yerr must be divisible by ds
+        'xerr1': xerr1,  # 168
+        'yerr0': yerr0,  # 96
+        'yerr1': yerr1,  # 120
+        'os': os,
+        'ds': ds,
+        'ds2': ds2,
+        'gsize': gs,
+        'mtype': 0,  # mge file
+        'bl': 0,
+        'lucy_it': lucyn}
 
-    if gs != 31:
-        lucys = {'baseline': 'ngc_384_20_strict2_lucyout_g' + str(gs) + '_n10.fits',
-                 'strict': 'ngc_384_20_strictstrict_lucyout_g' + str(gs) + '_n10.fits',
-                 'lax': 'ngc_384_20_strictlax_lucyout_g' + str(gs) + '_n10.fits',
-                 'ext3983': 'ngc_384_20_strict3983_lucyout_g' + str(gs) + '_n10.fits'}
+    priors = {'mbh': [0, 12], 'xloc': xrange, 'yloc': yrange, 'sig0': [0, 200], 'inc': [0, 89],
+              'PAdisk': [0, 90], 'vsys': [5000, 8100], 'ml_ratio': [0.1, 10], 'f': [0.1, 2.5]}
+    midpriors = {'mbh': [9., 9.8], 'xloc': [125.5, 129], 'yloc': [149, 153], 'sig0': [5, 25], 'inc': [63, 73],
+                 'PAdisk': [16, 22], 'vsys': [6440, 6490], 'ml_ratio': [1, 2.5], 'f': [0.7, 1.4]}
+    narrowpri = {'mbh': [9.1, 9.7], 'xloc': [125.5, 128], 'yloc': [150, 152], 'sig0': [12, 24], 'inc': [65, 71],
+                 'PAdisk': [15, 22], 'vsys': [6445, 6465], 'ml_ratio': [1.3, 2.4], 'f': [0.9, 1.2]}
+    priset2 = {'mbh': [8.5, 9.7], 'xloc': [124, 128], 'yloc': [148, 152], 'sig0': [5, 25], 'inc': [0, 85],
+               'PAdisk': [10, 30], 'vsys': [6425, 6485], 'ml_ratio': [0.8, 2.4], 'f': [0.5, 1.5]}
+    # priset3 = {'mbh': [8, 10.], 'xloc': [124, 128], 'yloc': [148, 152], 'sig0': [0, 40], 'inc': [0, 89],
+    #            'PAdisk': [5, 35], 'vsys': [6405, 6505], 'ml_ratio': [0.3, 3.], 'f': [0.5, 1.5]}
 
-    lucy_masks = {'baseline': 'ngc_384_collapsemask_20kms_jonathan_casaimview_strictmask2.fits',
-                  'strict': 'ngc_384_collapsemask_20kms_jonathan_casaimview_strictmaskstrict.fits',
-                  'lax': 'ngc_384_collapsemask_20kms_jonathan_casaimview_strictmasklax.fits',
-                  'ext3983': 'ngc_384_collapsemask_20kms_jonathan_casaimview_strictmask3983.fits'}
+    priset3 = {'mbh': [8., 10.], 'xloc': xrange, 'yloc': yrange, 'sig0': [0, 100], 'inc': [0, 89],
+               'PAdisk': parange, 'vsys': vsysrange, 'ml_ratio': [0.3, 3.], 'f': [0.5, 1.5]}
 
-    fluxmaps = {'baseline': 'ngc_384_fluxmap_20kms_jonathan_casaimview_strictmask2.fits',
-                'strict': 'ngc_384_fluxmap_20kms_jonathan_casaimview_strictmask2strict.fits',
-                'lax': 'ngc_384_fluxmap_20kms_jonathan_casaimview_strictmasklax.fits',
-                'ext3983': 'ngc_384_fluxmap_20kms_jonathan_casaimview_strictmask3983.fits'}
+    fullpriors = {'mbh': [6, 12], 'xloc': [116, 140], 'yloc': [140, 160], 'sig0': [0, 200], 'inc': [0, 89],
+                  'PAdisk': [0, 89], 'vsys': [5000, 8100], 'ml_ratio': [0.1, 10], 'f': [0.1, 2.5]}
 
-    mges = {'ahe': 'ngc_384_ahe_mge.txt', 'rhe': 'ngc_384_rhe_mge.txt', 'rre': 'ngc_384_rre_mge.txt',
-            'ahepsf': 'ngc_384_ahepsf_mge.txt', 'rhepsf': 'ngc_384_rhepsf_mge.txt',
-            'rrepsf': 'ngc_384_rrepsf_mge.txt',
-            'akin': 'yildirim_table_384.txt'}
-
-
-# SET PARAM FILE LOCATIONS
-localpars = dm + folder + '/'
-clusterloc = dc + '/' + folder + '/'
-
-# FIXED PARAMS
-dyn_pars = {'nlive': ['int', nlive], 'nprocs': ['int', 8], 'maxc': ['int', 10000000], 'thresh': ['float', dlogz]}
-
-fixed_str = {# OUTPUT RUN BASE NAME & OTHER FIXED STRINGS
-             'outname': folder + '_' + run_type,  # 'u2698_'
-             's_type': sigtype,
-             'vtype': vtype,  # orig, vrad, omega, kappa
-             'incl_gas': str(gas)}
-
-fixed = {# FIXED FLOATS
-         #'r0': 0.5,  # COULD BE FREE IN SOME MODELS
-         #'mu': 0.5,  # COULD BE FREE IN SOME MODELS
-         #'sig1': 5.,  # COULD BE FREE IN SOME MODELS
-         #'vrad': 0.,  # COULD BE FREE IN SOME MODELS
-         #'kappa': 0.,  # COULD BE FREE IN SOME MODELS
-         #'omega': 1.,  # COULD BE FREE IN SOME MODELS
-         # ELLIPTICAL REGION PARS
-         'xell': 126.85, 'yell': 150.9, 'theta_ell': 19., 'q_ell': 0.38, 'rfit': rfit,
-         # yell between 150.8~few to 150.9; could do 150.85; or round so xell 127, yell 151, qell .36-.38, adjust rfit?
-         # theta_ell 18.88 : 19.19 ;; q_ell cos(67.7 deg) ;; rfit arcsec
-         # DYNESTY PARAMS
-         # 'nlive': 250, 'nprocs': 8, 'maxc': 10000000, 'thresh': 0.02,
-         # OUTPUT RUN BASE NAME
-         # 'outname': 'u2698_' + run_type,
-         # ALWAYS FIXED PARAMETERS (THESE DON'T CHANGE!)
-         'resolution': 0.02,  # arcsec/pix
-         'x_fwhm': 0.197045,
-         'y_fwhm': 0.103544,
-         'PAbeam': 9.271,
-         'dist': 91.,  # 85.29,  #89.,  # Mpc'
-         # OTHER FIXED PARAMETERS
-         #'zi': zi, # cube range: zi:zf,
-         #'zf': zf,
-         #'xi': 84,
-         #'xf': 168,
-         #'yi': 118,
-         #'yf': 182,
-         #'xerr0': 144,  # xerr & yerr must be divisible by ds
-         #'xerr1': 168,
-         #'yerr0': 96,
-         #'yerr1': 120,
-         #'os': os,
-         #'ds': 4,
-         #'gsize': gs,
-         #'mtype': 0,  # mge file
-         #'bl': 0,
-         # 's_type': sigtype,
-         # 'vtype': vtype,  # orig, vrad, omega, kappa
-         # 'incl_gas': str(gas),
-         #'lucy_it': 10
-         }
-
-fixed_int = {  # FIXED INTs
-    'zi': zi,  # cube range: zi:zf,
-    'zf': zf,
-    'xi': xi,  # 84
-    'xf': xf,  # 168
-    'yi': yi,  # 118
-    'yf': yf,  # 182
-    'xerr0': xerr0,  # 144 # xerr & yerr must be divisible by ds
-    'xerr1': xerr1,  # 168
-    'yerr0': yerr0,  # 96
-    'yerr1': yerr1,  # 120
-    'os': os,
-    'ds': ds,
-    'ds2': ds2,
-    'gsize': gs,
-    'mtype': 0,  # mge file
-    'bl': 0,
-    'lucy_it': 10}
-
-priors = {'mbh': [0, 12], 'xloc': [116, 140], 'yloc': [140, 160], 'sig0': [0, 200], 'inc': [0, 89],
-          'PAdisk': [0, 90], 'vsys': [5000, 8100], 'ml_ratio': [0.1, 10], 'f': [0.1, 2.5]}
-midpriors = {'mbh': [9., 9.8], 'xloc': [125.5, 129], 'yloc': [149, 153], 'sig0': [5, 25], 'inc': [63, 73],
-             'PAdisk': [16, 22], 'vsys': [6440, 6490], 'ml_ratio': [1, 2.5], 'f': [0.7, 1.4]}
-narrowpri = {'mbh': [9.1, 9.7], 'xloc': [125.5, 128], 'yloc': [150, 152], 'sig0': [12, 24], 'inc': [65, 71],
-             'PAdisk': [15, 22], 'vsys': [6445, 6465], 'ml_ratio': [1.3, 2.4], 'f': [0.9, 1.2]}
-priset2 = {'mbh': [8.5, 9.7], 'xloc': [124, 128], 'yloc': [148, 152], 'sig0': [5, 25], 'inc': [0, 85],
-          'PAdisk': [10, 30], 'vsys': [6425, 6485], 'ml_ratio': [0.8, 2.4], 'f': [0.5, 1.5]}
-priset3 = {'mbh': [8, 10.], 'xloc': [124, 128], 'yloc': [148, 152], 'sig0': [0, 40], 'inc': [0, 89],
-          'PAdisk': [5, 35], 'vsys': [6405, 6505], 'ml_ratio': [0.3, 3.], 'f': [0.5, 1.5]}
-fullpriors = {'mbh': [6, 12], 'xloc': [116, 140], 'yloc': [140, 160], 'sig0': [0, 200], 'inc': [0, 89],
-              'PAdisk': [0, 89], 'vsys': [5000, 8100], 'ml_ratio': [0.1, 10], 'f': [0.1, 2.5]}
-
-
-if vrad:
-    priors['vrad'] = [-50, 50]
-    midpriors['vrad'] = [-20, 35]
-    narrowpri['vrad'] = [-5, 25]
-    priset2['vrad'] = [-5, 25]
-    priset3['vrad'] = [-50, 50]
-    fixed['kappa'] = 0.
-    fixed['omega'] = 1.
-elif kappa or omega:
-    fixed['vrad'] = 0.
-    priors['kappa'] = [-1, 1]
-    midpriors['kappa'] = [-0.5, 0.5]
-    narrowpri['kappa'] = [-0.1, 0.1]
-    priset2['kappa'] = [-0.2, 0.2]
-    priset3['kappa'] = [-1, 1]
-    if omega:
-        priors['omega'] = [0, 1]
-        midpriors['omega'] = [0.5, 1]
-        narrowpri['omega'] = [0.75, 1]
-        priset2['omega'] = [0.7, 1]
-        priset3['omega'] = [0, 1]
-    else:
+    # COULD BE FREE OR FIXED: vrad, kappa, omega (depends on vtype)
+    if vrad:
+        priors['vrad'] = [-50, 50]
+        midpriors['vrad'] = [-20, 35]
+        narrowpri['vrad'] = [-5, 25]
+        priset2['vrad'] = [-5, 25]
+        priset3['vrad'] = [-50, 50]
+        fixed['kappa'] = 0.
         fixed['omega'] = 1.
-else:
-    fixed['vrad'] = 0.
-    fixed['kappa'] = 0.
-    fixed['omega'] = 1.
-
-# 'gauss': sig1 + sig0 * np.exp(-(r - r0) ** 2 / (2 * mu ** 2)) ;;; 'exp': sig1 + sig0 * np.exp(-r / r0)
-if sigtype == 'exp' or sigtype == 'gauss':
-    priors['r0'] = [0, 100]
-    midpriors['r0'] = [0, 50]
-    narrowpri['r0'] = [0, 20]
-    priset2['r0'] = [0, 50]
-    priset3['r0'] = [0, 100]
-    priors['sig1'] = [0, 100]
-    midpriors['sig1'] = [0, 50]
-    narrowpri['sig1'] = [0, 20]
-    priset2['sig1'] = [0, 50]
-    priset3['sig1'] = [0, 100]
-    priset3['sig0'] = [0, 100]
-    if sigtype == 'gauss':
-        priors['mu'] = [0, 100]
-        midpriors['mu'] = [0, 50]
-        narrowpri['mu'] = [0, 10]
-        priset2['mu'] = [0, 50]
-        priset3['mu'] = [0, 100]
+    elif kappa or omega:
+        fixed['vrad'] = 0.
+        priors['kappa'] = [-1, 1]
+        midpriors['kappa'] = [-0.5, 0.5]
+        narrowpri['kappa'] = [-0.1, 0.1]
+        priset2['kappa'] = [-0.2, 0.2]
+        priset3['kappa'] = [-1, 1]
+        if omega:
+            priors['omega'] = [0, 1]
+            midpriors['omega'] = [0.5, 1]
+            narrowpri['omega'] = [0.75, 1]
+            priset2['omega'] = [0.7, 1]
+            priset3['omega'] = [0, 1]
+        else:
+            fixed['omega'] = 1.
     else:
+        fixed['vrad'] = 0.
+        fixed['kappa'] = 0.
+        fixed['omega'] = 1.
+
+    # COULD BE FREE OR FIXED: r0, sig1, mu (depends on sigtype)
+    # 'gauss': sig1 + sig0 * np.exp(-(r - r0) ** 2 / (2 * mu ** 2)) ;;; 'exp': sig1 + sig0 * np.exp(-r / r0)
+    if sigtype == 'exp' or sigtype == 'gauss':
+        priors['r0'] = [0, 100]
+        midpriors['r0'] = [0, 50]
+        narrowpri['r0'] = [0, 20]
+        priset2['r0'] = [0, 50]
+        priset3['r0'] = [0, 100]
+        priors['sig1'] = [0, 100]
+        midpriors['sig1'] = [0, 50]
+        narrowpri['sig1'] = [0, 20]
+        priset2['sig1'] = [0, 50]
+        priset3['sig1'] = [0, 100]
+        priset3['sig0'] = [0, 100]
+        if sigtype == 'gauss':
+            priors['mu'] = [0, 100]
+            midpriors['mu'] = [0, 50]
+            narrowpri['mu'] = [0, 10]
+            priset2['mu'] = [0, 50]
+            priset3['mu'] = [0, 100]
+        else:
+            fixed['mu'] = 1.
+    else:
+        fixed['r0'] = 0.5
         fixed['mu'] = 1.
-else:
-    fixed['r0'] = 0.5
-    fixed['mu'] = 1.
-    fixed['sig1'] = 0.
+        fixed['sig1'] = 0.
 
-# LOCAL FILES
-localfiles = {'data': localpars + cube,
-              'mask': localpars + masks[masktype], 'lucy': localpars + lucys[masktype],
-              'lucy_mask': localpars + lucy_masks[masktype], 'lucy_in': localpars + fluxmaps[masktype],
-              'lucy_b': localpars + folder + '_beam' + str(gs) + '.fits', 'lucy_o': localpars + lucys[masktype] + '[0]',
-              'mass': localpars + mges[mgetype]}
+    # LOCAL FILES
+    localfiles = {'data': localpars + cube,
+                  'mask': localpars + masks[masktype], 'lucy': localpars + lucys[masktype],
+                  'lucy_mask': localpars + lucy_masks[masktype], 'lucy_in': localpars + fluxmaps[masktype],
+                  'lucy_b': localpars + folder + '_beam' + str(gs) + '.fits',
+                  'lucy_o': localpars + lucys[masktype] + '[0]',
+                  'mass': localpars + mges[mgetype]}
 
-# CLUSTER FILES
-clusterfiles = {'data': clusterloc + cube,
-                'mask': clusterloc + masks[masktype], 'lucy': clusterloc + lucys[masktype],
-                'lucy_mask': localpars + lucy_masks[masktype], 'lucy_in': clusterloc + fluxmaps[masktype],
-                'lucy_b': clusterloc + folder + '_beam' + str(gs) + '.fits',
-                'lucy_o': clusterloc + lucys[masktype] + '[0]', 'mass': clusterloc + mges[mgetype]}
+    # CLUSTER FILES
+    clusterfiles = {'data': clusterloc + cube,
+                    'mask': clusterloc + masks[masktype], 'lucy': clusterloc + lucys[masktype],
+                    'lucy_mask': localpars + lucy_masks[masktype], 'lucy_in': clusterloc + fluxmaps[masktype],
+                    'lucy_b': clusterloc + folder + '_beam' + str(gs) + '.fits',
+                    'lucy_o': clusterloc + lucys[masktype] + '[0]', 'mass': clusterloc + mges[mgetype]}
 
-newpar = folder + '_' + run_type + '.txt'
-locnewpar = localpars + newpar
-clusternewpar = clusterpars + newpar
+    newpar = folder + '_' + run_type + '.txt'
+    locnewpar = localpars + newpar
+    clusternewpar = clusterpars + newpar
 
-copyf = localpars + folder + 'ugc_2698_baseline_rhe_orig_gas.txt'
+    copyf = localpars + folder + 'ugc_2698_baseline_rhe_orig_gas.txt'
 
-# SET PRIOR CHOICE
-use_priors = priors
-if pri == 'wide':
-    use_priors = priors
-elif pri == 'mid':
-    use_priors = midpriors
-elif pri == 'narrow':
-    use_priors = narrowpri
-elif pri == 'priset2':
-    use_priors = priset2
-elif pri == 'priset3':
-    use_priors = priset3
+    # SET PRIOR CHOICE
+    prior_dict = {'wide': priors,
+                  'mid': midpriors,
+                  'narrow': narrowpri,
+                  'priset2': priset2,
+                  'priset3': priset3,
+                  'fullpriors': fullpriors}
 
-# MAKE THE LOCAL VERSION
-# newpl = write_newpar(locnewpar, copyf, use_priors, fixed, localfiles)
-newpl = newpar_scratch(locnewpar, use_priors, dyn_pars, fixed_str, fixed, fixed_int, localfiles)
-print(newpl)
+    use_priors = prior_dict[pri]
 
-# AND THE CLUSTER VERSION TO SCP OVER
-# newpc = write_newpar(clusternewpar, copyf, use_priors, fixed, clusterfiles)
-newpc = newpar_scratch(clusternewpar, use_priors, dyn_pars, fixed_str, fixed, fixed_int, clusterfiles)
-print(newpc)
+    #use_priors = priors
+    #if pri == 'wide':
+    #    use_priors = priors
+    #elif pri == 'mid':
+    #    use_priors = midpriors
+    #elif pri == 'narrow':
+    #    use_priors = narrowpri
+    #elif pri == 'priset2':
+    #    use_priors = priset2
+    #elif pri == 'priset3':
+    #    use_priors = priset3
 
-# THEN WRITE CLUSTER RUNFILE TO SCP OVER
-submit_file = write_runfile(run_type, galaxy=galaxy, folder=folder)
-print(submit_file)
+    # MAKE THE LOCAL VERSION
+    # newpl = write_newpar(locnewpar, copyf, use_priors, fixed, localfiles)
+    newpl = newpar_scratch(locnewpar, use_priors, dyn_pars, fixed_str, fixed, fixed_int, localfiles)
+    print(newpl)
+
+    # AND THE CLUSTER VERSION TO SCP OVER
+    # newpc = write_newpar(clusternewpar, copyf, use_priors, fixed, clusterfiles)
+    newpc = newpar_scratch(clusternewpar, use_priors, dyn_pars, fixed_str, fixed, fixed_int, clusterfiles)
+    print(newpc)
+
+    # THEN WRITE CLUSTER RUNFILE TO SCP OVER
+    submit_file = write_runfile(run_type, galaxy=galaxy, folder=folder)
+    print(submit_file)
+
+
+# SETTINGS / CHOICES
+galaxy = '384' # 2698, 11179, 384
+bid = 'preliminary'  # preliminary, finaltests
+pri = 'priset3'  # 'wide', 'mid', 'narrow', 'priset2', 'priset3' (fiducial), 'fullpriors'
+masktype = 'baseline'  # 'strict'  # 'lax'  # 'baseline'
+mgetype = 'akin'  # 'rhe'  # 'rhe'  # 'ahe'  # 'rhe'  # 'rre'  # 'akin'
+os = 4  # 1 2 3 4 6 8 10 12 14 16
+gs = 31  # beam grid size
+sigtype = 'flat'  # flat, exp, gauss
+# rfit = 0.7
+vrad = False  # include radial velocity
+kappa = False  # include radial velocity with kappa
+omega = False  # include radial velocity with sub-Keplerian motion
+gas = False  # incl_gas
+# zi = 25  # 29
+# zf = 82  # 78
+# total pixels in xi:xf must be divisible by ds2; total pixels in yi:yf must be divisible by ds (same for xerr & yerr)
+ds = 4
+ds2 = 4
+####### ds = #4x4  #8x4  #10x5 #6x3  #10x10
+#xerr0 = 144  # 144 # 144 # 141 # 144 # 141
+#xerr1 = 168  # 168 # 168 # 171 # 168 # 171
+#yerr0 = 96   # 96  # 96  # 95  # 96  # 93
+#yerr1 = 120  # 120 # 120 # 120 # 120 # 123
+#xi = 84      # 84  # 82  # 81  # 84  # 81
+#xf = 168     # 168 # 170 # 171 # 168 # 171
+#yi = 118     # 118 # 118 # 115 # 117 # 115
+#yf = 182     # 182 # 182 # 185 # 183 # 185
+# ds=4x4 -> xi=84,xf=168, yi=118,yf=182. ds=8x4 -> xi=82,xf=170, yi=118,yf=182. ds=10x5 -> xi=81,xf=171, yi=115,yf=185.
+# ds=6x3 -> xi=84,xf=168, yi=117,yf=183. ds=10x10 -> xi=81,xf=171, yi=115, yf=185
+# ds=4x4 OR =8x4 OR =6x3 -> xerr0=144,xerr1=168, yerr0=96,yerr1=120. ds=10x5 -> xerr0=141,xerr1=171, yerr0=95,yerr1=120.
+# ds=10x10 -> xerr0=141,xerr1=171, yerr0=93,yerr1=123.
+# confirmed: this error region has no overlap with the strictmask
+lucyn = 10  # 5 10 15
+lucyvb = False  # False  True
+nlive = 250  # 250  # 1000
+dlogz = 0.02  # 0.02  # 0.001
+
+# MAKE THE FILES!
+# for os in [1, 2, 3, 4, 6, 8, 10, 12]:
+# for mgetype in ['rhe', 'ahe', 'rre']:
+#for rfit in [0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
+#    make_the_files(galaxy, pri, masktype, mgetype, os, gs, sigtype, rfit, vrad, kappa, omega, gas, zi, zf, ds, ds2, nlive,
+#                   dlogz)
+# USED FOR 2698
+# make_the_files(galaxy, pri, masktype, mgetype, os, gs, sigtype, rfit, vrad, kappa, omega, gas, zi, zf, ds, ds2, nlive,
+#                dlogz, lucyn, lucyvb=lucyvb)
+# MADE MORE GENERAL:
+make_the_files(galaxy, bid, pri, masktype, mgetype, os, gs, sigtype, vrad, kappa, omega, gas, ds, ds2, nlive, dlogz,
+               lucyn, lucyvb)
+
 
 '''  #
 # PARAM INFO:
@@ -593,3 +756,30 @@ print(submit_file)
 # cornername = 'ugc_2698_newmasks/u2698_nest_maskstrictrhe_priextend_corner_3sig.png'
 # inpf = 'ugc_2698/ugc_2698_newmaskstrict_rhe_n8.txt'
 # mod = 'rhe strict'
+
+'''
+hdu = fits.open('ugc_2698/ugc_2698_20.3_strict2_lucyout_n15.fits')
+data15 = hdu[0].data  # data[0] contains: z, y, x (121, 700, 700)
+hdu.close()
+hdu = fits.open('ugc_2698/ugc_2698_20.3_strict2_lucyout_n10.fits')
+data10 = hdu[0].data  # data[0] contains: z, y, x (121, 700, 700)
+hdu.close()
+hdu = fits.open('ugc_2698/ugc_2698_20.3_strict2_lucyout_n5.fits')
+data5 = hdu[0].data  # data[0] contains: z, y, x (121, 700, 700)
+hdu.close()
+fig, ax = plt.subplots(2, 3)
+im5 = ax[0][0].imshow(data5, origin='lower')
+cbar5 = fig.colorbar(im5, ax=ax[0][0], pad=0.02)
+im10 = ax[0][1].imshow(data10, origin='lower')
+cbar10 = fig.colorbar(im10, ax=ax[0][1], pad=0.02)
+im15 = ax[0][2].imshow(data15, origin='lower')
+cbar15 = fig.colorbar(im15, ax=ax[0][2], pad=0.02)
+im5r = ax[1][0].imshow((data5 - data10)/data10, origin='lower')
+cbar5r = fig.colorbar(im5r, ax=ax[1][0], pad=0.02)
+im10r = ax[1][1].imshow((data10 - data10)/data10, origin='lower')
+cbar10r = fig.colorbar(im10r, ax=ax[1][1], pad=0.02)
+im15r = ax[1][2].imshow((data15 - data10)/data10, origin='lower')
+cbar15r = fig.colorbar(im15r, ax=ax[1][2], pad=0.02)
+plt.show()
+print(oop)
+'''

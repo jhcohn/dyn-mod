@@ -866,7 +866,6 @@ def gas_vel(resolution, co_rad, co_sb, dist, f_0, inc_fixed, zfixed=0.02152):
     return vcg_func  # vg = vcg_func(radius_array), to interpolate vcg onto vcg(R)
 
 
-
 def map_averaging(m1, xpix, ypix, binNum, x_in, nPixels):
     """
     Function for averaging moment maps within voronoi bins
@@ -1295,6 +1294,7 @@ class ModelGrid:
         lum_K = 10 ** (0.4 * (magsolK - abs_K))  # LK / Lsol = 10^(.4(MsolK - MK))
         LK_fromH = lum_H * 10 ** (0.4 * (HK + magsolK - magsolH))
         Mgal = lum_H * self.ml_ratio
+        # print(lum_H/1e11, lum_K/1e11, Mgal/1e11, self.ml_ratio)  # 2.161741279282659 2.370302178436106 3.6823320041952625 1.7034101349154922
         # MsolK: 3.27, MsolH: 3.37,
         # print(lum_K, lum_H, self.ml_ratio, Mgal)  # 237030217843.6 216174127928.3 1.7034101349154922 368233200419.5
         # print(oop)
@@ -1344,6 +1344,7 @@ class ModelGrid:
 
         abs_V1277 = magsolV - 2.5 * np.log10(lum_V1277)  # MsolV = 4.83
         abs_K1277 = abs_V1277 - VK  # V-K = 3.0
+        # print(abs_K1277)  # -23.877043864787655 (KH is very close to -24, around -23.9ish?)
         lum_K1277 = 10 ** (0.4 * (magsolK - abs_K1277))  # MsolK = 3.27
         LK_fromV1277 = lum_V1277 * 10 ** (0.4 * (VK + magsolK - magsolV))  # for LK = 1e11, need x~3.484
         # need (V-K) + magsolK - magsolV ~= 1.924
@@ -2511,7 +2512,8 @@ if __name__ == "__main__":
     args = vars(parser.parse_args())
 
     # Load parameters from the parameter file
-    params, priors, n_free = par_dicts(args['parfile'])
+    # params, priors, n_free = par_dicts(args['parfile'])
+    params, priors, n_free, qobs = par_dicts(args['parfile'], q=True)  # get dicts of params and file names from param file
 
     # Make nice plot fonts
     rc('font', **{'family': 'serif', 'serif': ['Times']})
@@ -2571,6 +2573,23 @@ if __name__ == "__main__":
     # print(dists)  # (0.01349781247173701, 0.7733676872895765, 1228300.934928068, 1025833.7478520127)
     # print(oop)
 
+    # BUCKET REMOVE THIS AFTER TESTING
+    #qint_in = np.amax(np.rad2deg(np.arccos(np.sqrt((400*qobs**2 - 1.)/399.))))
+    #params['inc'] = np.amax([params['inc'], qint_in])
+    #params['inc'] = np.amax([params['inc'], np.rad2deg(np.arccos(np.amin(qobs)))])
+    # NEED qintr = qobs**2 - np.cos(inc)**2 > 0.05
+    # qobs^2 > 0.05 + cos(inc)^2 -> qobs^2 - 0.05 > cos(inc)^2 -> cos(inc) < qobs^2 - 0.05
+    # qobs_min = 0.2793000 -> qobs_min^2 = 0.07800849 -> inc < arccos(sqrt(qobs^2 - 0.05))
+    # U2698 qmin = 0.6527 -> qmin^2 = 0.42601729 -> inc < arccos(0.42601729^2 - 0.05)
+
+
+    # inc_bdry = np.rad2deg(np.arccos(np.min(qobs)**2 - 0.05)) + 0.01
+    # params['inc'] = np.amax([params['inc'], inc_bdry])
+    # print(params['inc'])
+
+    # priors['inc'][0] = np.amax([priors['inc'][0], np.rad2deg(np.arccos(np.amin(qobs)))])
+    # priors['inc'][0] = np.amax([priors['inc'][0], qint_in])
+
     # CREATE MODEL CUBE!
     inc_fixed = np.deg2rad(67.7)  # based on fiducial model (67.68 deg)
     vcg_in = None
@@ -2598,6 +2617,7 @@ if __name__ == "__main__":
     mg.convolution()
     chi_sq = mg.chi2()  # 6495.965711236455 (1.2275067481550368)  # 6498.030199144044 (1.227896863027975)
     # mg.moment_0(False, False, False)
+    print(oop)
     mg.scaling_rels(rel=2)
     # mg.vor_moms(incl_beam=True, fs=12, pars_backup=params, frac=True)
     # mg.pvd()
