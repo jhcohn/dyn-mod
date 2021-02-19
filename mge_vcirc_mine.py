@@ -89,6 +89,11 @@ from __future__ import print_function
 import numpy as np
 import argparse
 from cap_quadva import quadva  # this is from the jam package!
+import matplotlib.pyplot as plt
+from scipy import interpolate
+import matplotlib as mpl
+mpl.rcParams['text.usetex'] = True
+mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']  # for \text command
 
 #
 # The following set of routines computes the R acceleration
@@ -232,40 +237,75 @@ def test_mge_vcirc(surf=None, sigma=None, qObs=None, inc=60., mbh=1e6, distance=
 
     # plt.plot(np.logspace(-2., 2., 50), vcirc2, 'r--')
     # plt.plot(radii, np.sqrt(np.asarray(v_circ) * ml), 'k*'
-    plt.plot(rad, vcirc, 's', markerfacecolor='none', label=r'MGE + ' + mge_lab)
+    print(np.amax(vcirc))
+    plt.plot(rad, vcirc, 'b-', label=r'MGE: ' + mge_lab)  #  's', markerfacecolor='none',
     plt.xlabel('R (arcsec)')
     plt.ylabel(ylabel)  # r'$V_{circ}$ (km/s)'
-    plt.xscale('log')
-    plt.yscale('log')
+    # plt.xscale('log')
+    # plt.yscale('log')
     #plt.ylim(1., 10**3.)
     #plt.xlim(np.min(rad), np.max(rad))
-    plt.legend(loc='upper left')  # lower right
+    plt.legend()#loc='upper left')  # lower right
     plt.show()
 
 
-def multi_vcirc(files, inc=60., mbh=0., distance=89., rad=np.logspace(-1,2,25), ml=5.0, mge_labs=None, fmts=None,
+def rsoi(file, inc, mbh, distance, rad, ml, mge_lab, zoom=False):
+    fig = plt.figure(figsize=(8,6))
+    comp, surf, sigma, qObs = load_mge(file, logged=False)
+
+    vcirc = mge_vcirc(surf * ml, sigma, qObs, inc, 0., distance, rad)  # replaced mbh with 0.
+    ylabel = r'$V_{circ}$ [km/s], assuming M/L=' + str(ml)
+
+    vc2 = interpolate.interp1d(rad, vcirc, fill_value='extrapolate')
+    vcirc2 = vc2(np.logspace(-2, 2., 50))
+
+    plt.plot(rad, vcirc, 'b--', label=r'MGE: ' + mge_lab)
+
+    mbh_curve = np.sqrt(0.00429897278 * mbh / (rad * distance * 1e6 / 206265))
+    idx = np.argwhere(np.diff(np.sign(vcirc - mbh_curve))).flatten()
+
+    plt.plot(rad, mbh_curve, 'k-', label=r'Best-fit $M_{\mathrm{BH}}$')
+    plt.xlabel('Radius [arcsec]')
+    print(rad[idx])
+    plt.axvline(x=rad[idx][0], color='r', label=r'r=' + str(round(rad[idx][0], 2)) + ' arcsec')
+    # fiducial: 0.1745", ahe: 0.2117"
+    plt.ylabel(ylabel)  # r'$V_{circ}$ (km/s)'
+    # plt.xscale('log')
+    # plt.yscale('log')
+    if zoom:
+        plt.xlim(0.04, 8.)
+        plt.ylim(75., 750.)
+    # plt.ylim(1., 10**3.)
+    # plt.xlim(np.min(rad), np.max(rad))
+    plt.legend()  # lower right  # loc='upper left'
+    plt.show()
+
+
+def multi_vcirc(files, inc=60., mbh=0., distance=91., rad=np.logspace(-1,2,25), ml=1.0, mge_labs=None, fmts=None,
                 zoom=False):
+    fig = plt.figure(figsize=(8,6))
     for f in range(len(files)):
         comp, surf, sigma, qObs = load_mge(files[f], logged=False)
-        import matplotlib.pyplot as plt
-        from time import clock
-        from scipy import interpolate
 
-        t = clock()
-        if ml is None:
-            vcirc = mge_vcirc(surf, sigma, qObs, inc, mbh, distance, rad)
-            ylabel = r'$V_{circ}$ [km/s / M/L]'
-        else:
-            vcirc = mge_vcirc(surf * ml, sigma, qObs, inc, mbh, distance, rad)
-            ylabel = r'$V_{circ}$ [km/s], assuming M/L=' + str(ml)
-
+        vcirc = mge_vcirc(surf * ml, sigma, qObs, inc[f], 0., distance, rad)  # replaced mbh with 0.
         vc2 = interpolate.interp1d(rad, vcirc, fill_value='extrapolate')
         vcirc2 = vc2(np.logspace(-2, 2., 50))
 
         plt.plot(rad, vcirc, fmts[f], markerfacecolor='none', label=r'MGE: ' + mge_labs[f])
 
-    plt.xlabel('R (arcsec)')
-    plt.ylabel(ylabel)  # r'$V_{circ}$ (km/s)'
+    mbh_curve = np.sqrt(0.00429897278 * mbh / (rad * distance * 1e6 / 206265))
+    idx = np.argwhere(np.diff(np.sign(vcirc - mbh_curve))).flatten()
+
+    #if ml == 1:
+    #    plt.ylabel(r'$v_{\text{c}}$ [km s$^{-1}$], assuming $(M/L)_H=M_\odot/L_\odot$')
+    #else:
+    import matplotlib as mpl
+    mpl.rcParams['text.usetex'] = True
+    mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']  # for \text command
+    if ml == 1.0:
+        ml = int(ml)
+    plt.ylabel(r'$v_{c,\star}$ [km s$^{-1}$], assuming $(M/L)_H=' + str(ml) + 'M_\odot/L_\odot$')
+    plt.xlabel(r'Radius [arcsec]')
     plt.xscale('log')
     # plt.yscale('log')
     if zoom:
@@ -358,6 +398,20 @@ if __name__ == '__main__':
     dm = '/Users/jonathancohn/Documents/dyn_mod/'
     ugc = dm + 'ugc_2698/'
     mdir = '/Users/jonathancohn/Documents/mge/'
+
+    '''  # NGC 4111 STUFF HERE!
+    mge_n4111 = dm + 'galfit_u2698/mge_parameters_atlas3d/mge_NGC4111.txt'
+    comp, surf, sigma, qObs = load_mge(mge_n4111, logged=False)
+    # d = 15.08, 14.6
+    import dynamical_model as dm
+    # pc_per_ac = 70.782731
+    dm.mge_sum(mge_n4111, 14.6 * 1e6 / 206265)
+    # print(oop)
+    test_mge_vcirc(surf=surf, sigma=sigma, qObs=qObs, inc=84, mbh=0., distance=14.6, rad=np.linspace(0.01, 200, 25),
+                   ml=4.487, mge_lab=r'NGC 4111')  # np.linspace(0, 200, 1000)  # np.logspace(-1, 2.3, 20)
+    print(oop)
+    # '''  #
+
     mge_rre = ugc + 'ugc_2698_rre_mge.txt'
     mge_rhe = ugc + 'ugc_2698_rhe_mge.txt'
     mge_ahe = ugc + 'ugc_2698_ahe_mge.txt'
@@ -377,6 +431,18 @@ if __name__ == '__main__':
     fmts = ['+k', 'om', 'sb', '*r']
     fmts_psf = ['+k', 'om', 'sb']
 
+    my_mges = [mge_rre, mge_rhe, mge_ahe]
+    my_incs = [67.59, 67.61, 67.56]
+    mge_labs = [r'original $H$-band', r'dust-masked $H$-band', r'dust-corrected $H$-band']
+    radcomp = np.logspace(-1., 0.5, 1000)  # np.logspace(-.7, -0.6, 1000)  # np.logspace(-.77, -0.75, 50)
+#    multi_vcirc(my_mges, inc=67.61, mbh=2461189947.064265, distance=91., rad=radcomp, ml=1.70, mge_labs=mge_labs,
+    #multi_vcirc(my_mges, inc=67.56, mbh=3154810151.4633145, distance=91., rad=radcomp, ml=1.58, mge_labs=[r'dust-corrected $H$-band'],
+    #            fmts=fmts, zoom=False)  #
+    #multi_vcirc(my_mges, inc=67.59, mbh=1708653896.954655, distance=91., rad=radcomp, ml=1.94, mge_labs=[r'original $H$-band'],
+    #            fmts=fmts, zoom=False)  #
+    multi_vcirc(my_mges, inc=my_incs, mbh=0., distance=91., rad=np.logspace(-1., 0.55, 25), ml=1., mge_labs=mge_labs,  # -1.7, 0.6, 25
+                fmts=fmts, zoom=False)
+    print(oop)
     multi_vcirc(all_mges, inc=67.6, mbh=0., distance=91., rad=np.logspace(-1., 0.5, 25), ml=1., mge_labs=all_mge_labs,  # -1.7, 0.6, 25
                 fmts=all_fmts, zoom=False)
     # multi_vcirc(mges, inc=67.6, mbh=0., distance=91., rad=np.logspace(-1.7, 0.6, 25), ml=1., mge_labs=mge_labs, fmts=fmts,  # -1.7, 0.6, 25
