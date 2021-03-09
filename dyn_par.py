@@ -2,7 +2,7 @@
 import numpy as np
 
 
-def write_runfile(run_base, galaxy='2698', folder='ugc_2698'):
+def write_runfile(run_base, galaxy='2698', folder='ugc_2698', dynpy='dyndyn_n.py'):
     """
 
     :param run_base: new run file base, including directory
@@ -26,7 +26,7 @@ def write_runfile(run_base, galaxy='2698', folder='ugc_2698'):
         rn.write('ml purge\n')
         rn.write('source /home/joncohn/mydyn.sh\n\n')
 
-        rn.write('python dyndyn_n.py --p=' + folder + '/' + folder + '_' + run_base + '.txt')
+        rn.write('python ' + dynpy + ' --p=' + folder + '/' + folder + '_' + run_base + '.txt')
 
         return nest_base + 'nest_' + galaxy + '_' + run_base + '.lsf'
 
@@ -282,6 +282,7 @@ def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, vra
         PAbeam = 9.271  # deg
         dist = 91.  # Mpc
         vsysrange = [6405, 6505]
+        zfix = 0.02152
 
     elif galaxy == '11179':  # BUCKET: UPDATE  (done): masks (baseline), lucys (baseline), lucy_masks (baseline),
         # fluxmaps (baseline), mges (akin)
@@ -322,10 +323,10 @@ def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, vra
                 'rrepsf': 'pgc_11179_rrepsf_mge.txt',
                 'akin': 'pgc_11179_mge_akin.txt'}  # 'yildirim_table_11179.txt'}
 
-        xell = 153.  # pix
-        yell = 160.  # pix
-        xrange = [140., 160.]
-        yrange = [150., 170.]
+        xell = 155.  # pix
+        yell = 155.  # pix
+        xrange = [150., 160.]  # [140., 160.]
+        yrange = [150., 160.]  # [150., 170.]
         theta_ell = 70.  # ellipse PA [deg] (counter-clockwise from x)
         parange = [60., 90.]
         q_ell = 0.35  # akin MGE min q=0.2793 -> arccos(sqrt((400*.2793^2 - 1.)/399.)) = 74.03 deg ;; take i~80. deg
@@ -335,10 +336,11 @@ def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, vra
         resolution = 0.03  # arcsec/pix
         x_fwhm = 0.29  # arcsec
         y_fwhm = 0.16  # arcsec
-        PAbeam = 86.78  # PA of beam [deg] (as defined in casa/the ALMA data)
+        PAbeam = 86.97  # 86.78  # PA of beam [deg] (as defined in casa/the ALMA data)
         dist = 98.  # Mpc
         # https://ned.ipac.caltech.edu/byname?objname=PGC%2011179&hconst=67.8&omegam=0.308&omegav=0.692&wmap=4&corr_z=1
-        vsysrange = [6600, 7000]
+        vsysrange = [6600, 7600]
+        zfix = 0.02289
 
     elif galaxy == '384':  # BUCKET: UPDATE (done): masks (baseline), lucys (baseline), lucy_masks (baseline), fluxmaps
         # (baseline), mges (akin)
@@ -348,10 +350,10 @@ def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, vra
         zi = 40  # ~4 slices before first with emission
         zf = 83  # ~4 slices after last with emission
 
-        masks = {'baseline': 'NGC384_C4_CO21_bri_MS_20kms_jonathan_casaimviewhand_strictmask.fits',
-                 'strict': 'NGC384_C4_CO21_bri_MS_20kms_jonathan_casaimviewhand_strictmaskstrict.fits',
-                 'lax': 'NGC384_C4_CO21_bri_MS_20kms_jonathan_casaimviewhand_strictmasklax.fits',
-                 'ext3983': 'NGC384_C4_CO21_bri_MS_20kms_jonathan_casaimviewhand_strictmaskext3983.fits'}
+        masks = {'baseline': 'NGC384_C4_CO21_bri_20kms_jonathan_casaimviewhand_strictmask.fits',
+                 'strict': 'NGC384_C4_CO21_bri_20kms_jonathan_casaimviewhand_strictmaskstrict.fits',
+                 'lax': 'NGC384_C4_CO21_bri_20kms_jonathan_casaimviewhand_strictmasklax.fits',
+                 'ext3983': 'NGC384_C4_CO21_bri_20kms_jonathan_casaimviewhand_strictmaskext3983.fits'}
 
         lucys = {'baseline': 'ngc_384_20_strict_lucyout_n' + str(lucyn) + '.fits',
                  'strict': 'ngc_384_20_strictstrict_lucyout_n' + str(lucyn) + '.fits',
@@ -396,6 +398,7 @@ def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, vra
         dist = 61.  # Mpc
         # https://ned.ipac.caltech.edu/byname?objname=NGC%20384&hconst=67.8&omegam=0.308&omegav=0.692&wmap=4&corr_z=1
         vsysrange = [4000, 4500]
+        zfix = 0.01412
 
     # CREATE FILE/MODEL RUN NAME
     dfid = ''  # difference from fiducial model!
@@ -411,7 +414,7 @@ def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, vra
         dfid += '_' + str(gs)
     if sigtype != 'flat':
         dfid += '_' + sigtype
-    if rfit != 1.8:  # != 0.7: (for UGC 2698); != 1.8: (for NGC 384 and PGC 11179)
+    if rfit != 0.7:  # != 0.7: (for UGC 2698); != 1.8: (for NGC 384 and PGC 11179)
         dfid += '_rfit' + str(rfit)
     if vtype != 'orig':
         dfid += '_' + vtype
@@ -460,7 +463,12 @@ def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, vra
         'y_fwhm': y_fwhm,
         'PAbeam': PAbeam,
         'dist': dist,  # 91.  # 85.29,  #89.,  # Mpc'
+        'zfix': zfix
         }
+
+    if 'pri' == 'weird' or 'pri' == 'pretest':
+        fixed['inc'] = 89.9  # 11179
+        fixed['PAdisk'] = 70.  # 11179
 
     fixed_int = {  # FIXED INTs
         'zi': zi,  # cube range: zi:zf,
@@ -492,11 +500,17 @@ def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, vra
     # priset3 = {'mbh': [8, 10.], 'xloc': [124, 128], 'yloc': [148, 152], 'sig0': [0, 40], 'inc': [0, 89],
     #            'PAdisk': [5, 35], 'vsys': [6405, 6505], 'ml_ratio': [0.3, 3.], 'f': [0.5, 1.5]}
 
-    priset3 = {'mbh': [8., 10.], 'xloc': xrange, 'yloc': yrange, 'sig0': [0, 100], 'inc': [0, 89],
+    prepri = {'mbh': [7.5, 10.5], 'xloc': xrange, 'yloc': yrange, 'sig0': [0, 200], 'inc': [0, 89.9],
+              'PAdisk': parange, 'vsys': vsysrange, 'ml_ratio': [0.1, 10.], 'f': [0.2, 5.]}
+
+    priset3 = {'mbh': [8., 10.], 'xloc': xrange, 'yloc': yrange, 'sig0': [0, 100], 'inc': [0, 89.9],
                'PAdisk': parange, 'vsys': vsysrange, 'ml_ratio': [0.3, 3.], 'f': [0.5, 1.5]}
 
     fullpriors = {'mbh': [6, 12], 'xloc': [116, 140], 'yloc': [140, 160], 'sig0': [0, 200], 'inc': [0, 89],
                   'PAdisk': [0, 89], 'vsys': [5000, 8100], 'ml_ratio': [0.1, 10], 'f': [0.1, 2.5]}
+
+    weird_11179 = {'mbh': [0., 11.], 'xloc': [143, 173], 'yloc': [133, 163], 'sig0': [0, 1e3], 'vsys': [6800, 7200],
+                   'ml_ratio': [0., 5.], 'f': [0.2, 2.]}
 
     # COULD BE FREE OR FIXED: vrad, kappa, omega (depends on vtype)
     if vrad:
@@ -573,17 +587,25 @@ def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, vra
     locnewpar = localpars + newpar
     clusternewpar = clusterpars + newpar
 
-    copyf = localpars + folder + 'ugc_2698_baseline_rhe_orig_gas.txt'
+    # copyf = localpars + folder + 'ugc_2698_baseline_rhe_orig_gas.txt'
 
     # SET PRIOR CHOICE
     prior_dict = {'wide': priors,
                   'mid': midpriors,
                   'narrow': narrowpri,
+                  'prepri': prepri,
                   'priset2': priset2,
                   'priset3': priset3,
-                  'fullpriors': fullpriors}
+                  'fullpriors': fullpriors,
+                  'weird': weird_11179}
 
     use_priors = prior_dict[pri]
+
+    pyfile = 'dyndyn_n.py'
+    if 'fixbh' in base_id:
+        use_priors.pop('mbh')
+        fixed['mbh'] = base_id[5:]  # base_id must be in format fixbhMBH e.g. fixbh2.46e9, so base_id[5:] = 2.46e9
+        pyfile = 'dyndyn_fixbh.py'
 
     #use_priors = priors
     #if pri == 'wide':
@@ -608,16 +630,18 @@ def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, vra
     print(newpc)
 
     # THEN WRITE CLUSTER RUNFILE TO SCP OVER
-    submit_file = write_runfile(run_type, galaxy=galaxy, folder=folder)
+    submit_file = write_runfile(run_type, galaxy=galaxy, folder=folder, dynpy=pyfile)
     print(submit_file)
 
 
 # SETTINGS / CHOICES
-galaxy = '384' # 2698, 11179, 384
-bid = 'preliminary'  # preliminary, finaltests
-pri = 'priset3'  # 'wide', 'mid', 'narrow', 'priset2', 'priset3' (fiducial), 'fullpriors'
+galaxy = '2698'  # '11179' # 2698, 11179, 384
+bid = 'fixbh7500000000' # 'weird'  # preliminary, finaltests, pre2, pretest, pre3, weird
+# fixbh numbers: median 2461189947.064265, +/-1sig 2526552381.586655,2395489164.9312243 ;;
+# +/-3sig 2667403123.112414,2275153534.726537 ;; +/-systemic 2.46+0.70=3160000000,2.46-0.78=1680000000
+pri = 'priset3'  # 'prepri', 'wide', 'mid', 'narrow', 'priset2', 'priset3' (fiducial), 'fullpriors'
 masktype = 'baseline'  # 'strict'  # 'lax'  # 'baseline'
-mgetype = 'akin'  # 'rhe'  # 'rhe'  # 'ahe'  # 'rhe'  # 'rre'  # 'akin'
+mgetype = 'rhe'  # 'rhe'  # 'rhe'  # 'ahe'  # 'rhe'  # 'rre'  # 'akin'
 os = 4  # 1 2 3 4 6 8 10 12 14 16
 gs = 31  # beam grid size
 sigtype = 'flat'  # flat, exp, gauss
