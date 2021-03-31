@@ -546,6 +546,8 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
 
     # CALCULATE VELOCITY WIDTH  # vsys = 6454.9 estimated from various test runs; see eg. Week of 2020-05-04 on wiki
     v_width = 2.99792458e5 * (1 + (6454.9 / 2.99792458e5)) * fstep / f_0  # velocity width [km/s] = c*(1+v/c)*fstep/f0
+    #print(v_width)  # 20.754396985748013
+    #print(oop)
 
     # CONSTRUCT THE FLUX MAP IN UNITS Jy km/s beam^-1
     collapsed_fluxes_vel = np.zeros(shape=(len(input_data[0]), len(input_data[0][0])))
@@ -562,7 +564,7 @@ def model_prep(lucy_out=None, lucy_mask=None, lucy_b=None, lucy_in=None, lucy_it
     for zz in range(len(bignoise)):
         tot_unc+= bignoise[zz]**2 * pts_per_chan[zz]
     tot_flux_unc = np.sqrt(tot_unc)
-    #print(tot)  # 0.0487979421224
+    #print(tot_flux_unc)  # 0.0487979421224
 
     # DEFINE SEMI-MAJOR AXES FOR SAMPLING, THEN CALCULATE THE MEAN SURFACE BRIGHTNESS INSIDE ELLIPTICAL ANNULI
     semi_major = np.linspace(0., 100., num=85)  # [pix]  # num=66)
@@ -1073,6 +1075,30 @@ class ModelGrid:
     def grids(self):
         t_grid = time.time()
 
+        '''  #
+        vel_ax = []
+        velwidth = self.c_kms * (1 + self.zred) * self.fstep / self.f_0
+        for v in range(len(self.freq_ax)):
+            vel_ax.append(self.c_kms * (1. - (self.freq_ax[v] / self.f_0) * (1 + self.zred)))
+        print(vel_ax)
+        print(self.zred, self.z_fixed) # zred = 0.021531124489166463, z_fixed = 0.02152
+        # -> z_fixed CO line = 225.681338 ;;  using zred instead: CO line = 225.67888
+        print(vel_ax[2]-vel_ax[1], vel_ax[3]-vel_ax[2], velwidth)  # all = 25.754395
+        print(vel_ax[self.zrange[0]], vel_ax[self.zrange[1]])  # -583.7219933918362 599.2785140192336
+        print(self.vsys-vel_ax[self.zrange[0]], self.vsys-vel_ax[self.zrange[1]], self.vsys)
+        print((vel_ax[self.zrange[1]] - vel_ax[self.zrange[0]])/(self.zrange[1]-self.zrange[0]))
+        print(self.vsys-vel_ax[29], self.vsys-vel_ax[77])  # 6955.573148035577 5959.362194426275 (delta-V = 996.210954)
+        # in non-python: velocity appears in channels 30 through 78; in python, this is 29 through 77, or 29:78
+        print((vel_ax[77]-vel_ax[29])/(77-29))
+        print((vel_ax[68] - vel_ax[20])/(68-20))
+        print(vel_ax[68] - vel_ax[67])  # 20.754394866866733
+        print(self.zrange[0], self.zrange[1])
+        # 29: 77:
+        print(oop)  # [28]: 6976.327542902444, [76]: 5980.116589293141 ;; 25: 7038.590727503044, 82: 5855.5902200919745
+        # -> total delta-vel ACTUALLY = 1183.0, 1183.0 / 57 = 20.75 km/s!!!
+        # -> total delta-vel = 996.210954, that /49 = 20.3308358
+        # '''  #
+
         # SUBPIXELS (reshape deconvolved flux map [lucy_out] sxs subpixels, so subpix has flux=(real pixel flux)/s**2)
         if not self.quiet:
             print('start')
@@ -1308,6 +1334,10 @@ class ModelGrid:
         ap_ds *= self.ell_ds
         n_pts = np.sum(self.ell_ds) * len(self.z_ax)  # total number of pixels compared in chi^2 calculation!
 
+        #print(n_pts, np.sum(self.ell_ds))
+        # fiducial: 5301, 93 ;; rfit0.5: 2736, 48 ;; rfit0.8: 6726, 118 ;; rfit0.9: 8607, 151
+        #print(oop)
+
         chi_sq = 0.  # initialize chi^2
         cs = []  # initialize chi^2 per slice
 
@@ -1319,6 +1349,7 @@ class ModelGrid:
             chi_disk += (ap_ds[z_ind] - data_ds[z_ind])**2 / self.noise[z_ind]**2
 
             z_ind += 1  # the actual index for the model-data comparison cubes
+
 
         if self.sqrt2n:
             chi_sq /= np.sqrt(2. * n_pts)
@@ -1370,8 +1401,8 @@ class ModelGrid:
         Mgal = lum_H * self.ml_ratio
         # print(lum_H/1e11, lum_K/1e11, Mgal/1e11, self.ml_ratio)  # 2.161741279282659 2.370302178436106 3.6823320041952625 1.7034101349154922
         # MsolK: 3.27, MsolH: 3.37,
-        # print(lum_K, lum_H, self.ml_ratio, Mgal)  # 237030217843.6 216174127928.3 1.7034101349154922 368233200419.5
-        # print(oop)
+        print(lum_K, lum_H, self.ml_ratio, Mgal)  # 237030217843.6 216174127928.3 1.7034101349154922 368233200419.5
+        print(oop)
 
         #print(mge_sum('mge_mrk1216.txt', 94e6 / 206265), 'mrk1216')  # 117014480545.67628
         #print(mge_sum('mge_ngc1271.txt', 80e6 / 206265), 'ngc1271')  # 70176058033.44998
@@ -2170,7 +2201,7 @@ class ModelGrid:
         plt.show()
 
 
-    def orig_final4(self, incl_beam, snr=10, fs=20, pars_backup=None):
+    def orig_final4(self, incl_beam, snr=10, fs=20, pars_backup=None, beamcol='w'):
         """
         Calculate moment maps, average them within voronoi bins
         # using equations from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
@@ -2217,7 +2248,7 @@ class ModelGrid:
             beam_overlay = np.zeros(
                 shape=self.convolved_cube[0].shape)  # overlay the beam on the same scale as the moment map
             ebeam = patches.Ellipse((-0.65, -0.5), params['x_fwhm'], params['y_fwhm'],
-                                    angle=-(90 + params['PAbeam']), linewidth=2, edgecolor='w', fill=False)
+                                    angle=-(90 + params['PAbeam']), linewidth=2, edgecolor=beamcol, fill=False)
             print(beam_overlay.shape, self.beam.shape)  # (120, 120) (31, 31)
             if '2698' in params['outname']:  # insert [21x21 cut of beam into bottom corner, at [:21, (final-21):]
                 beam_overlay[:21, 63:] = self.beam[5:26, 5:26]
@@ -2884,7 +2915,275 @@ class ModelGrid:
         plt.show()
 
 
-    def vor_moms(self, incl_beam, snr=10, just_data=False, fs=20, pars_backup=None, frac=False, just1=False):
+    def montecarlo_moms(self, mciter=100, snr=10, fs=20, pars_backup=None):
+        """
+        Calculate moment maps, average them within voronoi bins
+        # using equations from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
+
+        :param snr: voronoi binning target signal-to-noise ratio
+        :param just_data: if True, plot just the moments of the data (don't include model and residual)
+        :return:
+        """
+        # OPEN STRICTMASK
+        hdu_m = fits.open(self.data_mask)
+        data_mask = hdu_m[0].data  # The mask is stored in hdu_m[0].data, NOT hdu_m[0].data[0]
+        hdu_m.close()
+
+        # CREATE VELOCITY AXIS FROM FREQUENCY AXIS
+        vel_ax = []
+        velwidth = self.c_kms * (1 + self.zred) * self.fstep / self.f_0
+        for v in range(len(self.freq_ax)):
+            vel_ax.append(self.c_kms * (1. - (self.freq_ax[v] / self.f_0) * (1 + self.zred)))
+
+        # full cube strictmask, clipped to the appropriate zrange
+        clipped_mask = data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
+                       self.xyrange[0]:self.xyrange[1]]
+
+        # MOMENT 0 MODEL
+        model_masked_m0 = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+        for zi in range(len(self.convolved_cube)):
+            model_masked_m0 += self.convolved_cube[zi] * abs(velwidth) * clipped_mask[zi]  # SUM_z model[z]*mask[z]*dz
+        model_masked_m0 *= 1e3
+
+        # AVERAGE EACH MAP WITHING THE VORONOI BIN -- CALCULATE THE VORONOI BINS!
+        xpix, ypix, binNum, x_in, nPixels = self.just_the_bins(snr=snr, pars_backup=pars_backup)
+
+        m0 = map_averaging(model_masked_m0, xpix, ypix, binNum, x_in, nPixels)
+
+        model_denominator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+        m2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # denominator
+        for zi in range(len(self.convolved_cube)):
+            model_denominator += self.convolved_cube[zi] * clipped_mask[zi]
+            m2_den += self.convolved_cube[zi] * clipped_mask[zi]
+
+        d0_arr = []
+        d1_arr = []
+        d2_arr = []
+        m1_arr = []
+        m2_arr = []
+        for mcit in range(mciter):
+            if mciter > 50:  # for larger numbers of mc iterations
+                if mcit % 10 == 0:  # print mcit every 10 iterations
+                    print(mcit)
+            for z in range(len(self.clipped_data)):
+                data_errmod = np.random.normal(self.clipped_data, self.noise[z], size=self.clipped_data.shape)
+
+            # CALCULATE MOMENT 0 for data, and CONVERT TO mJy
+            data_masked_m0 = np.zeros(shape=self.convolved_cube[0].shape)
+            for z in range(len(vel_ax)):
+                data_masked_m0 += abs(velwidth) * data_errmod[z] * clipped_mask[z]  # SUM_z data[z] * mask[z] * dz
+            data_masked_m0 *= 1e3  # mJy
+
+            # CALCULATE NUMERATOR AND DENOMINATOR USED IN MOMENT 1 & 2, FOR MODEL, THEN FOR DATA
+            model_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            for zi in range(len(self.convolved_cube)):
+                model_numerator += vel_ax[zi] * data_errmod[zi] * clipped_mask[zi]
+            model_m1 = model_numerator / model_denominator
+
+            data_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            data_denominator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            for zi in range(len(self.convolved_cube)):
+                data_numerator += vel_ax[zi] * data_errmod[zi] * clipped_mask[zi]
+                data_denominator += data_errmod[zi] * clipped_mask[zi]
+            data_m1 = data_numerator / data_denominator
+
+            # CALCULATE MOMENT 2 (model, then data)
+            m2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # numerator
+            for zi in range(len(self.convolved_cube)):
+                m2_num += (vel_ax[zi] - model_m1) ** 2 * self.convolved_cube[zi] * clipped_mask[zi]
+            model_m2 = np.sqrt(m2_num / m2_den)
+
+            d2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            d2_n2 = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            d2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            for zi in range(len(self.convolved_cube)):
+                d2_n2 += data_errmod[zi] * (vel_ax[zi] - data_m1) ** 2 * clipped_mask[zi]  # * mask2d
+                d2_num += (vel_ax[zi] - data_m1) ** 2 * data_errmod[zi] * clipped_mask[zi]  # * mask2d
+                d2_den += data_errmod[zi] * clipped_mask[zi]  # * mask2d
+
+            d2_num[d2_num < 0] = 0.  # ADDING TO GET RID OF NANs
+            data_m2 = np.sqrt(d2_num / d2_den)
+            data_m2 = np.nan_to_num(data_m2)
+
+            # AVERAGE EACH MOMENT MAP WITHIN THE VORONOI BINS
+            d0 = map_averaging(data_masked_m0, xpix, ypix, binNum, x_in, nPixels)
+            d0_arr.append(d0)
+
+            data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
+            d1 = map_averaging(data_m1, xpix, ypix, binNum, x_in, nPixels)
+            d1_arr.append(d1)
+            m1 = map_averaging(model_m1, xpix, ypix, binNum, x_in, nPixels)
+            m1_arr.append(m1)
+
+            d2 = map_averaging(data_m2, xpix, ypix, binNum, x_in, nPixels)
+            d2_arr.append(d2)
+            m2 = map_averaging(model_m2, xpix, ypix, binNum, x_in, nPixels)
+            m2_arr.append(m2)
+
+        d0_meds = np.median(d0_arr, axis=0)
+        d1_meds = np.median(d1_arr, axis=0)
+        m1_meds = np.median(m1_arr, axis=0)
+        d2_meds = np.median(d2_arr, axis=0)
+        m2_meds = np.median(m2_arr, axis=0)
+        d0_stds = np.std(d0_arr, axis=0)
+        d1_stds = np.std(d1_arr, axis=0)
+        m1_stds = np.std(m1_arr, axis=0)
+        d2_stds = np.std(d2_arr, axis=0)
+        m2_stds = np.std(m2_arr, axis=0)
+
+        #for i in range(len(d1_arr)):
+        #    plt.imshow(d1_arr[i], origin='lower')
+        #    plt.colorbar()
+        #    plt.pause(0.5)
+        #    plt.clf()
+        #print(oop)
+
+        plt.imshow(d0_meds, origin='lower')
+        plt.colorbar()
+        plt.show()
+
+        plt.imshow(d0_stds, origin='lower')
+        plt.colorbar()
+        plt.show()
+
+        plt.imshow(d1_meds, origin='lower', cmap='RdBu_r')
+        plt.colorbar()
+        plt.show()
+
+        plt.imshow(d1_stds, origin='lower')
+        plt.colorbar()
+        plt.show()
+
+        plt.imshow(d2_meds, origin='lower')
+        plt.colorbar()
+        plt.show()
+
+        plt.imshow(d2_stds, origin='lower')
+        plt.colorbar()
+        plt.show()
+
+        results_dict = {}
+        import pickle
+        with open('mom_unc_' + str(mciter) + '.pkl', 'wb+') as newfile:  # 'wb' bc binary
+            results_dict['mom0'] = [d0_meds, d0_stds]
+            results_dict['mom1'] = [d1_meds, d1_stds]
+            results_dict['mom2'] = [d2_meds, d2_stds]
+            pickle.dump(results_dict, newfile, pickle.HIGHEST_PROTOCOL)  # save temporary results to file
+        print(oop)
+
+        cbar_0 = r'mJy km s$^{-1}$ beam$^{-1}$'  # same for data, model, residual for moment 0
+        cmap_0 = 'viridis'  # same for data, model, residual for moment 0
+        min0 = np.amin([np.nanmin(m0), np.nanmin(d0)])
+        max0 = np.amax([np.nanmax(m0), np.nanmax(d0)])
+
+        cbar_1 = r'km s$^{-1}$'  # same for data, model, residual for moment 1
+        cmap_dm1 = 'RdBu_r'  # for data, model for moment 1
+        cmap_r1 = 'viridis'  # for residual for moment 1
+        min1 = np.amin([np.nanmin(m1), np.nanmin(d1)])
+        max1 = np.amax([np.nanmax(m1), np.nanmax(d1)])
+
+        cbar_2 = r'km s$^{-1}$'  # same for data, model, residual for moment 2
+        cmap_2 = 'viridis'  # same for data, model, residual for moment 2
+        min2 = np.amin([np.nanmin(m2), np.nanmin(d2)])
+        max2 = np.amax([np.nanmax(m2), np.nanmax(d2)])
+
+        # CALCULATE SUB-CUBE ARCSEC EXTENT
+        # RESCALE (x_loc, y_loc) AND (xell, yell) PIXEL VALUES TO CORRESPOND TO SUB-CUBE PIXEL LOCATIONS!
+        x_locvb = self.x_loc - self.xyrange[0]  # x_loc - xi
+        y_locvb = self.y_loc - self.xyrange[2]  # y_loc - yi
+
+        # SET UP OBSERVATION AXES: initialize x,y axes at 0., with lengths = sub_cube.shape
+        y_obs_acvb = np.asarray([0.] * len(m1))
+        x_obs_acvb = np.asarray([0.] * len(m1[0]))
+
+        # Define coordinates to be 0,0 at center of the observed axes (find the central pixel number along each axis)
+        for i in range(len(x_obs_acvb)):
+            x_obs_acvb[i] = -self.resolution * (i - x_locvb)  # (arcsec/pix) * N_pix = arcsec  # - bc RA increases left
+        for i in range(len(y_obs_acvb)):
+            y_obs_acvb[i] = self.resolution * (i - y_locvb)
+
+        extent = [x_obs_acvb[0], x_obs_acvb[-1], y_obs_acvb[0], y_obs_acvb[-1]]  # left right bottom top
+
+        # START PLOTTING
+        rc('text', usetex=False)
+        fig, ax = plt.subplots(3, 3, figsize=(13, 8))  # (12,8)
+        plt.gca().set_aspect('equal', adjustable='box')
+        plt.subplots_adjust(hspace=0.02, wspace=0.02)
+
+        # PLOT MOMENT 0
+        imd0 = ax[0][0].imshow(d0, vmin=min0, vmax=max0, origin='lower', extent=extent, cmap=cmap_0)
+        cbard0 = fig.colorbar(imd0, ax=ax[0][0], pad=0.02)
+        # cbard0.set_label(cbar_0, rotation=270, labelpad=20.)
+
+        imm0 = ax[0][1].imshow(m0, vmin=min0, vmax=max0, origin='lower', extent=extent, cmap=cmap_0)
+        cbarm0 = fig.colorbar(imm0, ax=ax[0][1], pad=0.02)
+        # cbarm0.set_label(cbar_0, rotation=270, labelpad=20.)
+
+        imr0 = ax[0][2].imshow(r0, origin='lower', vmin=np.nanmin(r0), vmax=np.nanmax(r0), extent=extent,
+                               cmap=cmap_0)
+        cbar2r0 = fig.colorbar(imr0, ax=ax[0][2], pad=0.02)
+        cbar2r0.set_label(cbar_0, rotation=270, labelpad=20.)
+
+        # only label in first row is on y axis
+        ax[0][0].set_xticklabels([])  # xticks shared, yticks not shared!
+        ax[0][1].set_xticklabels([])  # xticks shared, yticks shared
+        ax[0][1].set_yticklabels([])
+        ax[0][2].set_xticklabels([])  # xticks shared, yticks shared
+        ax[0][2].set_yticklabels([])
+        ax[0][0].set_ylabel('Moment 0\n' + '\n' + r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]
+
+        # PLOT MOMENT 1
+        imd1 = ax[1][0].imshow(d1, vmin=min1, vmax=max1, origin='lower', extent=extent, cmap=cmap_dm1)
+        cbard1 = fig.colorbar(imd1, ax=ax[1][0], pad=0.02)
+        # cbard1.set_label(cbar_1, rotation=270, labelpad=20.)
+
+        imm1 = ax[1][1].imshow(m1, vmin=min1, vmax=max1, origin='lower', extent=extent, cmap=cmap_dm1)
+        cbarm1 = fig.colorbar(imm1, ax=ax[1][1], pad=0.02)
+        # cbarm1.set_label(cbar_1, rotation=270, labelpad=20.)
+
+        imr1 = ax[1][2].imshow(r1, origin='lower', vmin=np.nanmin(r1), vmax=np.nanmax(r1), extent=extent,
+                               cmap=cmap_r1)
+        cbarr1 = fig.colorbar(imr1, ax=ax[1][2], pad=0.02)
+        cbarr1.set_label(cbar_1, rotation=270, labelpad=20.)
+
+        # only label in second row is on y axis
+        ax[1][0].set_xticklabels([])  # xticks shared, yticks not shared!
+        ax[1][1].set_xticklabels([])  # xticks shared, yticks shared
+        ax[1][1].set_yticklabels([])
+        ax[1][2].set_xticklabels([])  # xticks shared, yticks shared
+        ax[1][2].set_yticklabels([])
+        ax[1][0].set_ylabel('Moment 1\n' + '\n' + r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]
+
+        # PLOT MOMENT 2
+        imd2 = ax[2][0].imshow(d2, vmin=min2, vmax=max2, origin='lower', extent=extent, cmap=cmap_2)
+        cbard2 = fig.colorbar(imd2, ax=ax[2][0], pad=0.02)
+        # cbard2.set_label(cbar_2, rotation=270, labelpad=20.)
+
+        imm2 = ax[2][1].imshow(m2, vmin=min2, vmax=max2, origin='lower', extent=extent, cmap=cmap_2)
+        cbarm2 = fig.colorbar(imm2, ax=ax[2][1], pad=0.02)
+        # cbarm2.set_label(cbar_2, rotation=270, labelpad=20.)
+
+        imr2 = ax[2][2].imshow(r2, origin='lower', vmin=np.nanmin(r2), vmax=np.nanmax(r2), extent=extent,
+                               cmap=cmap_2)
+        cbarr2 = fig.colorbar(imr2, ax=ax[2][2], pad=0.02)
+        cbarr2.set_label(cbar_2, rotation=270, labelpad=20.)
+
+        # only left-most panel has y axis label, but all panels in bottom row have x axis label
+        ax[2][1].set_yticklabels([])  # xticks not shared, yticks shared!
+        ax[2][2].set_yticklabels([])  # xticks not shared, yticks shared!
+        ax[2][0].set_ylabel('Moment 2\n' + '\n' + r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]
+        ax[2][0].set_xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)  # x [arcsec]
+        ax[2][1].set_xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)  # y [arcsec]
+        ax[2][2].set_xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)  # x [arcsec]
+
+        ax[0][0].set_title(r'Data', fontsize=fs)
+        ax[0][1].set_title(r'Model', fontsize=fs)
+        ax[0][2].set_title(r'Residual', fontsize=fs)  # Moment 1 residual
+
+        plt.show()
+
+    def vor_moms(self, incl_beam, snr=10, just_data=False, fs=20, pars_backup=None, frac=False, just1=False,
+                 beamcol='w'):
         """
         Calculate moment maps, average them within voronoi bins
         # using equations from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
@@ -2935,7 +3234,7 @@ class ModelGrid:
             # print(self.beam.shape, self.convolved_cube.shape)
             # beam_overlay[:self.beam.shape[0], (beam_overlay.shape[1] - self.beam.shape[1]):] = self.beam
             ebeam = patches.Ellipse((-0.65,-0.5), params['x_fwhm'], params['y_fwhm'],
-                                    angle=-(90 + params['PAbeam']), linewidth=2, edgecolor='w', fill=False)
+                                    angle=-(90 + params['PAbeam']), linewidth=2, edgecolor=beamcol, fill=False)
             # beam_overlay[:self.beam.shape[0] - 6, (beam_overlay.shape[1] - self.beam.shape[1]) + 6:] = self.beam[6:,:-6]
             print(beam_overlay.shape, self.beam.shape)  # (120, 120) (31, 31)
             if '2698' in params['outname']:  # insert [21x21 cut of beam into bottom corner, at [:21, (final-21):]
@@ -3049,13 +3348,28 @@ class ModelGrid:
         delta_m0_data = np.sqrt(delta_m0_data)
         delta_m1_data = np.sqrt(delta_m1_data)
         delta_m2_data = np.sqrt(delta_m2_data) / (2 * d2)
-        plt.imshow(delta_m1_data, origin='lower')
-        plt.colorbar()
-        plt.show()
-        plt.imshow(delta_m2_data, origin='lower')
-        plt.colorbar()
-        plt.show()
         print(delta_m0_data*1e3, 'mJy, look here')
+        showplts = True
+        if showplts:
+            plt.imshow(r0, origin='lower')
+            plt.colorbar()
+            plt.show()
+            plt.imshow(r0 / (delta_m0_data*1e3), origin='lower')  # r0 already in mJy
+            plt.colorbar()
+            plt.show()
+            plt.imshow(delta_m1_data, origin='lower')
+            plt.colorbar()
+            plt.show()
+            plt.imshow(r1 / delta_m1_data, origin='lower', vmax=50, vmin=-50)
+            plt.colorbar()
+            plt.show()
+            plt.imshow(delta_m2_data, origin='lower')
+            plt.colorbar()
+            plt.show()
+            plt.imshow(r2 / delta_m2_data, origin='lower', vmax=40, vmin=np.amin(r2 / delta_m2_data))
+            plt.colorbar()
+            plt.show()
+            print(oop)
         from astropy.stats import sigma_clip, sigma_clipped_stats
         # calculate sigma-clipped medians!
         collapsemask = np.zeros(shape=clipped_mask[0].shape)
@@ -3183,6 +3497,8 @@ class ModelGrid:
                 if gridi == 0:
                     imd1 = axis.imshow(d1, vmin=min1, vmax=max1, origin='lower', extent=extent, cmap=cmap_dm1)
                     gridi += 1
+                    if incl_beam:
+                        axis.add_patch(ebeam)
             # cbard1 = fig.colorbar(imd1, ax=ax[0], pad=0.02)
             # cbard1.set_label(cbar_1, rotation=270, labelpad=20.)
                 else:
@@ -3200,8 +3516,8 @@ class ModelGrid:
             #ax[0].set_yticklabels([-0.5, 0., 0.5])
             #ax[1].set_yticklabels([])
 
-            ax[0].set_title(r'First moment (data)', fontsize=fs)
-            ax[1].set_title(r'First moment (model)', fontsize=fs)
+            ax[0].set_title(r'UGC 2698 V (data)', fontsize=fs)
+            ax[1].set_title(r'UGC 2698 V (model)', fontsize=fs)
             ax[0].set_ylabel(r'$\Delta$ Dec [arcsec]', fontsize=fs)  # y [arcsec]
             ax[0].set_xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)  # y [arcsec]
             ax[1].set_xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)  # y [arcsec]
@@ -3849,16 +4165,18 @@ if __name__ == "__main__":
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()  # 6495.965711236455 (1.2275067481550368)  # 6498.030199144044 (1.227896863027975)
-
+    mg.montecarlo_moms(mciter=1000, pars_backup=params)
     # mg.final4(incl_beam=True, fs=12, pars_backup=params)
     #mg.manual_final4(incl_beam=True, fs=12, pars_backup=params)
     # mg.orig_final4(incl_beam=True, fs=12, pars_backup=params)
-    #mg.vor_moms(incl_beam=True, fs=12, pars_backup=params, just1=True) # , frac=True)
+    #mg.vor_moms(incl_beam=True, fs=12, pars_backup=params, just1=True, beamcol='k') # , frac=True)
+    #mg.vor_moms(incl_beam=True, fs=12, pars_backup=params, just1=False, beamcol='w', frac=True)
     #mg.pvd()
     # mg.moment_0(False, False, False)
     #print(oop)
-    mg.scaling_rels(all3=False, savefig="proposal_scaling_rels_21x5_fs20")
-    # mg.vor_moms(incl_beam=True, fs=12, pars_backup=params, frac=True)
+    #mg.scaling_rels(all3=False, savefig="proposal_scaling_rels_21x5_fs20")
+    #mg.scaling_rels(savefig=None)#"proposal_scaling_rels_21x5_fs20")
+    mg.vor_moms(incl_beam=True, fs=12, pars_backup=params)  # , frac=True
     # mg.pvd()
     print(oop)
     xtalk = [4, 7, 13, 16]
