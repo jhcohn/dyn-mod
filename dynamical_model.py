@@ -2917,13 +2917,13 @@ class ModelGrid:
         plt.show()
 
 
-    def montecarlo_moms(self, mciter=100, snr=10, fs=15, pars_backup=None, reb=False, voronoi=True, yy=7, xx=11):
+    def montecarlo_moms(self, mciter=100, snr=10, fs=15, pars_backup=None, reb=False, voronoi=True, earlybin=False,
+                        yy=7, xx=11):
         """
         Calculate moment maps, average them within voronoi bins
         # using equations from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
 
         :param snr: voronoi binning target signal-to-noise ratio
-        :param just_data: if True, plot just the moments of the data (don't include model and residual)
         :return:
         """
         import pickle
@@ -2932,7 +2932,11 @@ class ModelGrid:
             basename += '_rebin'
         if not voronoi:
             basename += '_novor'
+        if earlybin:
+            basename += '_earlybin_ds'
         mc_filename = 'mom_unc_' + basename + '.pkl'
+
+        self.ell_ds[self.ell_ds == 0.] = np.nan
 
         # OPEN STRICTMASK
         hdu_m = fits.open(self.data_mask)
@@ -2949,53 +2953,119 @@ class ModelGrid:
         clipped_mask = data_mask[self.zrange[0]:self.zrange[1], self.xyrange[2]:self.xyrange[3],
                        self.xyrange[0]:self.xyrange[1]]
 
-        # MOMENT 0 MODEL & DATA
-        reg_data_m0 = np.zeros(shape=self.convolved_cube[0].shape)
-        for z in range(len(vel_ax)):
-            reg_data_m0 += abs(velwidth) * self.clipped_data[z] * clipped_mask[z]  # SUM_z data[z] * mask[z] * d
-        reg_data_m0 *= 1e3
+        if earlybin:
+            mod_ds = rebin(self.convolved_cube, self.ds2, self.ds, avg=self.avg)
+            dat_ds = rebin(self.clipped_data, self.ds2, self.ds, avg=self.avg)
+            msk_ds = rebin(clipped_mask, self.ds2, self.ds, avg=self.avg)  # produces mask with values 0 -> 1
+            msk_ds[msk_ds < 0.5] = 0.
+            msk_ds[msk_ds >= 0.5] = 1.
 
-        model_masked_m0 = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
-        for zi in range(len(self.convolved_cube)):
-            model_masked_m0 += self.convolved_cube[zi] * abs(velwidth) * clipped_mask[zi]  # SUM_z model[z]*mask[z]*dz
-        model_masked_m0 *= 1e3
+            # MOMENT 0 MODEL & DATA
+            reg_data_m0 = np.zeros(shape=self.ell_ds.shape)
+            for z in range(len(vel_ax)):
+                reg_data_m0 += abs(velwidth) * dat_ds[z] * msk_ds[z]  # SUM_z data[z] * mask[z] * d
+            reg_data_m0 *= 1e3  # convert Jy to mJy
 
-        # CALCULATE NUMERATOR AND DENOMINATOR USED IN MOMENT 1 & 2, FOR MODEL THEN FOR DATA
-        model_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
-        model_denominator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
-        for zi in range(len(self.convolved_cube)):
-            model_numerator += vel_ax[zi] * self.convolved_cube[zi] * clipped_mask[zi]
-            model_denominator += self.convolved_cube[zi] * clipped_mask[zi]
-        model_m1 = model_numerator / model_denominator
+            model_masked_m0 = np.zeros(shape=(len(self.ell_ds), len(self.ell_ds[0])))
+            for zi in range(len(self.convolved_cube)):
+                model_masked_m0 += mod_ds[zi] * abs(velwidth) * msk_ds[zi]  # SUM_z model[z]*mask[z]*dz
+            model_masked_m0 *= 1e3  # convert Jy to mJy
 
-        data_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
-        data_denominator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
-        for zi in range(len(self.convolved_cube)):
-            data_numerator += vel_ax[zi] * self.clipped_data[zi] * clipped_mask[zi]
-            data_denominator += self.clipped_data[zi] * clipped_mask[zi]
-        data_m1 = data_numerator / data_denominator
+            # CALCULATE NUMERATOR AND DENOMINATOR USED IN MOMENT 1 & 2, FOR MODEL THEN FOR DATA
+            model_numerator = np.zeros(shape=(len(self.ell_ds), len(self.ell_ds[0])))
+            model_denominator = np.zeros(shape=(len(self.ell_ds), len(self.ell_ds[0])))
+            model_numfull = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            model_denfull = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            for zi in range(len(self.convolved_cube)):
+                model_numerator += vel_ax[zi] * mod_ds[zi] * msk_ds[zi]
+                model_denominator += mod_ds[zi] * msk_ds[zi]
+                model_numfull = vel_ax[zi] * self.convolved_cube[zi] * clipped_mask[zi]
+                model_denfull = self.convolved_cube[zi] * clipped_mask[zi]
+            model_m1 = model_numerator / model_denominator
+            model_m1full = model_numfull / model_denfull
 
-        # CALCULATE MOMENT 2
-        m2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # numerator
-        m2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # denominator
-        for zi in range(len(self.convolved_cube)):
-            m2_num += (vel_ax[zi] - model_m1) ** 2 * self.convolved_cube[zi] * clipped_mask[zi]
-            m2_den += self.convolved_cube[zi] * clipped_mask[zi]
-        model_m2 = np.sqrt(m2_num / m2_den)
+            data_numerator = np.zeros(shape=(len(self.ell_ds), len(self.ell_ds[0])))
+            data_denominator = np.zeros(shape=(len(self.ell_ds), len(self.ell_ds[0])))
+            data_numfull = np.zeros(shape=(len(self.clipped_data[0]), len(self.clipped_data[0][0])))
+            data_denfull = np.zeros(shape=(len(self.clipped_data[0]), len(self.clipped_data[0][0])))
+            for zi in range(len(self.convolved_cube)):
+                data_numerator += vel_ax[zi] * dat_ds[zi] * msk_ds[zi]
+                data_denominator += dat_ds[zi] * msk_ds[zi]
+                data_numfull = vel_ax[zi] * self.clipped_data[zi] * clipped_mask[zi]
+                data_denfull = self.clipped_data[zi] * clipped_mask[zi]
+            data_m1 = data_numerator / data_denominator
+            data_m1full = data_numfull / data_denfull
 
-        d2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
-        d2_n2 = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
-        d2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
-        for zi in range(len(self.convolved_cube)):
-            d2_n2 += self.clipped_data[zi] * (vel_ax[zi] - data_m1) ** 2 * clipped_mask[zi]  # * mask2d
-            d2_num += (vel_ax[zi] - data_m1) ** 2 * self.clipped_data[zi] * clipped_mask[zi]  # * mask2d
-            d2_den += self.clipped_data[zi] * clipped_mask[zi]  # * mask2d
+            # CALCULATE MOMENT 2
+            m2_num = np.zeros(shape=(len(self.ell_ds), len(self.ell_ds[0])))  # numerator
+            m2_den = np.zeros(shape=(len(self.ell_ds), len(self.ell_ds[0])))  # denominator
+            for zi in range(len(self.convolved_cube)):
+                m2_num += (vel_ax[zi] - model_m1) ** 2 * mod_ds[zi] * msk_ds[zi]
+                m2_den += mod_ds[zi] * msk_ds[zi]
+            model_m2 = np.sqrt(m2_num / m2_den)
 
-        d2_num[d2_num < 0] = 0.  # ADDING TO GET RID OF NANs
-        data_m2 = np.sqrt(d2_num / d2_den)
-        data_m2 = np.nan_to_num(data_m2)
+            d2_num = np.zeros(shape=(len(self.ell_ds), len(self.ell_ds[0])))
+            d2_n2 = np.zeros(shape=(len(self.ell_ds), len(self.ell_ds[0])))
+            d2_den = np.zeros(shape=(len(self.ell_ds), len(self.ell_ds[0])))
+            for zi in range(len(self.convolved_cube)):
+                d2_n2 += dat_ds[zi] * (vel_ax[zi] - data_m1) ** 2 * msk_ds[zi]
+                d2_num += (vel_ax[zi] - data_m1) ** 2 * dat_ds[zi] * msk_ds[zi]
+                d2_den += dat_ds[zi] * msk_ds[zi]
 
-        data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
+            d2_num[d2_num < 0] = 0.  # ADDING TO GET RID OF NANs
+            data_m2 = np.sqrt(d2_num / d2_den)
+            data_m2 = np.nan_to_num(data_m2)
+
+            data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
+
+        else:
+            # MOMENT 0 MODEL & DATA
+            reg_data_m0 = np.zeros(shape=self.convolved_cube[0].shape)
+            for z in range(len(vel_ax)):
+                reg_data_m0 += abs(velwidth) * self.clipped_data[z] * clipped_mask[z]  # SUM_z data[z] * mask[z] * d
+            reg_data_m0 *= 1e3
+
+            model_masked_m0 = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            for zi in range(len(self.convolved_cube)):
+                model_masked_m0 += self.convolved_cube[zi] * abs(velwidth) * clipped_mask[zi]  # SUM_z model[z]*mask[z]*dz
+            model_masked_m0 *= 1e3
+
+            # CALCULATE NUMERATOR AND DENOMINATOR USED IN MOMENT 1 & 2, FOR MODEL THEN FOR DATA
+            model_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            model_denominator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            for zi in range(len(self.convolved_cube)):
+                model_numerator += vel_ax[zi] * self.convolved_cube[zi] * clipped_mask[zi]
+                model_denominator += self.convolved_cube[zi] * clipped_mask[zi]
+            model_m1 = model_numerator / model_denominator
+
+            data_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            data_denominator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            for zi in range(len(self.convolved_cube)):
+                data_numerator += vel_ax[zi] * self.clipped_data[zi] * clipped_mask[zi]
+                data_denominator += self.clipped_data[zi] * clipped_mask[zi]
+            data_m1 = data_numerator / data_denominator
+
+            # CALCULATE MOMENT 2
+            m2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # numerator
+            m2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # denominator
+            for zi in range(len(self.convolved_cube)):
+                m2_num += (vel_ax[zi] - model_m1) ** 2 * self.convolved_cube[zi] * clipped_mask[zi]
+                m2_den += self.convolved_cube[zi] * clipped_mask[zi]
+            model_m2 = np.sqrt(m2_num / m2_den)
+
+            d2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            d2_n2 = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            d2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            for zi in range(len(self.convolved_cube)):
+                d2_n2 += self.clipped_data[zi] * (vel_ax[zi] - data_m1) ** 2 * clipped_mask[zi]  # * mask2d
+                d2_num += (vel_ax[zi] - data_m1) ** 2 * self.clipped_data[zi] * clipped_mask[zi]  # * mask2d
+                d2_den += self.clipped_data[zi] * clipped_mask[zi]  # * mask2d
+
+            d2_num[d2_num < 0] = 0.  # ADDING TO GET RID OF NANs
+            data_m2 = np.sqrt(d2_num / d2_den)
+            data_m2 = np.nan_to_num(data_m2)
+
+            data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
 
         if reb:
             # START REBINNING AND MASKING CODE
@@ -3005,6 +3075,16 @@ class ModelGrid:
 
             # REBIN AND APPLY ELLIPSE MASK TO EACH MOMENT!
             model_masked_m0 = rebin(model_masked_m0, self.ds2, self.ds, avg=self.avg) * self.ell_ds
+            '''  #
+            model_masked_m02 = rebin(model_masked_m0, self.ds2, self.ds, avg=self.avg) #* self.ell_ds
+            fig, ax = plt.subplots(nrows=1, ncols=3)
+            ax[0].imshow(model_masked_m0[0], origin='lower')
+            ax[1].imshow(model_masked_m02[0], origin='lower')
+            ax[2].imshow(model_masked_m0[0] - model_masked_m02[0], origin='lower')
+            #plt.colorbar()
+            plt.show()
+            print(oop)
+            # '''  #
             model_m1 = rebin(model_m1, self.ds2, self.ds, avg=self.avg) * self.ell_ds
             model_m2 = rebin(model_m2, self.ds2, self.ds, avg=self.avg) * self.ell_ds
             reg_data_m0 = rebin(reg_data_m0, self.ds2, self.ds, avg=self.avg) * self.ell_ds
@@ -3031,6 +3111,13 @@ class ModelGrid:
             d0_reg = map_averaging(reg_data_m0, xpix, ypix, binNum, x_in, nPixels)
             d1_reg = map_averaging(data_m1, xpix, ypix, binNum, x_in, nPixels)
             d2_reg = map_averaging(data_m2, xpix, ypix, binNum, x_in, nPixels)
+        elif earlybin:
+            m0_reg = model_masked_m0 * self.ell_ds
+            m1_reg = model_m1 * self.ell_ds
+            m2_reg = model_m2 * self.ell_ds
+            d0_reg = reg_data_m0 * self.ell_ds
+            d1_reg = data_m1 * self.ell_ds
+            d2_reg = data_m2 * self.ell_ds
         else:
             m0_reg = model_masked_m0
             m1_reg = model_m1
@@ -3097,47 +3184,104 @@ class ModelGrid:
                 if mciter > 50:  # for larger numbers of mc iterations
                     if mcit % 10 == 0:  # print mcit every 10 iterations
                         print(mcit)
+
+                data_errmod = []
                 for z in range(len(self.clipped_data)):
-                    data_errmod = np.random.normal(self.clipped_data, self.noise[z], size=self.clipped_data.shape)
+                    data_errmod.append(np.random.normal(self.clipped_data[z], self.noise[z]))
+                data_errmod = np.array(data_errmod)
 
-                # CALCULATE MOMENT 0 for data, and CONVERT TO mJy
-                data_masked_m0 = np.zeros(shape=self.convolved_cube[0].shape)
-                for z in range(len(vel_ax)):
-                    data_masked_m0 += abs(velwidth) * data_errmod[z] * clipped_mask[z]  # SUM_z data[z] * mask[z] * dz
-                data_masked_m0 *= 1e3  # mJy
+                datmod_ds = rebin(data_errmod, self.ds2, self.ds, avg=self.avg)
 
-                # CALCULATE NUMERATOR AND DENOMINATOR USED IN MOMENT 1 & 2, FOR MODEL, THEN FOR DATA
-                model_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
-                for zi in range(len(self.convolved_cube)):
-                    model_numerator += vel_ax[zi] * data_errmod[zi] * clipped_mask[zi]
-                model_m1 = model_numerator / model_denominator
+                if earlybin:
+                    # CALCULATE MOMENT 0 for data, and CONVERT TO mJy
+                    data_masked_m0 = np.zeros(shape=self.ell_ds.shape)
+                    for z in range(len(vel_ax)):
+                        data_masked_m0 += abs(velwidth) * datmod_ds[z] * msk_ds[z]  # SUM_z data[z] * mask[z] * dz
+                    data_masked_m0 *= 1e3  # mJy
 
-                data_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
-                data_denominator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
-                for zi in range(len(self.convolved_cube)):
-                    data_numerator += vel_ax[zi] * data_errmod[zi] * clipped_mask[zi]
-                    data_denominator += data_errmod[zi] * clipped_mask[zi]
-                data_m1 = data_numerator / data_denominator
+                    # CALCULATE NUMERATOR AND DENOMINATOR USED IN MOMENT 1 & 2, FOR MODEL, THEN FOR DATA
+                    model_numerator = np.zeros(shape=(len(self.ell_ds), len(self.ell_ds[0])))
+                    model_denominator = np.zeros(shape=(len(self.ell_ds), len(self.ell_ds[0])))
+                    model_numfull = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+                    model_denfull = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+                    for zi in range(len(self.convolved_cube)):
+                        model_numerator += vel_ax[zi] * mod_ds[zi] * msk_ds[zi]
+                        model_denominator += mod_ds[zi] * msk_ds[zi]
+                        model_numfull = vel_ax[zi] * self.convolved_cube[zi] * clipped_mask[zi]
+                        model_denfull = self.convolved_cube[zi] * clipped_mask[zi]
+                    model_m1 = model_numerator / model_denominator
+                    model_m1full = model_numfull / model_denfull
 
-                # CALCULATE MOMENT 2 (model, then data)
-                m2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # numerator
-                for zi in range(len(self.convolved_cube)):
-                    m2_num += (vel_ax[zi] - model_m1) ** 2 * self.convolved_cube[zi] * clipped_mask[zi]
-                model_m2 = np.sqrt(m2_num / m2_den)
+                    data_numerator = np.zeros(shape=(len(self.ell_ds), len(self.ell_ds[0])))
+                    data_denominator = np.zeros(shape=(len(self.ell_ds), len(self.ell_ds[0])))
+                    data_numfull = np.zeros(shape=(len(self.clipped_data[0]), len(self.clipped_data[0][0])))
+                    data_denfull = np.zeros(shape=(len(self.clipped_data[0]), len(self.clipped_data[0][0])))
+                    for zi in range(len(self.convolved_cube)):
+                        data_numerator += vel_ax[zi] * datmod_ds[zi] * msk_ds[zi]
+                        data_denominator += datmod_ds[zi] * msk_ds[zi]
+                        data_numfull = vel_ax[zi] * data_errmod[zi] * clipped_mask[zi]
+                        data_denfull = data_errmod[zi] * clipped_mask[zi]
+                    data_m1 = data_numerator / data_denominator
+                    data_m1full = data_numfull / data_denfull
 
-                d2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
-                d2_n2 = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
-                d2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
-                for zi in range(len(self.convolved_cube)):
-                    d2_n2 += data_errmod[zi] * (vel_ax[zi] - data_m1) ** 2 * clipped_mask[zi]  # * mask2d
-                    d2_num += (vel_ax[zi] - data_m1) ** 2 * data_errmod[zi] * clipped_mask[zi]  # * mask2d
-                    d2_den += data_errmod[zi] * clipped_mask[zi]  # * mask2d
+                    # CALCULATE MOMENT 2 (model, then data)
+                    m2_num = np.zeros(shape=(len(self.ell_ds), len(self.ell_ds[0])))  # numerator
+                    for zi in range(len(self.convolved_cube)):
+                        m2_num += (vel_ax[zi] - model_m1) ** 2 * mod_ds[zi] * msk_ds[zi]
+                    model_m2 = np.sqrt(m2_num / m2_den)
 
-                d2_num[d2_num < 0] = 0.  # ADDING TO GET RID OF NANs
-                data_m2 = np.sqrt(d2_num / d2_den)
-                data_m2 = np.nan_to_num(data_m2)
+                    d2_num = np.zeros(shape=(len(self.ell_ds), len(self.ell_ds[0])))
+                    d2_n2 = np.zeros(shape=(len(self.ell_ds), len(self.ell_ds[0])))
+                    d2_den = np.zeros(shape=(len(self.ell_ds), len(self.ell_ds[0])))
+                    for zi in range(len(self.convolved_cube)):
+                        d2_n2 += datmod_ds[zi] * (vel_ax[zi] - data_m1) ** 2 * msk_ds[zi]
+                        d2_num += (vel_ax[zi] - data_m1) ** 2 * datmod_ds[zi] * msk_ds[zi]
+                        d2_den += datmod_ds[zi] * msk_ds[zi]
 
-                data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
+                    d2_num[d2_num < 0] = 0.  # ADDING TO GET RID OF NANs
+                    data_m2 = np.sqrt(d2_num / d2_den)
+                    data_m2 = np.nan_to_num(data_m2)
+
+                    data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
+                else:
+                    # CALCULATE MOMENT 0 for data, and CONVERT TO mJy
+                    data_masked_m0 = np.zeros(shape=self.convolved_cube[0].shape)
+                    for z in range(len(vel_ax)):
+                        data_masked_m0 += abs(velwidth) * data_errmod[z] * clipped_mask[z]  # SUM_z data[z] * mask[z] * dz
+                    data_masked_m0 *= 1e3  # mJy
+
+                    # CALCULATE NUMERATOR AND DENOMINATOR USED IN MOMENT 1 & 2, FOR MODEL, THEN FOR DATA
+                    model_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+                    for zi in range(len(self.convolved_cube)):
+                        model_numerator += vel_ax[zi] * data_errmod[zi] * clipped_mask[zi]
+                    model_m1 = model_numerator / model_denominator
+
+                    data_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+                    data_denominator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+                    for zi in range(len(self.convolved_cube)):
+                        data_numerator += vel_ax[zi] * data_errmod[zi] * clipped_mask[zi]
+                        data_denominator += data_errmod[zi] * clipped_mask[zi]
+                    data_m1 = data_numerator / data_denominator
+
+                    # CALCULATE MOMENT 2 (model, then data)
+                    m2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # numerator
+                    for zi in range(len(self.convolved_cube)):
+                        m2_num += (vel_ax[zi] - model_m1) ** 2 * self.convolved_cube[zi] * clipped_mask[zi]
+                    model_m2 = np.sqrt(m2_num / m2_den)
+
+                    d2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+                    d2_n2 = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+                    d2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+                    for zi in range(len(self.convolved_cube)):
+                        d2_n2 += data_errmod[zi] * (vel_ax[zi] - data_m1) ** 2 * clipped_mask[zi]  # * mask2d
+                        d2_num += (vel_ax[zi] - data_m1) ** 2 * data_errmod[zi] * clipped_mask[zi]  # * mask2d
+                        d2_den += data_errmod[zi] * clipped_mask[zi]  # * mask2d
+
+                    d2_num[d2_num < 0] = 0.  # ADDING TO GET RID OF NANs
+                    data_m2 = np.sqrt(d2_num / d2_den)
+                    data_m2 = np.nan_to_num(data_m2)
+
+                    data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
 
                 if reb:
                     # REBIN AND APPLY ELLIPSE MASK TO EACH MOMENT!
@@ -3214,7 +3358,8 @@ class ModelGrid:
         ellmask = ellipse_fitting(self.clipped_data, self.rfit, self.xell, self.yell, self.resolution, self.theta_ell,
                                   self.q_ell)  # create ellipse mask
 
-        if not reb and not voronoi:
+        '''  # UNCOMMENT TO APPLY MASK ON REGULAR SCALE
+        if not reb and not voronoi and not earlybin:
             d0_arr *= ellmask
             d1_arr *= ellmask
             d2_arr *= ellmask
@@ -3230,6 +3375,7 @@ class ModelGrid:
             m0_reg *= ellmask
             m1_reg *= ellmask
             m2_reg *= ellmask
+        # '''  #
 
         maps = [d0_meds, d0_stds, d1_meds, d1_stds, d2_meds, d2_stds]
         modelmaps = [m0_reg, m1_reg, m2_reg]
@@ -3253,7 +3399,7 @@ class ModelGrid:
 
         # Define coordinates to be 0,0 at center of the observed axes (find the central pixel number along each axis)
         pix = 1.
-        if reb:
+        if reb or earlybin:
             pix = 4.
         for i in range(len(x_obs_acvb)):
             x_obs_acvb[i] = -self.resolution * pix * (i - x_locvb)  # (arcsec/pix) * N_pix = arcsec; RA increases left
@@ -3347,6 +3493,9 @@ class ModelGrid:
                     print(rhist.shape)
                 else:
                     rhist = rhists[r]
+                #rhist = rhist[:, yy, xx]
+                #rhist = rhist[~np.isnan(rhist)]
+                #plt.hist(rhist, bins=20)  # [:, yy, xx]
                 plt.hist(rhist[:, yy, xx], bins=20)
                 plt.show()
                 # '''  #
@@ -3361,17 +3510,60 @@ class ModelGrid:
                 plt.show()
                 # '''  #
 
-        else:  # plot residual comparisons
+        residhist = False
+        if residhist:  # plot residual comparisons
             for d in range(3):
-                plt.title(comp_titles[d])
                 residmap = (regdat[d] - modelmaps[d]) / maps[int(2*d+1)]
                 #print(residmap[40, 75])
+
                 if len(np.shape(residmap)) == 3:
                     residmap = residmap[0]
 
-                if voronoi:
+                print(np.nanmedian(residmap), np.nanstd(residmap))
+                print(self.avg)
+                #plt.hist(residmap[~np.isnan(residmap)], bins=20)
+                #plt.show()
 
+                plt.figure(figsize=(6,3.7))  # (8,5))#
+                #fig, ax = plt.subplots(1)
+                plt.gca().set_aspect('equal', adjustable='box')
+
+                # AVERAGE EACH MAP WITHING THE VORONOI BIN -- CALCULATE THE VORONOI BINS!
+                xpix, ypix, binNum, x_in, nPixels = self.just_the_bins(snr=snr, pars_backup=pars_backup)
+                residmap_vb = map_averaging(residmap, xpix, ypix, binNum, x_in, nPixels)
+                #residmap_vb[residmap_vb == 0.] = np.nan
+                residmap_vb *= ellmask
+                #plt.figure(figsize=(7,4))
+                #residmap_vb[np.abs(maps[int(2*d+1)]) < 1e-3] = 10.
+                residmap_vb[np.abs(residmap_vb) > 1e3] = 0.
+                plt.title('Moment ' + str(d) + r' Residual / Uncertainty', fontsize=fs)
+                plt.imshow(residmap_vb, origin='lower', cmap=cbs[d], vmin=np.nanmin([residmap_vb, -residmap_vb]),
+                           vmax=np.nanmax([residmap_vb, -residmap_vb]), extent=extent)
+                cbar = plt.colorbar(pad=0.02)
+                cbar.set_label(units[d], rotation=270, labelpad=20., fontsize=fs)
+                plt.xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)
+                plt.ylabel(r'$\Delta$ Dec [arcsec]', fontsize=fs)
+                plt.xticks([-0.5, 0., 0.5])
+                plt.yticks([-0.5, 0., 0.5])
+                plt.xlim(extent[0], extent[1])
+                plt.ylim(extent[2], extent[3])
+                #plt.tick_params(axis='x', which='minor')
+                plt.show()
+
+        else:
+            for d in range(3):
+                residmap = (regdat[d] - modelmaps[d]) / maps[int(2*d+1)]
+                if len(np.shape(residmap)) == 3:
+                    residmap = residmap[0]
+
+                plt.title(comp_titles[d])
+
+                if voronoi:
                     residmap *= ellmask
+                    plt.imshow(residmap, origin='lower')
+                    plt.colorbar()
+                    plt.show()
+
                     plt.hist(list(set(residmap.flatten())), bins=20)
                     plt.axvline(x=np.nanmean(list(set(residmap.flatten()))), color='k')
                     plt.title(r'std = ' + str(np.nanstd(list(set(residmap.flatten())))))
@@ -3383,6 +3575,9 @@ class ModelGrid:
                     plt.imshow(residmap, origin='lower', cmap='viridis', extent=extent)  # , extent=extent)
                     ax.add_patch(e7)
                 else:
+                    #print(self.avg, np.nanmedian(residmap))
+                    #residmap = rebin(residmap, self.ds2, self.ds, avg=self.avg)[0] * self.ell_ds  # testing
+                    #print(self.avg, np.nanmedian(residmap))
                     plt.imshow(residmap, origin='lower', cmap='viridis')#, extent=extent)
                 #print(residmap[10, 10], residmap[40,75], 'here')  # y,x
                 plt.colorbar()
@@ -4394,7 +4589,8 @@ if __name__ == "__main__":
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()  # 6495.965711236455 (1.2275067481550368)  # 6498.030199144044 (1.227896863027975)
-    mg.montecarlo_moms(mciter=1000, pars_backup=params, voronoi=True, reb=False, yy=7, xx=11)  # yy,xx = 7,11 ;; 30,35
+    mg.montecarlo_moms(mciter=1000, pars_backup=params, voronoi=False, reb=False, earlybin=True, yy=7, xx=11)
+    # montecarlo_moms: yy,xx = 7,11 ;; 30,35
     # mg.final4(incl_beam=True, fs=12, pars_backup=params)
     #mg.manual_final4(incl_beam=True, fs=12, pars_backup=params)
     # mg.orig_final4(incl_beam=True, fs=12, pars_backup=params)
