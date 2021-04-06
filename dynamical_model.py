@@ -2918,7 +2918,7 @@ class ModelGrid:
 
 
     def montecarlo_moms(self, mciter=100, snr=10, fs=15, pars_backup=None, reb=False, voronoi=True, earlybin=False,
-                        yy=7, xx=11):
+                        earlyvor=False, yy=7, xx=11):
         """
         Calculate moment maps, average them within voronoi bins
         # using equations from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
@@ -2930,10 +2930,14 @@ class ModelGrid:
         basename = str(mciter)
         if reb:
             basename += '_rebin'
-        if not voronoi:
-            basename += '_novor'
+        if voronoi:
+            basename += 'vorcorr'
+        if earlyvor:
+            basename += 'earlyvor'
         if earlybin:
             basename += '_earlybin_ds'
+        if not reb and not voronoi and not earlybin and not earlyvor:
+            basename += '_novor_corr'
         mc_filename = 'mom_unc_' + basename + '.pkl'
 
         self.ell_ds[self.ell_ds == 0.] = np.nan
@@ -3017,8 +3021,16 @@ class ModelGrid:
             data_m2 = np.nan_to_num(data_m2)
 
             data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
-
         else:
+            if earlyvor:
+                # AVERAGE EACH MAP WITHING THE VORONOI BIN -- CALCULATE THE VORONOI BINS!
+                xpix, ypix, binNum, x_in, nPixels = self.just_the_bins(snr=snr, pars_backup=pars_backup)
+
+                # Voronoi-binned at spectra stage!
+                for z in range(len(self.convolved_cube)):
+                    self.convolved_cube[z] = map_averaging(self.convolved_cube[z], xpix, ypix, binNum, x_in, nPixels)
+                    self.clipped_data[z] = map_averaging(self.clipped_data[z], xpix, ypix, binNum, x_in, nPixels)
+
             # MOMENT 0 MODEL & DATA
             reg_data_m0 = np.zeros(shape=self.convolved_cube[0].shape)
             for z in range(len(vel_ax)):
@@ -3357,6 +3369,7 @@ class ModelGrid:
 
         ellmask = ellipse_fitting(self.clipped_data, self.rfit, self.xell, self.yell, self.resolution, self.theta_ell,
                                   self.q_ell)  # create ellipse mask
+        ellmask[ellmask == 0.] = np.nan
 
         '''  # UNCOMMENT TO APPLY MASK ON REGULAR SCALE
         if not reb and not voronoi and not earlybin:
@@ -3439,7 +3452,7 @@ class ModelGrid:
             plt.hist(d2_arr[:, yy, xx], bins=20)
             plt.show()
 
-        plotall = False
+        plotall = True
         if plotall:
             for d in range(len(maps)):
                 fig, ax = plt.subplots(nrows=1, ncols=1)
@@ -3510,29 +3523,20 @@ class ModelGrid:
                 plt.show()
                 # '''  #
 
-        residhist = False
-        if residhist:  # plot residual comparisons
+        vorbinresid = True
+        if vorbinresid:
             for d in range(3):
                 residmap = (regdat[d] - modelmaps[d]) / maps[int(2*d+1)]
-                #print(residmap[40, 75])
 
                 if len(np.shape(residmap)) == 3:
+                    print('double check this is due to rebin adding unnecessary dimension')
                     residmap = residmap[0]
-
-                print(np.nanmedian(residmap), np.nanstd(residmap))
-                print(self.avg)
-                #plt.hist(residmap[~np.isnan(residmap)], bins=20)
-                #plt.show()
-
-                plt.figure(figsize=(6,3.7))  # (8,5))#
-                #fig, ax = plt.subplots(1)
-                plt.gca().set_aspect('equal', adjustable='box')
 
                 # AVERAGE EACH MAP WITHING THE VORONOI BIN -- CALCULATE THE VORONOI BINS!
                 xpix, ypix, binNum, x_in, nPixels = self.just_the_bins(snr=snr, pars_backup=pars_backup)
                 residmap_vb = map_averaging(residmap, xpix, ypix, binNum, x_in, nPixels)
                 #residmap_vb[residmap_vb == 0.] = np.nan
-                residmap_vb *= ellmask
+                #residmap_vb *= ellmask
                 #plt.figure(figsize=(7,4))
                 #residmap_vb[np.abs(maps[int(2*d+1)]) < 1e-3] = 10.
                 residmap_vb[np.abs(residmap_vb) > 1e3] = 0.
@@ -3550,19 +3554,62 @@ class ModelGrid:
                 #plt.tick_params(axis='x', which='minor')
                 plt.show()
 
-        else:
+        residplt = True
+        if residplt:  # plot residual comparisons
+            for d in range(3):
+                residmap = (regdat[d] - modelmaps[d]) / maps[int(2*d+1)]
+                #print(residmap[40, 75])
+
+                if len(np.shape(residmap)) == 3:
+                    print('double check this is due to rebin adding unnecessary dimension')
+                    residmap = residmap[0]
+
+                # print(np.nanmedian(residmap), np.nanstd(residmap))
+                #plt.hist(residmap[~np.isnan(residmap)], bins=20)
+                #plt.show()
+
+                plt.figure(figsize=(6,3.7))  # (8,5))#
+                #fig, ax = plt.subplots(1)
+                plt.gca().set_aspect('equal', adjustable='box')
+
+                if reb or earlybin:
+                    residmap *= self.ell_ds
+                else:
+                    residmap *= ellmask
+                #residmap[np.abs(residmap) > 1e3] = 0.
+                plt.title('Moment ' + str(d) + r' Residual / Uncertainty', fontsize=fs)
+                plt.imshow(residmap, origin='lower', cmap=cbs[d], vmin=np.nanmin([residmap, -residmap]),
+                           vmax=np.nanmax([residmap, -residmap]), extent=extent)
+                cbar = plt.colorbar(pad=0.02)
+                cbar.set_label(units[d], rotation=270, labelpad=20., fontsize=fs)
+                plt.xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)
+                plt.ylabel(r'$\Delta$ Dec [arcsec]', fontsize=fs)
+                plt.xticks([-0.5, 0., 0.5])
+                plt.yticks([-0.5, 0., 0.5])
+                plt.xlim(extent[0], extent[1])
+                plt.ylim(extent[2], extent[3])
+                #plt.tick_params(axis='x', which='minor')
+                plt.show()
+
+        residhist = True
+        if residhist:
             for d in range(3):
                 residmap = (regdat[d] - modelmaps[d]) / maps[int(2*d+1)]
                 if len(np.shape(residmap)) == 3:
+                    print('double check this is due to rebin adding unnecessary dimension')
                     residmap = residmap[0]
 
                 plt.title(comp_titles[d])
 
-                if voronoi:
+                if reb or earlybin:
+                    residmap *= self.ell_ds
+                else:
                     residmap *= ellmask
-                    plt.imshow(residmap, origin='lower')
-                    plt.colorbar()
-                    plt.show()
+
+                if voronoi or earlyvor:
+                    #plt.imshow(residmap, origin='lower')
+                    #plt.colorbar()
+                    #plt.show()
 
                     plt.hist(list(set(residmap.flatten())), bins=20)
                     plt.axvline(x=np.nanmean(list(set(residmap.flatten()))), color='k')
@@ -3570,10 +3617,10 @@ class ModelGrid:
                     plt.show()
 
                     fig, ax = plt.subplots(nrows=1, ncols=1)
-                    e7 = patches.Ellipse((0., 0.), 2 * 0.7, 2 * 0.7 * self.q_ell, angle=-(np.rad2deg(self.theta_ell)),
-                                         linewidth=1, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
+                    #e7 = patches.Ellipse((0., 0.), 2 * 0.7, 2 * 0.7 * self.q_ell, angle=-(np.rad2deg(self.theta_ell)),
+                    #                     linewidth=1, edgecolor='w', fill=False)  # np.rad2deg(params['theta_ell'])
                     plt.imshow(residmap, origin='lower', cmap='viridis', extent=extent)  # , extent=extent)
-                    ax.add_patch(e7)
+                    #ax.add_patch(e7)
                 else:
                     #print(self.avg, np.nanmedian(residmap))
                     #residmap = rebin(residmap, self.ds2, self.ds, avg=self.avg)[0] * self.ell_ds  # testing
@@ -4589,7 +4636,8 @@ if __name__ == "__main__":
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()  # 6495.965711236455 (1.2275067481550368)  # 6498.030199144044 (1.227896863027975)
-    mg.montecarlo_moms(mciter=1000, pars_backup=params, voronoi=False, reb=False, earlybin=True, yy=7, xx=11)
+    mg.montecarlo_moms(mciter=1000, pars_backup=params, voronoi=False, reb=False, earlybin=False, earlyvor=True,
+                       yy=7, xx=11)
     # montecarlo_moms: yy,xx = 7,11 ;; 30,35
     # mg.final4(incl_beam=True, fs=12, pars_backup=params)
     #mg.manual_final4(incl_beam=True, fs=12, pars_backup=params)
