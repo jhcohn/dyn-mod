@@ -2918,7 +2918,7 @@ class ModelGrid:
 
 
     def montecarlo_moms(self, mciter=100, snr=10, fs=15, pars_backup=None, reb=False, voronoi=True, earlybin=False,
-                        earlyvor=False, yy=7, xx=11):
+                        earlyvor=False, use_dcube=True, yy=7, xx=11):
         """
         Calculate moment maps, average them within voronoi bins
         # using equations from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
@@ -2928,17 +2928,19 @@ class ModelGrid:
         """
         import pickle
         basename = str(mciter)
+        if not use_dcube:
+            basename += '_usemodcube'
         if reb:
             basename += '_rebin'
         if voronoi:
-            basename += 'vorcorr'
+            basename += '_vorcorr'
         if earlyvor:
-            basename += 'earlyvor'
+            basename += '_earlyvorcorr' + str(snr)
         if earlybin:
             basename += '_earlybin_ds'
         if not reb and not voronoi and not earlybin and not earlyvor:
             basename += '_novor_corr'
-        mc_filename = 'mom_unc_' + basename + '.pkl'
+        mc_filename = 'mom_unc' + basename + '.pkl'
 
         self.ell_ds[self.ell_ds == 0.] = np.nan
 
@@ -3021,16 +3023,73 @@ class ModelGrid:
             data_m2 = np.nan_to_num(data_m2)
 
             data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
+        elif earlyvor:
+            # AVERAGE EACH MAP WITHING THE VORONOI BIN -- CALCULATE THE VORONOI BINS!
+            xpix, ypix, binNum, x_in, nPixels = self.just_the_bins(snr=snr, pars_backup=pars_backup)
+
+            # Voronoi-binned at spectra stage!
+            vorcc = []
+            vordat = []
+            for z in range(len(self.convolved_cube)):
+                vorcc.append(map_averaging(self.convolved_cube[z], xpix, ypix, binNum, x_in, nPixels))
+                vordat.append(map_averaging(self.clipped_data[z], xpix, ypix, binNum, x_in, nPixels))
+            vorcc = np.asarray(vorcc)
+            vordat = np.asarray(vordat)
+
+            # MOMENT 0 MODEL & DATA
+            reg_data_m0 = np.zeros(shape=self.convolved_cube[0].shape)
+            for z in range(len(vel_ax)):
+                reg_data_m0 += abs(velwidth) * vordat[z] * clipped_mask[z]  # SUM_z data[z] * mask[z] * d
+            reg_data_m0 *= 1e3
+
+            model_masked_m0 = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            for zi in range(len(self.convolved_cube)):
+                model_masked_m0 += vorcc[zi] * abs(velwidth) * clipped_mask[zi]  # SUM_z model[z]*mask[z]*dz
+            model_masked_m0 *= 1e3
+
+            # CALCULATE NUMERATOR AND DENOMINATOR USED IN MOMENT 1 & 2, FOR MODEL THEN FOR DATA
+            model_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            model_denominator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            for zi in range(len(self.convolved_cube)):
+                model_numerator += vel_ax[zi] * vorcc[zi] * clipped_mask[zi]
+                model_denominator += vorcc[zi] * clipped_mask[zi]
+            model_m1 = model_numerator / model_denominator
+
+            data_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            data_denominator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            for zi in range(len(self.convolved_cube)):
+                data_numerator += vel_ax[zi] * vordat[zi] * clipped_mask[zi]
+                data_denominator += vordat[zi] * clipped_mask[zi]
+            data_m1 = data_numerator / data_denominator
+
+            # CALCULATE MOMENT 2
+            m2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # numerator
+            m2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # denominator
+            for zi in range(len(self.convolved_cube)):
+                m2_num += (vel_ax[zi] - model_m1) ** 2 * vorcc[zi] * clipped_mask[zi]
+                m2_den += vorcc[zi] * clipped_mask[zi]
+            model_m2 = np.sqrt(m2_num / m2_den)
+
+            d2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            d2_n2 = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            d2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
+            for zi in range(len(self.convolved_cube)):
+                d2_n2 += vordat[zi] * (vel_ax[zi] - data_m1) ** 2 * clipped_mask[zi]  # * mask2d
+                d2_num += (vel_ax[zi] - data_m1) ** 2 * vordat[zi] * clipped_mask[zi]  # * mask2d
+                d2_den += vordat[zi] * clipped_mask[zi]  # * mask2d
+
+            plt.imshow(np.sqrt(d2_num / d2_den), origin='lower')
+            plt.colorbar()
+            plt.show()
+            print(oops)
+
+            d2_num[d2_num < 0] = 0.  # ADDING TO GET RID OF NANs
+            data_m2 = np.sqrt(d2_num / d2_den)
+            data_m2 = np.nan_to_num(data_m2)
+
+            data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
+
         else:
-            if earlyvor:
-                # AVERAGE EACH MAP WITHING THE VORONOI BIN -- CALCULATE THE VORONOI BINS!
-                xpix, ypix, binNum, x_in, nPixels = self.just_the_bins(snr=snr, pars_backup=pars_backup)
-
-                # Voronoi-binned at spectra stage!
-                for z in range(len(self.convolved_cube)):
-                    self.convolved_cube[z] = map_averaging(self.convolved_cube[z], xpix, ypix, binNum, x_in, nPixels)
-                    self.clipped_data[z] = map_averaging(self.clipped_data[z], xpix, ypix, binNum, x_in, nPixels)
-
             # MOMENT 0 MODEL & DATA
             reg_data_m0 = np.zeros(shape=self.convolved_cube[0].shape)
             for z in range(len(vel_ax)):
@@ -3199,10 +3258,19 @@ class ModelGrid:
 
                 data_errmod = []
                 for z in range(len(self.clipped_data)):
-                    data_errmod.append(np.random.normal(self.clipped_data[z], self.noise[z]))
+                    if use_dcube:
+                        data_errmod.append(np.random.normal(self.clipped_data[z], self.noise[z]))
+                    else:  # use_model_cube
+                        data_errmod.append(np.random.normal(self.convolved_cube[z], self.noise[z]))
                 data_errmod = np.array(data_errmod)
 
                 datmod_ds = rebin(data_errmod, self.ds2, self.ds, avg=self.avg)
+
+                if earlyvor:
+                    for z in range(len(self.convolved_cube)):
+                        self.convolved_cube[z] = map_averaging(self.convolved_cube[z], xpix, ypix, binNum, x_in,
+                                                               nPixels)
+                        data_errmod[z] = map_averaging(data_errmod[z], xpix, ypix, binNum, x_in, nPixels)
 
                 if earlybin:
                     # CALCULATE MOMENT 0 for data, and CONVERT TO mJy
@@ -3390,6 +3458,33 @@ class ModelGrid:
             m2_reg *= ellmask
         # '''  #
 
+        '''  #
+        plt.imshow(d2_reg, origin='lower')
+        plt.colorbar()
+        plt.pause(1)
+        plt.clf()
+        plt.imshow(d2_stds, origin='lower')
+        plt.colorbar()
+        plt.pause(1)
+        plt.clf()
+        plt.imshow(d2_arr[0], origin='lower')
+        plt.colorbar()
+        plt.pause(1)
+        plt.clf()
+        plt.imshow(d2_arr[1], origin='lower')
+        plt.colorbar()
+        plt.pause(1)
+        plt.clf()
+        plt.imshow(d2_arr[2], origin='lower')
+        plt.colorbar()
+        plt.pause(1)
+        plt.clf()
+        plt.imshow(d2_meds, origin='lower')
+        plt.colorbar()
+        plt.pause(1)
+        print(oop)
+        # '''  #
+
         maps = [d0_meds, d0_stds, d1_meds, d1_stds, d2_meds, d2_stds]
         modelmaps = [m0_reg, m1_reg, m2_reg]
         regdat = [d0_reg, d1_reg, d2_reg]
@@ -3524,7 +3619,7 @@ class ModelGrid:
                 # '''  #
 
         vorbinresid = True
-        if vorbinresid:
+        if vorbinresid and not earlybin:
             for d in range(3):
                 residmap = (regdat[d] - modelmaps[d]) / maps[int(2*d+1)]
 
@@ -4637,7 +4732,7 @@ if __name__ == "__main__":
     mg.convolution()
     chi_sq = mg.chi2()  # 6495.965711236455 (1.2275067481550368)  # 6498.030199144044 (1.227896863027975)
     mg.montecarlo_moms(mciter=1000, pars_backup=params, voronoi=False, reb=False, earlybin=False, earlyvor=True,
-                       yy=7, xx=11)
+                       use_dcube=True, snr=70, yy=7, xx=11)
     # montecarlo_moms: yy,xx = 7,11 ;; 30,35
     # mg.final4(incl_beam=True, fs=12, pars_backup=params)
     #mg.manual_final4(incl_beam=True, fs=12, pars_backup=params)
