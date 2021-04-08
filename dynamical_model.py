@@ -1890,7 +1890,7 @@ class ModelGrid:
         return xpix, ypix, binNum, x_in, nPixels
 
 
-    def manual_final4(self, incl_beam, snr=10, fs=20, pars_backup=None):
+    def manual_final4(self, incl_beam, snr=10, fs=20, pars_backup=None, novor=True):
         """
         Calculate moment maps, average them within voronoi bins
         # using equations from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
@@ -1980,6 +1980,10 @@ class ModelGrid:
             data_denominator += self.clipped_data[zi] * clipped_mask[zi]
         data_m1 = data_numerator / data_denominator
 
+        data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
+        residual_m1 = (data_m1 - subtr) - model_m1  # calculate residual
+        residual_frac_m1 = np.nan_to_num(((data_m1 - subtr) - model_m1) / data_m1, nan=10.)
+
         # CALCULATE MOMENT 2
         m2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # numerator
         m2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # denominator
@@ -2002,33 +2006,49 @@ class ModelGrid:
         residual_m2 = data_m2 - model_m2
         residual_frac_m2 = np.nan_to_num((data_m2 - model_m2) / data_m2, nan=10.)
 
-        # AVERAGE EACH MOMENT MAP WITHIN THE VORONOI BINS
-        d0 = map_averaging(data_masked_m0, xpix, ypix, binNum, x_in, nPixels)
-        m0 = map_averaging(model_masked_m0, xpix, ypix, binNum, x_in, nPixels)
-        r0 = map_averaging(residual_m0, xpix, ypix, binNum, x_in, nPixels)
-        r0frac = map_averaging(residual_frac_m0, xpix, ypix, binNum, x_in, nPixels)
+
+        if novor:
+            d0 = data_masked_m0
+            m0 = model_masked_m0
+            r0 = residual_m0
+
+            d1 = data_m1
+            m1 = model_m1
+            r1 = residual_m1
+
+            d2 = data_m2
+            m2 = model_m2
+            r2 = residual_m2
+
+        else:
+            # AVERAGE EACH MOMENT MAP WITHIN THE VORONOI BINS
+            d0 = map_averaging(data_masked_m0, xpix, ypix, binNum, x_in, nPixels)
+            m0 = map_averaging(model_masked_m0, xpix, ypix, binNum, x_in, nPixels)
+            r0 = map_averaging(residual_m0, xpix, ypix, binNum, x_in, nPixels)
+            r0frac = map_averaging(residual_frac_m0, xpix, ypix, binNum, x_in, nPixels)
+
+            d1 = map_averaging(data_m1, xpix, ypix, binNum, x_in, nPixels)
+            m1 = map_averaging(model_m1, xpix, ypix, binNum, x_in, nPixels)
+            r1 = map_averaging(residual_m1, xpix, ypix, binNum, x_in, nPixels)
+            r1frac = map_averaging(residual_frac_m1, xpix, ypix, binNum, x_in, nPixels)
+
+            d2 = map_averaging(data_m2, xpix, ypix, binNum, x_in, nPixels)
+            m2 = map_averaging(model_m2, xpix, ypix, binNum, x_in, nPixels)
+            r2 = map_averaging(residual_m2, xpix, ypix, binNum, x_in, nPixels)
+            r2frac = map_averaging(residual_frac_m2, xpix, ypix, binNum, x_in, nPixels)
+
         cbar_0 = r'mJy km s$^{-1}$ beam$^{-1}$'  # same for data, model, residual for moment 0
         cmap_0 = 'viridis'  # same for data, model, residual for moment 0
         min0 = np.amin([np.nanmin(m0), np.nanmin(d0)])
         max0 = np.amax([np.nanmax(m0), np.nanmax(d0)])
 
-        data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
-        residual_m1 = (data_m1 - subtr) - model_m1  # calculate residual
-        residual_frac_m1 = np.nan_to_num(((data_m1 - subtr) - model_m1) / data_m1, nan=10.)
-        d1 = map_averaging(data_m1, xpix, ypix, binNum, x_in, nPixels)
-        m1 = map_averaging(model_m1, xpix, ypix, binNum, x_in, nPixels)
-        r1 = map_averaging(residual_m1, xpix, ypix, binNum, x_in, nPixels)
-        r1frac = map_averaging(residual_frac_m1, xpix, ypix, binNum, x_in, nPixels)
+
         cbar_1 = r'km s$^{-1}$'  # same for data, model, residual for moment 1
         cmap_dm1 = 'RdBu_r'  # for data, model for moment 1
         cmap_r1 = 'viridis'  # for residual for moment 1
         min1 = np.amin([np.nanmin(m1), np.nanmin(d1)])
         max1 = np.amax([np.nanmax(m1), np.nanmax(d1)])
 
-        d2 = map_averaging(data_m2, xpix, ypix, binNum, x_in, nPixels)
-        m2 = map_averaging(model_m2, xpix, ypix, binNum, x_in, nPixels)
-        r2 = map_averaging(residual_m2, xpix, ypix, binNum, x_in, nPixels)
-        r2frac = map_averaging(residual_frac_m2, xpix, ypix, binNum, x_in, nPixels)
         cbar_2 = r'km s$^{-1}$'  # same for data, model, residual for moment 2
         cmap_2 = 'viridis'  # same for data, model, residual for moment 2
         min2 = np.amin([np.nanmin(m2), np.nanmin(d2)])
@@ -2487,7 +2507,7 @@ class ModelGrid:
         plt.show()
 
 
-    def final4(self, incl_beam, snr=10, fs=20, pars_backup=None):
+    def final4(self, incl_beam, snr=10, fs=20, pars_backup=None, novor=True, mc_filename=None, fitreg=True):
         """
         Calculate moment maps, average them within voronoi bins
         # using equations from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
@@ -2577,6 +2597,10 @@ class ModelGrid:
             data_denominator += self.clipped_data[zi] * clipped_mask[zi]
         data_m1 = data_numerator / data_denominator
 
+        data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
+        residual_m1 = (data_m1 - subtr) - model_m1  # calculate residual
+        residual_frac_m1 = np.nan_to_num(((data_m1 - subtr) - model_m1) / data_m1, nan=10.)
+
         # CALCULATE MOMENT 2
         m2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # numerator
         m2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # denominator
@@ -2593,41 +2617,43 @@ class ModelGrid:
         d2_num[d2_num < 0] = 0.  # ADDING TO GET RID OF NANs
         data_m2 = np.sqrt(d2_num / d2_den)
         data_m2 = np.nan_to_num(data_m2)
+        data_m2[data_m2 > 4000] = 0.
 
         residual_m2 = data_m2 - model_m2
         residual_frac_m2 = np.nan_to_num((data_m2 - model_m2) / data_m2, nan=10.)
 
-        # AVERAGE EACH MOMENT MAP WITHIN THE VORONOI BINS
-        d0 = map_averaging(data_masked_m0, xpix, ypix, binNum, x_in, nPixels)
-        m0 = map_averaging(model_masked_m0, xpix, ypix, binNum, x_in, nPixels)
-        r0 = map_averaging(residual_m0, xpix, ypix, binNum, x_in, nPixels)
-        r0frac = map_averaging(residual_frac_m0, xpix, ypix, binNum, x_in, nPixels)
-        cbar_0 = r'mJy km s$^{-1}$ beam$^{-1}$'  # same for data, model, residual for moment 0
-        cmap_0 = 'viridis'  # same for data, model, residual for moment 0
-        min0 = np.amin([np.nanmin(m0), np.nanmin(d0)])
-        max0 = np.amax([np.nanmax(m0), np.nanmax(d0)])
+        ellmask = ellipse_fitting(self.clipped_data, self.rfit, self.xell, self.yell, self.resolution, self.theta_ell,
+                                  self.q_ell)  # create ellipse mask
+        # ellmask[ellmask == 0.] = np.nan
 
-        data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
-        residual_m1 = (data_m1 - subtr) - model_m1  # calculate residual
-        residual_frac_m1 = np.nan_to_num(((data_m1 - subtr) - model_m1) / data_m1, nan=10.)
-        d1 = map_averaging(data_m1, xpix, ypix, binNum, x_in, nPixels)
-        m1 = map_averaging(model_m1, xpix, ypix, binNum, x_in, nPixels)
-        r1 = map_averaging(residual_m1, xpix, ypix, binNum, x_in, nPixels)
-        r1frac = map_averaging(residual_frac_m1, xpix, ypix, binNum, x_in, nPixels)
-        cbar_1 = r'km s$^{-1}$'  # same for data, model, residual for moment 1
-        cmap_dm1 = 'RdBu_r'  # for data, model for moment 1
-        cmap_r1 = 'viridis'  # for residual for moment 1
-        min1 = np.amin([np.nanmin(m1), np.nanmin(d1)])
-        max1 = np.amax([np.nanmax(m1), np.nanmax(d1)])
+        if novor:
+            d0 = data_masked_m0
+            m0 = model_masked_m0
+            r0 = residual_m0
 
-        d2 = map_averaging(data_m2, xpix, ypix, binNum, x_in, nPixels)
-        m2 = map_averaging(model_m2, xpix, ypix, binNum, x_in, nPixels)
-        r2 = map_averaging(residual_m2, xpix, ypix, binNum, x_in, nPixels)
-        r2frac = map_averaging(residual_frac_m2, xpix, ypix, binNum, x_in, nPixels)
-        cbar_2 = r'km s$^{-1}$'  # same for data, model, residual for moment 2
-        cmap_2 = 'viridis'  # same for data, model, residual for moment 2
-        min2 = np.amin([np.nanmin(m2), np.nanmin(d2)])
-        max2 = np.amax([np.nanmax(m2), np.nanmax(d2)])
+            d1 = data_m1
+            m1 = model_m1
+            r1 = residual_m1
+
+            d2 = data_m2
+            m2 = model_m2
+            r2 = residual_m2
+        else:
+            # AVERAGE EACH MOMENT MAP WITHIN THE VORONOI BINS
+            d0 = map_averaging(data_masked_m0, xpix, ypix, binNum, x_in, nPixels)
+            m0 = map_averaging(model_masked_m0, xpix, ypix, binNum, x_in, nPixels)
+            r0 = map_averaging(residual_m0, xpix, ypix, binNum, x_in, nPixels)
+            r0frac = map_averaging(residual_frac_m0, xpix, ypix, binNum, x_in, nPixels)
+
+            d1 = map_averaging(data_m1, xpix, ypix, binNum, x_in, nPixels)
+            m1 = map_averaging(model_m1, xpix, ypix, binNum, x_in, nPixels)
+            r1 = map_averaging(residual_m1, xpix, ypix, binNum, x_in, nPixels)
+            r1frac = map_averaging(residual_frac_m1, xpix, ypix, binNum, x_in, nPixels)
+
+            d2 = map_averaging(data_m2, xpix, ypix, binNum, x_in, nPixels)
+            m2 = map_averaging(model_m2, xpix, ypix, binNum, x_in, nPixels)
+            r2 = map_averaging(residual_m2, xpix, ypix, binNum, x_in, nPixels)
+            r2frac = map_averaging(residual_frac_m2, xpix, ypix, binNum, x_in, nPixels)
 
         # CALCULATE SUB-CUBE ARCSEC EXTENT
         # RESCALE (x_loc, y_loc) AND (xell, yell) PIXEL VALUES TO CORRESPOND TO SUB-CUBE PIXEL LOCATIONS!
@@ -2646,13 +2672,79 @@ class ModelGrid:
 
         extent = [x_obs_acvb[0], x_obs_acvb[-1], y_obs_acvb[0], y_obs_acvb[-1]]  # left right bottom top
 
+        # JUST RESIDUAL FIRST
+        import pickle
+        with open(mc_filename, 'rb') as pk:
+            u = pickle._Unpickler(pk)
+            u.encoding = 'latin1'
+            results_dict = u.load()  #
+        d1_stds = results_dict['mom1'][1]
+        d2_meds = results_dict['mom2'][0]
+
+        residmap = (d1 - m1) / d1_stds
+
         # START PLOTTING
         rc('text', usetex=False)
         import matplotlib.gridspec as gridspec
         #fig, ax = plt.subplots(3, 3, figsize=(13, 8))  # (12,8)
 
-        # NEW VERSION PLOT JUST MOMENT MAPS FIRST
-        # JUST RESIDUAL FIRST
+        if fitreg:
+            d0 *= ellmask
+            m0 *= ellmask
+            d1 *= ellmask
+            m1 *= ellmask
+            #d2 *= ellmask
+            d2 = d2_meds * ellmask
+            m2 *= ellmask
+            residmap *= ellmask
+
+            d0 = np.nan_to_num(d0)
+            d1 = np.nan_to_num(d1)
+            d2 = np.nan_to_num(d2)
+            m0 = np.nan_to_num(m0)
+            m1 = np.nan_to_num(m1)
+            m2 = np.nan_to_num(m2)
+            residmap = np.nan_to_num(residmap)
+
+        cbar_0 = r'mJy km s$^{-1}$ beam$^{-1}$'  # same for data, model, residual for moment 0
+        cmap_0 = 'viridis'  # same for data, model, residual for moment 0
+        min0 = np.amin([np.nanmin(m0), np.nanmin(d0)])
+        max0 = np.amax([np.nanmax(m0), np.nanmax(d0)])
+
+        cbar_1 = r'km s$^{-1}$'  # same for data, model, residual for moment 1
+        cmap_dm1 = 'RdBu_r'  # for data, model for moment 1
+        cmap_r1 = 'viridis'  # for residual for moment 1
+        min1 = np.amin([np.nanmin(m1), np.nanmin(d1)])
+        max1 = np.amax([np.nanmax(m1), np.nanmax(d1)])
+
+        cbar_2 = r'km s$^{-1}$'  # same for data, model, residual for moment 2
+        cmap_2 = 'viridis'  # same for data, model, residual for moment 2
+        min2 = np.amin([np.nanmin(m2), np.nanmin(d2)])
+        max2 = np.amax([np.nanmax(m2), np.nanmax(d2)])
+
+        plt.figure(figsize=(6, 3.7))  # (8,5))#
+        # fig, ax = plt.subplots(1)
+        plt.gca().set_aspect('equal', adjustable='box')
+        residmap[np.abs(residmap) > 500] = 0.
+        # residmap *= ellmask
+        # residmap[np.abs(residmap) > 1e3] = 0.
+        #print(np.nanmin([residmap, -residmap]), np.nanmax([residmap, -residmap]))
+        #print(oop)
+        plt.title('Moment 1 Residual / Uncertainty', fontsize=fs)
+        plt.imshow(residmap, origin='lower', vmin=np.nanmin([residmap, -residmap]),
+                   vmax=np.nanmax([residmap, -residmap]), extent=extent)
+        cbar = plt.colorbar(pad=0.02)
+        cbar.set_label(r'km s$^{-1}$', rotation=270, labelpad=20., fontsize=fs)
+        plt.xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)
+        plt.ylabel(r'$\Delta$ Dec [arcsec]', fontsize=fs)
+        plt.xticks([-0.5, 0., 0.5])
+        plt.yticks([-0.5, 0., 0.5])
+        plt.xlim(extent[0], extent[1])
+        plt.ylim(extent[2], extent[3])
+        # plt.tick_params(axis='x', which='minor')
+        plt.show()
+
+        '''  #
         fig, ax = plt.subplots(1)
         plt.title(r'Residual Moment 1', fontsize=fs)
         #divider = make_axes_locatable(ax)
@@ -2680,6 +2772,7 @@ class ModelGrid:
         plt.ylabel(r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]
         plt.show()
         #print(oop)
+        # '''  #
 
         # THEN 6 MOMENTS
         fig, ax = plt.subplots(3, 2, figsize=(8,8))
@@ -2935,7 +3028,7 @@ class ModelGrid:
         if voronoi:
             basename += '_vorcorr'
         if earlyvor:
-            basename += '_earlyvorcorr' + str(snr)
+            basename += '_earlyvorstrict' + str(snr)
         if earlybin:
             basename += '_earlybin_ds'
         if not reb and not voronoi and not earlybin and not earlyvor:
@@ -3030,62 +3123,75 @@ class ModelGrid:
             # Voronoi-binned at spectra stage!
             vorcc = []
             vordat = []
+            vormask = []
             for z in range(len(self.convolved_cube)):
                 vorcc.append(map_averaging(self.convolved_cube[z], xpix, ypix, binNum, x_in, nPixels))
                 vordat.append(map_averaging(self.clipped_data[z], xpix, ypix, binNum, x_in, nPixels))
+                vormask.append(map_averaging(clipped_mask[z], xpix, ypix, binNum, x_in, nPixels))
             vorcc = np.asarray(vorcc)
             vordat = np.asarray(vordat)
 
             # MOMENT 0 MODEL & DATA
             reg_data_m0 = np.zeros(shape=self.convolved_cube[0].shape)
             for z in range(len(vel_ax)):
-                reg_data_m0 += abs(velwidth) * vordat[z] * clipped_mask[z]  # SUM_z data[z] * mask[z] * d
+                reg_data_m0 += abs(velwidth) * vordat[z] * vormask[z]  # SUM_z data[z] * mask[z] * d
             reg_data_m0 *= 1e3
 
             model_masked_m0 = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
             for zi in range(len(self.convolved_cube)):
-                model_masked_m0 += vorcc[zi] * abs(velwidth) * clipped_mask[zi]  # SUM_z model[z]*mask[z]*dz
+                model_masked_m0 += vorcc[zi] * abs(velwidth) * vormask[zi]  # SUM_z model[z]*mask[z]*dz
             model_masked_m0 *= 1e3
 
             # CALCULATE NUMERATOR AND DENOMINATOR USED IN MOMENT 1 & 2, FOR MODEL THEN FOR DATA
             model_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
             model_denominator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
             for zi in range(len(self.convolved_cube)):
-                model_numerator += vel_ax[zi] * vorcc[zi] * clipped_mask[zi]
-                model_denominator += vorcc[zi] * clipped_mask[zi]
+                model_numerator += vel_ax[zi] * vorcc[zi] * vormask[zi]
+                model_denominator += vorcc[zi] * vormask[zi]
             model_m1 = model_numerator / model_denominator
 
             data_numerator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
             data_denominator = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
             for zi in range(len(self.convolved_cube)):
-                data_numerator += vel_ax[zi] * vordat[zi] * clipped_mask[zi]
-                data_denominator += vordat[zi] * clipped_mask[zi]
+                data_numerator += vel_ax[zi] * vordat[zi] * vormask[zi]
+                data_denominator += vordat[zi] * vormask[zi]
             data_m1 = data_numerator / data_denominator
 
             # CALCULATE MOMENT 2
             m2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # numerator
             m2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # denominator
             for zi in range(len(self.convolved_cube)):
-                m2_num += (vel_ax[zi] - model_m1) ** 2 * vorcc[zi] * clipped_mask[zi]
-                m2_den += vorcc[zi] * clipped_mask[zi]
+                m2_num += (vel_ax[zi] - model_m1) ** 2 * vorcc[zi] * vormask[zi]
+                m2_den += vorcc[zi] * vormask[zi]
             model_m2 = np.sqrt(m2_num / m2_den)
 
             d2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
             d2_n2 = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
             d2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))
             for zi in range(len(self.convolved_cube)):
-                d2_n2 += vordat[zi] * (vel_ax[zi] - data_m1) ** 2 * clipped_mask[zi]  # * mask2d
-                d2_num += (vel_ax[zi] - data_m1) ** 2 * vordat[zi] * clipped_mask[zi]  # * mask2d
-                d2_den += vordat[zi] * clipped_mask[zi]  # * mask2d
+                d2_n2 += vordat[zi] * (vel_ax[zi] - data_m1) ** 2 * vormask[zi]  # * mask2d
+                d2_num += (vel_ax[zi] - data_m1) ** 2 * vordat[zi] * vormask[zi]  # * mask2d
+                d2_den += vordat[zi] * vormask[zi]  # * mask2d
 
-            plt.imshow(np.sqrt(d2_num / d2_den), origin='lower')
+            data_m2 = np.sqrt(d2_num / d2_den)
+
+            '''  # TESTING MOMENTS
+            for z in range(len(vordat)):
+                if np.any(vordat[z] * vormask[z] < 0.):
+                    print(z, 'look here', np.nanmin(vordat[z] * vormask[z]),
+                          np.nanmin(np.nanmin(vordat[z] * vormask[z]) * (vel_ax[z] - data_m1)))
+            print(np.any(d2_num < 0.), np.nanmin(d2_num))
+            plt.imshow(d2_num, origin='lower')
             plt.colorbar()
             plt.show()
             print(oops)
-
-            d2_num[d2_num < 0] = 0.  # ADDING TO GET RID OF NANs
-            data_m2 = np.sqrt(d2_num / d2_den)
-            data_m2 = np.nan_to_num(data_m2)
+            #d2_num[d2_num < 0] = 0.  # ADDING TO GET RID OF NANs
+            # data_m2 = np.nan_to_num(data_m2)
+            plt.imshow(data_m2, origin='lower')
+            plt.colorbar()
+            plt.show()
+            print(oop)
+            # '''  #
 
             data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
 
@@ -3271,6 +3377,7 @@ class ModelGrid:
                         self.convolved_cube[z] = map_averaging(self.convolved_cube[z], xpix, ypix, binNum, x_in,
                                                                nPixels)
                         data_errmod[z] = map_averaging(data_errmod[z], xpix, ypix, binNum, x_in, nPixels)
+                        clipped_mask[z] = map_averaging(clipped_mask[z], xpix, ypix, binNum, x_in, nPixels)
 
                 if earlybin:
                     # CALCULATE MOMENT 0 for data, and CONVERT TO mJy
@@ -3516,6 +3623,106 @@ class ModelGrid:
 
         extent = [x_obs_acvb[0], x_obs_acvb[-1], y_obs_acvb[0], y_obs_acvb[-1]]  # left right bottom top
 
+        final4style = True
+        if final4style:
+            subtr = 0.
+            if incl_beam:  # if including beam overlay
+                # overlay the beam on the same scale as the moment map
+                #beam_overlay = np.zeros(shape=self.convolved_cube[0].shape)
+                ebeam = patches.Ellipse((-0.65, -0.5), params['x_fwhm'], params['y_fwhm'],
+                                        angle=-(90 + params['PAbeam']), linewidth=2, edgecolor='w', fill=False)
+                #print(beam_overlay.shape, self.beam.shape)  # (120, 120) (31, 31)
+                #if '2698' in params['outname']:  # insert [21x21 cut of beam into bottom corner, at [:21, (final-21):]
+                #    beam_overlay[:21, 63:] = self.beam[5:26, 5:26]
+                #elif '384' in params['outname']:
+                #    beam_overlay[:21, (beam_overlay.shape[1] - 21):] = self.beam[5:26, 5:26]
+                #print(beam_overlay.shape, self.beam.shape)
+                #beam_overlay *= np.amax(d0_reg) / np.amax(beam_overlay)  # scale so beam shows up well on colormap
+
+            cbar_0 = r'mJy km s$^{-1}$ beam$^{-1}$'  # same for data, model, residual for moment 0
+            cmap_0 = 'viridis'  # same for data, model, residual for moment 0
+            min0 = np.amin([np.nanmin(m0_reg), np.nanmin(d0_reg)])
+            max0 = np.amax([np.nanmax(m0_reg), np.nanmax(d0_reg)])
+
+            cbar_1 = r'km s$^{-1}$'  # same for data, model, residual for moment 1
+            cmap_dm1 = 'RdBu_r'  # for data, model for moment 1
+            cmap_r1 = 'viridis'  # for residual for moment 1
+            min1 = np.amin([np.nanmin(m1_reg), np.nanmin(d1_reg)])
+            max1 = np.amax([np.nanmax(m1_reg), np.nanmax(d1_reg)])
+
+            cbar_2 = r'km s$^{-1}$'  # same for data, model, residual for moment 2
+            cmap_2 = 'viridis'  # same for data, model, residual for moment 2
+            min2 = np.amin([np.nanmin(m2_reg), np.nanmin(d2_reg)])
+            max2 = np.amax([np.nanmax(m2_reg), np.nanmax(d2_reg)])
+
+            fig, ax = plt.subplots(3, 2, figsize=(8, 8))
+            from mpl_toolkits.axes_grid1 import make_axes_locatable
+            # divider01 = make_axes_locatable(ax[0][1])
+            # divider11 = make_axes_locatable(ax[1][1])
+            # divider21 = make_axes_locatable(ax[2][1])
+            # cax01 = divider01.append_axes("right", size="5%", pad=0.05)
+            # cax11 = divider11.append_axes("right", size="5%", pad=0.05)
+            # cax21 = divider21.append_axes("right", size="5%", pad=0.05)
+
+            plt.gca().set_aspect('equal', adjustable='box')
+            plt.subplots_adjust(hspace=0.02, wspace=0.02)  # 0.02, 0.02 ;; 0.1, 0.1
+
+            # PLOT MOMENT 0
+            imd0 = ax[0][0].imshow(d0_reg, vmin=min0, vmax=max0, origin='lower', extent=extent, cmap=cmap_0)
+            # cbard0 = fig.colorbar(imd0, ax=ax[0][0], pad=0.02)
+            if incl_beam:
+                ax[0][0].add_patch(ebeam)
+
+            imm0 = ax[0][1].imshow(m0_reg, vmin=min0, vmax=max0, origin='lower', extent=extent, cmap=cmap_0)
+            # cbarm0 = fig.colorbar(imm0, cax=cax01, pad=0.02)
+            cbarm0 = fig.colorbar(imm0, ax=ax[0][1], pad=0.02)
+            cbarm0.set_label(cbar_0, rotation=270, labelpad=20.)
+
+            # only label in first row is on y axis
+            ax[0][0].set_xticklabels([])  # xticks shared, yticks not shared!
+            ax[0][1].set_xticklabels([])  # xticks shared, yticks shared
+            ax[0][1].set_yticklabels([])
+            # ax[0][2].set_xticklabels([])  # xticks shared, yticks shared
+            # ax[0][2].set_yticklabels([])
+            ax[0][0].set_ylabel('Moment 0\n' + '\n' + r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]
+
+            # PLOT MOMENT 1
+            imd1 = ax[1][0].imshow(d1_reg, vmin=min1, vmax=max1, origin='lower', extent=extent, cmap=cmap_dm1)
+            # cbard1 = fig.colorbar(imd1, ax=ax[1][0], pad=0.02)
+
+            imm1 = ax[1][1].imshow(m1_reg, vmin=min1, vmax=max1, origin='lower', extent=extent, cmap=cmap_dm1)
+            # cbarm1 = fig.colorbar(imm1, cax=cax11, pad=0.02)
+            cbarm1 = fig.colorbar(imm1, ax=ax[1][1], pad=0.02)
+            cbarm1.set_label(cbar_1, rotation=270, labelpad=20.)
+
+            # only label in second row is on y axis
+            ax[1][0].set_ylabel('Moment 1\n' + '\n' + r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]
+            ax[1][0].set_xticklabels([])  # xticks shared, yticks not shared!
+            ax[1][1].set_xticklabels([])  # xticks shared, yticks shared
+            ax[1][1].set_yticklabels([])
+            # ax[1][2].set_xticklabels([])  # xticks shared, yticks not shared!
+
+            # PLOT MOMENT 2
+            imd2 = ax[2][0].imshow(d2_reg, vmin=min2, vmax=max2, origin='lower', extent=extent, cmap=cmap_2)
+            # cbard2 = fig.colorbar(imd2, ax=ax[2][0], pad=0.02)
+
+            imm2 = ax[2][1].imshow(m2_reg, vmin=min2, vmax=max2, origin='lower', extent=extent, cmap=cmap_2)
+            # cbarm2 = fig.colorbar(imm2, cax=cax21, pad=0.02)
+            cbarm2 = fig.colorbar(imm2, ax=ax[2][1], pad=0.02)
+            cbarm2.set_label(cbar_2, rotation=270, labelpad=20.)
+
+            # only left-most panel has y axis label, but all panels in bottom row have x axis label
+            ax[2][1].set_yticklabels([])  # xticks not shared, yticks shared!
+            # ax[2][2].set_yticklabels([])  # xticks not shared, yticks shared!
+            ax[2][0].set_ylabel('Moment 2\n' + '\n' + r'$\Delta$ DEC [arcsec]', fontsize=fs)  # y [arcsec]
+            ax[2][0].set_xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)  # x [arcsec]
+            ax[2][1].set_xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)  # y [arcsec]
+            # ax[2][2].set_xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)  # x [arcsec]
+
+            ax[0][0].set_title(r'Data', fontsize=fs)
+            ax[0][1].set_title(r'Model', fontsize=fs)
+            plt.show()
+
         plothists = False
         if plothists:
             if reb:
@@ -3736,7 +3943,7 @@ class ModelGrid:
 
 
     def vor_moms(self, incl_beam, snr=10, just_data=False, fs=20, pars_backup=None, frac=False, just1=False,
-                 beamcol='w'):
+                 beamcol='w', novor=True):
         """
         Calculate moment maps, average them within voronoi bins
         # using equations from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
@@ -3834,6 +4041,10 @@ class ModelGrid:
             data_denominator += self.clipped_data[zi] * clipped_mask[zi]
         data_m1 = data_numerator / data_denominator
 
+        data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
+        residual_m1 = (data_m1 - subtr) - model_m1  # calculate residual
+        residual_frac_m1 = np.nan_to_num(((data_m1 - subtr) - model_m1) / data_m1, nan=10.)
+
         # CALCULATE MOMENT 2
         m2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # numerator
         m2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # denominator
@@ -3856,11 +4067,34 @@ class ModelGrid:
         residual_m2 = data_m2 - model_m2
         residual_frac_m2 = np.nan_to_num((data_m2 - model_m2) / data_m2, nan=10.)
 
-        # AVERAGE EACH MOMENT MAP WITHIN THE VORONOI BINS
-        d0 = map_averaging(data_masked_m0, xpix, ypix, binNum, x_in, nPixels)
-        m0 = map_averaging(model_masked_m0, xpix, ypix, binNum, x_in, nPixels)
-        r0 = map_averaging(residual_m0, xpix, ypix, binNum, x_in, nPixels)
-        r0frac = map_averaging(residual_frac_m0, xpix, ypix, binNum, x_in, nPixels)
+
+        if novor:
+            d0 = data_masked_m0
+            m0 = model_masked_m0
+            r0 = residual_m0
+            d1 = data_m1
+            m1 = model_m1
+            r1 = residual_m1
+            d2 = data_m2
+            m2 = model_m2
+            r2 = residual_m2
+        else:
+            # AVERAGE EACH MOMENT MAP WITHIN THE VORONOI BINS
+            d0 = map_averaging(data_masked_m0, xpix, ypix, binNum, x_in, nPixels)
+            m0 = map_averaging(model_masked_m0, xpix, ypix, binNum, x_in, nPixels)
+            r0 = map_averaging(residual_m0, xpix, ypix, binNum, x_in, nPixels)
+            r0frac = map_averaging(residual_frac_m0, xpix, ypix, binNum, x_in, nPixels)
+
+            d1 = map_averaging(data_m1, xpix, ypix, binNum, x_in, nPixels)
+            m1 = map_averaging(model_m1, xpix, ypix, binNum, x_in, nPixels)
+            r1 = map_averaging(residual_m1, xpix, ypix, binNum, x_in, nPixels)
+            r1frac = map_averaging(residual_frac_m1, xpix, ypix, binNum, x_in, nPixels)
+
+            d2 = map_averaging(data_m2, xpix, ypix, binNum, x_in, nPixels)
+            m2 = map_averaging(model_m2, xpix, ypix, binNum, x_in, nPixels)
+            r2 = map_averaging(residual_m2, xpix, ypix, binNum, x_in, nPixels)
+            r2frac = map_averaging(residual_frac_m2, xpix, ypix, binNum, x_in, nPixels)
+
         cbar_0 = r'mJy km s$^{-1}$ beam$^{-1}$'  # same for data, model, residual for moment 0
         cmap_0 = 'viridis'  # same for data, model, residual for moment 0
         min0 = np.amin([np.nanmin(m0), np.nanmin(d0)])
@@ -3868,23 +4102,12 @@ class ModelGrid:
         #if incl_beam:
         #    d0 += beam_overlay  # OPTION 1 (looks a bit too much like an extension of the galaxy)
 
-        data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
-        residual_m1 = (data_m1 - subtr) - model_m1  # calculate residual
-        residual_frac_m1 = np.nan_to_num(((data_m1 - subtr) - model_m1) / data_m1, nan=10.)
-        d1 = map_averaging(data_m1, xpix, ypix, binNum, x_in, nPixels)
-        m1 = map_averaging(model_m1, xpix, ypix, binNum, x_in, nPixels)
-        r1 = map_averaging(residual_m1, xpix, ypix, binNum, x_in, nPixels)
-        r1frac = map_averaging(residual_frac_m1, xpix, ypix, binNum, x_in, nPixels)
         cbar_1 = r'km s$^{-1}$'  # same for data, model, residual for moment 1
         cmap_dm1 = 'RdBu_r'  # for data, model for moment 1
         cmap_r1 = 'viridis'  # for residual for moment 1
         min1 = np.amin([np.nanmin(m1), np.nanmin(d1)])
         max1 = np.amax([np.nanmax(m1), np.nanmax(d1)])
 
-        d2 = map_averaging(data_m2, xpix, ypix, binNum, x_in, nPixels)
-        m2 = map_averaging(model_m2, xpix, ypix, binNum, x_in, nPixels)
-        r2 = map_averaging(residual_m2, xpix, ypix, binNum, x_in, nPixels)
-        r2frac = map_averaging(residual_frac_m2, xpix, ypix, binNum, x_in, nPixels)
         cbar_2 = r'km s$^{-1}$'  # same for data, model, residual for moment 2
         cmap_2 = 'viridis'  # same for data, model, residual for moment 2
         min2 = np.amin([np.nanmin(m2), np.nanmin(d2)])
@@ -4731,10 +4954,11 @@ if __name__ == "__main__":
     mg.grids()
     mg.convolution()
     chi_sq = mg.chi2()  # 6495.965711236455 (1.2275067481550368)  # 6498.030199144044 (1.227896863027975)
-    mg.montecarlo_moms(mciter=1000, pars_backup=params, voronoi=False, reb=False, earlybin=False, earlyvor=True,
-                       use_dcube=True, snr=70, yy=7, xx=11)
+    #mg.montecarlo_moms(mciter=1000, pars_backup=params, voronoi=False, reb=False, earlybin=False, earlyvor=False,
+    #                   use_dcube=True, snr=10, yy=7, xx=11)
     # montecarlo_moms: yy,xx = 7,11 ;; 30,35
-    # mg.final4(incl_beam=True, fs=12, pars_backup=params)
+    mg.final4(incl_beam=True, fs=12, pars_backup=params, mc_filename='mom_unc_1000_usemodcube_novor_corr.pkl')
+    # mom_unc1000_novor_corr.pkl
     #mg.manual_final4(incl_beam=True, fs=12, pars_backup=params)
     # mg.orig_final4(incl_beam=True, fs=12, pars_backup=params)
     #mg.vor_moms(incl_beam=True, fs=12, pars_backup=params, just1=True, beamcol='k') # , frac=True)
