@@ -2614,10 +2614,40 @@ class ModelGrid:
         for zi in range(len(self.convolved_cube)):
             d2_num += (vel_ax[zi] - data_m1) ** 2 * self.clipped_data[zi] * clipped_mask[zi]  # * mask2d
             d2_den += self.clipped_data[zi] * clipped_mask[zi]  # * mask2d
-        d2_num[d2_num < 0] = 0.  # ADDING TO GET RID OF NANs
+
+        # if 'usemodcube' not in mc_filename:
+        print('doingthething')
         data_m2 = np.sqrt(d2_num / d2_den)
-        data_m2 = np.nan_to_num(data_m2)
-        data_m2[data_m2 > 4000] = 0.
+        data_m2[data_m2 > 800] = 0.
+        for i in range(len(data_m2)):
+            for j in range(len(data_m2[0])):
+                if (d2_num[i, j] == 0 or np.isnan(d2_num[i, j])) and (d2_den[i, j] == 0. or np.isnan(d2_den[i, j])):
+                    data_m2[i, j] = 0.
+
+        for i in range(len(data_m2)):
+            for j in range(len(data_m2[0])):
+                if np.isnan(data_m2[i, j]):
+                    data_m2[i, j] = np.nanmedian(data_m2[i - 2:i + 2, j - 2:j + 2])
+            '''  #
+            plt.imshow(data_m2, origin='lower')
+            plt.colorbar()
+            plt.show()
+
+            for i in range(len(data_m2)):
+                for j in range(len(data_m2[0])):
+                    if np.isnan(data_m2[i, j]):
+                        data_m2[i, j] = np.nanmedian(data_m2[i - 2:i + 2, j - 2:j + 2])
+
+            plt.imshow(data_m2, origin='lower')
+            plt.colorbar()
+            plt.show()
+            # '''  #
+
+        #else:
+        #    d2_num[d2_num < 0] = 0.  # ADDING TO GET RID OF NANs
+        #    data_m2 = np.sqrt(d2_num / d2_den)
+        #    data_m2[data_m2 > 4000] = 0.
+        #    data_m2 = np.nan_to_num(data_m2)
 
         residual_m2 = data_m2 - model_m2
         residual_frac_m2 = np.nan_to_num((data_m2 - model_m2) / data_m2, nan=10.)
@@ -2693,8 +2723,8 @@ class ModelGrid:
             m0 *= ellmask
             d1 *= ellmask
             m1 *= ellmask
-            #d2 *= ellmask
-            d2 = d2_meds * ellmask
+            d2 *= ellmask
+            #d2 = d2_meds * ellmask
             m2 *= ellmask
             residmap *= ellmask
 
@@ -2722,7 +2752,7 @@ class ModelGrid:
         min2 = np.amin([np.nanmin(m2), np.nanmin(d2)])
         max2 = np.amax([np.nanmax(m2), np.nanmax(d2)])
 
-        plt.figure(figsize=(6, 3.7))  # (8,5))#
+        plt.figure(figsize=(6,3.7))#(6, 3.7))  # (8,5))#
         # fig, ax = plt.subplots(1)
         plt.gca().set_aspect('equal', adjustable='box')
         residmap[np.abs(residmap) > 500] = 0.
@@ -2730,15 +2760,18 @@ class ModelGrid:
         # residmap[np.abs(residmap) > 1e3] = 0.
         #print(np.nanmin([residmap, -residmap]), np.nanmax([residmap, -residmap]))
         #print(oop)
-        plt.title('Moment 1 Residual / Uncertainty', fontsize=fs)
+        #print(np.median(residmap[residmap != 0.]))
+        #print(np.median(((d1 - m1)/d1)[residmap != 0.]))
+        #print(oop)
+        plt.title('Moment 1 Residual / Uncertainty', fontsize=fs+5)
         plt.imshow(residmap, origin='lower', vmin=np.nanmin([residmap, -residmap]),
                    vmax=np.nanmax([residmap, -residmap]), extent=extent)
         cbar = plt.colorbar(pad=0.02)
-        cbar.set_label(r'km s$^{-1}$', rotation=270, labelpad=20., fontsize=fs)
-        plt.xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)
-        plt.ylabel(r'$\Delta$ Dec [arcsec]', fontsize=fs)
-        plt.xticks([-0.5, 0., 0.5])
-        plt.yticks([-0.5, 0., 0.5])
+        #cbar.set_label(rotation=270, labelpad=20., fontsize=fs+5)  # r'km s$^{-1}$'
+        plt.xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs+5)
+        plt.ylabel(r'$\Delta$ Dec [arcsec]', fontsize=fs+5)
+        plt.xticks([-0.5, 0., 0.5], fontsize=fs+5)
+        plt.yticks([-0.5, 0., 0.5], fontsize=fs+5)
         plt.xlim(extent[0], extent[1])
         plt.ylim(extent[2], extent[3])
         # plt.tick_params(axis='x', which='minor')
@@ -3011,7 +3044,7 @@ class ModelGrid:
 
 
     def montecarlo_moms(self, mciter=100, snr=10, fs=15, pars_backup=None, reb=False, voronoi=True, earlybin=False,
-                        earlyvor=False, use_dcube=True, yy=7, xx=11):
+                        earlyvor=False, use_dcube=True, yy=7, xx=11, parfile=None):
         """
         Calculate moment maps, average them within voronoi bins
         # using equations from https://www.atnf.csiro.au/people/Tobias.Westmeier/tools_hihelpers.php#moments
@@ -3021,6 +3054,8 @@ class ModelGrid:
         """
         import pickle
         basename = str(mciter)
+        if parfile != 'fiducial':
+            basename += parfile
         if not use_dcube:
             basename += '_usemodcube'
         if reb:
@@ -3034,6 +3069,7 @@ class ModelGrid:
         if not reb and not voronoi and not earlybin and not earlyvor:
             basename += '_novor_corr'
         mc_filename = 'mom_unc' + basename + '.pkl'
+        mc_filename = 'mom_unc_1000_usemodcube_novor_corr.pkl'
 
         self.ell_ds[self.ell_ds == 0.] = np.nan
 
@@ -3196,6 +3232,8 @@ class ModelGrid:
             data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
 
         else:
+            clipped_mask[np.isnan(clipped_mask)] = 0.
+
             # MOMENT 0 MODEL & DATA
             reg_data_m0 = np.zeros(shape=self.convolved_cube[0].shape)
             for z in range(len(vel_ax)):
@@ -3238,9 +3276,22 @@ class ModelGrid:
                 d2_num += (vel_ax[zi] - data_m1) ** 2 * self.clipped_data[zi] * clipped_mask[zi]  # * mask2d
                 d2_den += self.clipped_data[zi] * clipped_mask[zi]  # * mask2d
 
-            d2_num[d2_num < 0] = 0.  # ADDING TO GET RID OF NANs
-            data_m2 = np.sqrt(d2_num / d2_den)
-            data_m2 = np.nan_to_num(data_m2)
+            if use_dcube:
+                data_m2 = np.sqrt(d2_num / d2_den)
+                for i in range(len(data_m2)):
+                    for j in range(len(data_m2[0])):
+                        if (d2_num[i,j] == 0 or np.isnan(d2_num[i,j])) and (d2_den[i,j] == 0. or np.isnan(d2_den[i,j])):
+                            data_m2[i,j] = 0.
+
+                for i in range(len(data_m2)):
+                    for j in range(len(data_m2[0])):
+                        if np.isnan(data_m2[i,j]):
+                            data_m2[i,j] = np.nanmedian(data_m2[i-2:i+2, j-2:j+2])
+
+            else:
+                d2_num[d2_num < 0] = 0.  # ADDING TO GET RID OF NANs
+                data_m2 = np.sqrt(d2_num / d2_den)
+                data_m2 = np.nan_to_num(data_m2)
 
             data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
 
@@ -3350,6 +3401,31 @@ class ModelGrid:
                 d0_arr = results_dict['full'][0]
                 d1_arr = results_dict['full'][1]
                 d2_arr = results_dict['full'][2]
+
+            nanmedmodified = True
+            if use_dcube and nanmedmodified:
+                #for i in range(len(d2_meds)):
+                #    for j in range(len(d2_meds[0])):
+                #        if (d2_num[i, j] == 0 or np.isnan(d2_num[i, j])) and (
+                #                d2_den[i, j] == 0. or np.isnan(d2_den[i, j])):
+                #            d2_meds[i, j] = 0.
+
+                for z in range(len(d2_arr)):
+                    #m2_mc1000_novor_corr_median_nanmedmodified
+                    for i in range(len(d2_meds)):
+                        for j in range(len(d2_meds[0])):
+                            # if np.isnan(d2_meds[i, j]):
+                            if d2_num[i, j] < 0.:
+                                d2_arr[z, i, j] = np.nanmedian(d2_arr[z, i - 2:i + 2, j - 2:j + 2])
+
+                d2_stds = np.std(d2_arr, axis=0)
+
+                for i in range(len(d2_meds)):
+                    for j in range(len(d2_meds[0])):
+                        # if np.isnan(d2_meds[i, j]):
+                        if d2_num[i, j] < 0.:
+                            d2_meds[i, j] = np.nanmedian(d2_meds[i - 2:i + 2, j - 2:j + 2])
+
 
         else:  # no filename for that many mc iterations yet!!!
             d0_arr = []
@@ -3464,9 +3540,23 @@ class ModelGrid:
                         d2_num += (vel_ax[zi] - data_m1) ** 2 * data_errmod[zi] * clipped_mask[zi]  # * mask2d
                         d2_den += data_errmod[zi] * clipped_mask[zi]  # * mask2d
 
-                    d2_num[d2_num < 0] = 0.  # ADDING TO GET RID OF NANs
-                    data_m2 = np.sqrt(d2_num / d2_den)
-                    data_m2 = np.nan_to_num(data_m2)
+                    if use_dcube:
+                        data_m2 = np.sqrt(d2_num / d2_den)
+                        for i in range(len(data_m2)):
+                            for j in range(len(data_m2[0])):
+                                if (d2_num[i, j] == 0 or np.isnan(d2_num[i, j])) and (
+                                        d2_den[i, j] == 0. or np.isnan(d2_den[i, j])):
+                                    data_m2[i, j] = 0.
+
+                        for i in range(len(data_m2)):
+                            for j in range(len(data_m2[0])):
+                                if np.isnan(data_m2[i, j]):
+                                    data_m2[i, j] = np.nanmedian(data_m2[i - 2:i + 2, j - 2:j + 2])
+
+                    else:
+                        d2_num[d2_num < 0] = 0.  # ADDING TO GET RID OF NANs
+                        data_m2 = np.sqrt(d2_num / d2_den)
+                        data_m2 = np.nan_to_num(data_m2)
 
                     data_m1[np.abs(data_m1) > 1e3] = 0  # get rid of edge effects
 
@@ -3623,9 +3713,10 @@ class ModelGrid:
 
         extent = [x_obs_acvb[0], x_obs_acvb[-1], y_obs_acvb[0], y_obs_acvb[-1]]  # left right bottom top
 
-        final4style = True
+        final4style = False
         if final4style:
             subtr = 0.
+            incl_beam = True
             if incl_beam:  # if including beam overlay
                 # overlay the beam on the same scale as the moment map
                 #beam_overlay = np.zeros(shape=self.convolved_cube[0].shape)
@@ -3825,7 +3916,7 @@ class ModelGrid:
                 plt.show()
                 # '''  #
 
-        vorbinresid = True
+        vorbinresid = False
         if vorbinresid and not earlybin:
             for d in range(3):
                 residmap = (regdat[d] - modelmaps[d]) / maps[int(2*d+1)]
@@ -3883,7 +3974,7 @@ class ModelGrid:
                 plt.imshow(residmap, origin='lower', cmap=cbs[d], vmin=np.nanmin([residmap, -residmap]),
                            vmax=np.nanmax([residmap, -residmap]), extent=extent)
                 cbar = plt.colorbar(pad=0.02)
-                cbar.set_label(units[d], rotation=270, labelpad=20., fontsize=fs)
+                #cbar.set_label(rotation=270, labelpad=20., fontsize=fs)  # units[d],
                 plt.xlabel(r'$\Delta$ RA [arcsec]', fontsize=fs)
                 plt.ylabel(r'$\Delta$ Dec [arcsec]', fontsize=fs)
                 plt.xticks([-0.5, 0., 0.5])
@@ -4047,6 +4138,7 @@ class ModelGrid:
 
         # CALCULATE MOMENT 2
         m2_num = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # numerator
+        m2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # denominator
         m2_den = np.zeros(shape=(len(self.convolved_cube[0]), len(self.convolved_cube[0][0])))  # denominator
         for zi in range(len(self.convolved_cube)):
             m2_num += (vel_ax[zi] - model_m1) ** 2 * self.convolved_cube[zi] * clipped_mask[zi]
@@ -4953,12 +5045,15 @@ if __name__ == "__main__":
                    mapchi2=False, reduced=True)
     mg.grids()
     mg.convolution()
+    # with lucyvb: 31.7062817%
+    # without lucyvb: 31.6683722%
+    # MBH = 2461189947.064265 -> (0.780351818 [with lucyvb], 0.779418793 [without lucyvb])
     chi_sq = mg.chi2()  # 6495.965711236455 (1.2275067481550368)  # 6498.030199144044 (1.227896863027975)
-    #mg.montecarlo_moms(mciter=1000, pars_backup=params, voronoi=False, reb=False, earlybin=False, earlyvor=False,
-    #                   use_dcube=True, snr=10, yy=7, xx=11)
+    mg.montecarlo_moms(mciter=1000, pars_backup=params, voronoi=False, reb=False, earlybin=False, earlyvor=False,
+                       use_dcube=False, snr=10, yy=7, xx=11, parfile='fiducial')  # fiducial  # fixbh5e9
     # montecarlo_moms: yy,xx = 7,11 ;; 30,35
-    mg.final4(incl_beam=True, fs=12, pars_backup=params, mc_filename='mom_unc_1000_usemodcube_novor_corr.pkl')
-    # mom_unc1000_novor_corr.pkl
+    mg.final4(incl_beam=True, fs=15, pars_backup=params, mc_filename='mom_unc_1000_usemodcube_novor_corr.pkl')  # fs=12
+    # mom_unc1000_novor_corr.pkl  # mom_unc_1000_usemodcube_novor_corr  # mom_unc1000fixbh5e9_novor_corr
     #mg.manual_final4(incl_beam=True, fs=12, pars_backup=params)
     # mg.orig_final4(incl_beam=True, fs=12, pars_backup=params)
     #mg.vor_moms(incl_beam=True, fs=12, pars_backup=params, just1=True, beamcol='k') # , frac=True)
