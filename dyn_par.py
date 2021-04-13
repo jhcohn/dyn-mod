@@ -126,7 +126,8 @@ def cube_regions(ds, ds2, gal='2698'):
     # 384: xerr0 = 248 xerr1 = 272 yerr0 = 143 yerr1 = 167
     # 384: xi = 150  # 158 xf = 270  # 262 yi = 132  # 142 yf = 252  # 242
 
-    err_dict = {'2698': {'44': [144, 168, 96, 120],  # [xerr0, xerr1, yerr0, yerr1]
+    err_dict = {'2698': {'11': [144, 168, 96, 120],
+                         '44': [144, 168, 96, 120],  # [xerr0, xerr1, yerr0, yerr1]
                          '84': [144, 168, 96, 120],
                          '105': [141, 171, 95, 120],
                          '63': [144, 168, 96, 120]},
@@ -139,7 +140,8 @@ def cube_regions(ds, ds2, gal='2698'):
                         '105': [245, 275, 142, 167],
                         '63': [248, 272, 143, 167]}
                 }
-    sub_dict = {'2698': {'44': [84, 168, 118, 182],  # [xi, xf, yi, yf]
+    sub_dict = {'2698': {'11': [84, 168, 118, 182],
+                         '44': [84, 168, 118, 182],  # [xi, xf, yi, yf]
                          '84': [82, 170, 118, 182],
                          '105': [81, 171, 115, 185],
                          '63': [84, 168, 117, 183]},
@@ -156,8 +158,8 @@ def cube_regions(ds, ds2, gal='2698'):
     return err_dict[gal][str(ds2) + str(ds)], sub_dict[gal][str(ds2) + str(ds)]
 
 
-def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, vrad, kappa, omega, gas, ds, ds2, nlive,
-                   dlogz, lucyn, lucyvb=False):
+def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, fixedsig, vrad, kappa, omega, gas, ds, ds2,
+                   nlive, dlogz, lucyn, lucyvb=False):
     """
     Main function for handling parameter input options! Functions to write out parameter files and lsf files are called
         inside this function.
@@ -170,6 +172,7 @@ def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, vra
     :param os: pixel oversampling factor (4, etc.)
     :param gs: beam grid size (create beam on a grid of gs x gs pixels)
     :param sigtype: sigma type ('flat', 'exp', 'gauss')
+    :param fixedsig: False or float (if float: hold the sigma_turb parameter fixed to this value)
     :param vrad: True or False (if True: including radial velocity component as a free parameter, constant with radius)
     :param kappa: True or False (if True: including radial velocity component with kappa)
     :param omega: True or False (if True: including radial velocity component with omega; also uses kappa, although the
@@ -412,6 +415,8 @@ def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, vra
         dfid += '_os' + str(os)
     if gs != 31:
         dfid += '_' + str(gs)
+    if fixedsig:
+        dfid += '_fixsig' + str(fixedsig)
     if sigtype != 'flat':
         dfid += '_' + sigtype
     if rfit != 0.7:  # != 0.7: (for UGC 2698); != 1.8: (for NGC 384 and PGC 11179)
@@ -541,6 +546,17 @@ def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, vra
         fixed['kappa'] = 0.
         fixed['omega'] = 1.
 
+    # USING FIXED SIGMA?
+    if fixedsig:
+        del priors['sig0']
+        del midpriors['sig0']
+        del narrowpri['sig0']
+        del priset2['sig0']
+        del priset3['sig0']
+        del fullpriors['sig0']
+        del prepri['sig0']
+        fixed['sig0'] = fixedsig
+
     # COULD BE FREE OR FIXED: r0, sig1, mu (depends on sigtype)
     # 'gauss': sig1 + sig0 * np.exp(-(r - r0) ** 2 / (2 * mu ** 2)) ;;; 'exp': sig1 + sig0 * np.exp(-r / r0)
     if sigtype == 'exp' or sigtype == 'gauss':
@@ -601,12 +617,14 @@ def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, vra
 
     use_priors = prior_dict[pri]
 
+    pyfile = 'dyndyn_all.py'
+    '''  #
     pyfile = 'dyndyn_n.py'
     if 'fixbh' in base_id:
         use_priors.pop('mbh')
         fixed['mbh'] = base_id[5:]  # base_id must be in format fixbhMBH e.g. fixbh2.46e9, so base_id[5:] = 2.46e9
         pyfile = 'dyndyn_fixbh.py'
-
+    # '''  #
     #use_priors = priors
     #if pri == 'wide':
     #    use_priors = priors
@@ -636,7 +654,8 @@ def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, vra
 
 # SETTINGS / CHOICES
 galaxy = '2698'  # '11179' # 2698, 11179, 384
-bid = 'fixbh7500000000' # 'weird'  # preliminary, finaltests, pre2, pretest, pre3, weird
+# bid = 'fixbh7500000000' # 'weird'  # preliminary, finaltests, pre2, pretest, pre3, weird
+bid = 'finaltests'
 # fixbh numbers: median 2461189947.064265, +/-1sig 2526552381.586655,2395489164.9312243 ;;
 # +/-3sig 2667403123.112414,2275153534.726537 ;; +/-systemic 2.46+0.70=3160000000,2.46-0.78=1680000000
 pri = 'priset3'  # 'prepri', 'wide', 'mid', 'narrow', 'priset2', 'priset3' (fiducial), 'fullpriors'
@@ -644,6 +663,7 @@ masktype = 'baseline'  # 'strict'  # 'lax'  # 'baseline'
 mgetype = 'rhe'  # 'rhe'  # 'rhe'  # 'ahe'  # 'rhe'  # 'rre'  # 'akin'
 os = 4  # 1 2 3 4 6 8 10 12 14 16
 gs = 31  # beam grid size
+fixedsig = 10  # hold turbulent velocity dispersion (sigma) fixed: float or False
 sigtype = 'flat'  # flat, exp, gauss
 # rfit = 0.7
 vrad = False  # include radial velocity
@@ -684,8 +704,8 @@ dlogz = 0.02  # 0.02  # 0.001
 # make_the_files(galaxy, pri, masktype, mgetype, os, gs, sigtype, rfit, vrad, kappa, omega, gas, zi, zf, ds, ds2, nlive,
 #                dlogz, lucyn, lucyvb=lucyvb)
 # MADE MORE GENERAL:
-make_the_files(galaxy, bid, pri, masktype, mgetype, os, gs, sigtype, vrad, kappa, omega, gas, ds, ds2, nlive, dlogz,
-               lucyn, lucyvb)
+make_the_files(galaxy, bid, pri, masktype, mgetype, os, gs, sigtype, fixedsig, vrad, kappa, omega, gas, ds, ds2, nlive,
+               dlogz, lucyn, lucyvb)
 
 
 '''  #
