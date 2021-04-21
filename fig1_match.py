@@ -202,8 +202,8 @@ def make_fig1(hband='galfit_u2698/ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci.
     xref = 809.6162680387491
     yref = 615.3175137042995
 
-    x_galint = 881-1#+1 # 878 # 881
-    y_galint = 491-1#+1  # 492 # 491
+    x_galint = 881# 881-1#+1 # 878 # 881  # CURRENTLY USING THESE TO SET ZEROPOINT!
+    y_galint = 491#491-1#+1  # 492 # 491
 
     # FROM FIND GALAXY! IF NOT USING FIND GALAXY, COMMENT THESE OUT
     #x_galcen = 879.9361312648741
@@ -219,14 +219,23 @@ def make_fig1(hband='galfit_u2698/ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci.
                         'beamloc': (1.85, -2.), 'alma_x': 116, 'alma_y': 160}
     locations_zerozero = {'x_galcen': 879.6707, 'y_galcen': 490.1347, 'hlabel_x': 2., 'hlabel_y': 1.7, 'ihlabel_y':
                           -2.2, 'beamloc': (1.85, -2.), 'alma_x': 126.85356933052101, 'alma_y': 150.96256939040606}
-    locations_galfitrhe = {'x_galcen': 879.6707, 'y_galcen': 490.1347, 'hlabel_x': 2., 'hlabel_y': 1.7, 'ihlabel_y':
+    locations_shouldbcorr = {'x_galcen': 879.6707, 'y_galcen': 490.1347, 'hlabel_x': 2., 'hlabel_y': 1.7, 'ihlabel_y':
+                             -2.2, 'beamloc': (1.85, -2.), 'alma_x': 117, 'alma_y': 160}  # 11, 160
+    locations_galfitrhe = {'x_galcen': 879.6707, 'y_galcen': 490.1347, 'hlabel_x': 1.9, 'hlabel_y': 1.7, 'ihlabel_y':
                            -2.2, 'beamloc': (1.85, -2.), 'alma_x': 118, 'alma_y': 160}
-    # locations_zerozero must be wrong -- ALMA: RA, DEC 03:22:02.898, 40.51.50.068, HST: 3:22:02.914, 40.51.50.248
+    locations_recenttry = {'x_galcen': 879.6707, 'y_galcen': 490.1347, 'hlabel_x': 1.9, 'hlabel_y': 1.7, 'ihlabel_y':
+                           -2.2, 'beamloc': (1.85, -2.), 'alma_x': 119, 'alma_y': 159}
+    # locations_zerozero: ALMA: RA, DEC 03:22:02.898, 40.51.50.068 ;;;; galcen? HST: 3:22:02.914, 40.51.50.248
     # (matches ALMA 118 160, not 127 151)
-    using_locs = locations_galfitrhe  # locations_find_galaxy
+    #using_locs = locations_galfitrhe
+    #using_locs = locations_recenttry
+    #using_locs = locations_shouldbcorr
+    using_locs = locations_zerozero
 
     x_galcen = using_locs['x_galcen']
     y_galcen = using_locs['y_galcen']
+    x_galint = 880#881 # based on new shouldbcorr  #878  # based on matching alma x0
+    y_galint = 490#491 # based on new shouldbcorr #489  # based on matching alma y0
     hx = using_locs['hlabel_x']
     hy = using_locs['hlabel_y']
     ihy = using_locs['ihlabel_y']
@@ -245,9 +254,9 @@ def make_fig1(hband='galfit_u2698/ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci.
     if arcsec:
         scale = 3600.
     for xx in range(hdra['NAXIS1']):
-        ras.append(((xx - hdra['CRPIX1']) * hdra['CDELT1'] + hdra['CRVAL1'])*scale)
+        ras.append(((xx - (hdra['CRPIX1'])) * hdra['CDELT1'] + hdra['CRVAL1'])*scale)  # (hdra['CRPIX1']-1)
     for yy in range(hdra['NAXIS2']):
-        decs.append(((yy - hdra['CRPIX2']) * hdra['CDELT2'] + hdra['CRVAL2'])*scale)
+        decs.append(((yy - (hdra['CRPIX2'])) * hdra['CDELT2'] + hdra['CRVAL2'])*scale)  # (hdra['CRPIX2']-1)
     # ras[150] = 50.51190972220555  # 50.512743055538884 : 50.51108194442777
     # decs[150] = 40.86389444444445  # 40.863061111111115 : 40.86472222222223
 
@@ -301,7 +310,7 @@ def make_fig1(hband='galfit_u2698/ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci.
     xref_short = xref - xi
     yref_short = yref - yi
 
-    x_galint_short = x_galint - xi
+    x_galint_short = x_galint - xi  # CURRENTLY USING THESE!!!!
     y_galint_short = y_galint - yi
 
     # ROTATE HST RA, DEC ARRAYS
@@ -323,11 +332,6 @@ def make_fig1(hband='galfit_u2698/ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci.
     ih_rot, galint_short_rot = rot(ih_cps_zoom, x_galint_short, y_galint_short, angle=-116.755, reshape=True)
     magi_rot, galshort_rot = rot(magi_zoom, xgal_short, ygal_short, angle=-116.755, reshape=True)
     magh_rot, refshort_rot = rot(magh_zoom, xref_short, yref_short, angle=-116.755, reshape=True)
-
-    #plt.imshow(ih_rot, origin='lower', vmin=1., vmax=3.)
-    #plt.plot(galint_short_rot[0], galint_short_rot[1], 'r*')  # Good enough
-    #plt.show()
-    #print(oop)
     print(galint_short_rot)
 
     # SET UP AXIS EXTENTS (FULL AXES)
@@ -355,6 +359,14 @@ def make_fig1(hband='galfit_u2698/ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci.
         yax_refshortrot[i] = trueres * (i - refshort_rot[1])  # (arcsec/pix) * N_pix = arcsec
         yax_galshortrot[i] = trueres * (i - galshort_rot[1])  # (arcsec/pix) * N_pix = arcsec
         yax_galintshortrot[i] = trueres * (i - galint_short_rot[1])  # (arcsec/pix) * N_pix = arcsec
+
+    #plt.imshow(ih_rot, origin='lower', vmin=1., vmax=3., extent=[xax_galintshortrot[0], xax_galintshortrot[-1],
+    #                                                             yax_galintshortrot[0], yax_galintshortrot[-1]])
+    # plt.plot(galint_short_rot[0], galint_short_rot[1], 'r*')  # Good enough
+    #plt.xlabel(r'$\Delta$ RA [arcsec]')
+    #plt.ylabel(r'$\Delta$ DEC [arcsec]')
+    #plt.show()
+    #print(oop)
 
     '''  # I FIGURED IT OUT?!?!
     plt.imshow(ih_cps_zoom, origin='lower', vmin=1., vmax=3.)
@@ -422,7 +434,7 @@ def make_fig1(hband='galfit_u2698/ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci.
     ext_galshortrot = [xax_galshortrot[0], xax_galshortrot[-1], yax_galshortrot[0], yax_galshortrot[-1]]
     ext_galintshortrot = [xax_galintshortrot[0], xax_galintshortrot[-1], yax_galintshortrot[0], yax_galintshortrot[-1]]
     fullext_rot = [fullx_rot[0], fullx_rot[-1], fully_rot[0], fully_rot[-1]]
-    shortext_rot = ext_galshortrot  # ext_galintshortrot, ext_galshortrot, ext_refshortrot
+    shortext_rot = ext_galshortrot  # ext_galshortrot  # ext_galintshortrot, ext_galshortrot, ext_refshortrot
     print(ext_galshortrot)
     print(ext_galintshortrot)
     zp_galint_short_rot = [galint_short_rot[0] - botcut, galint_short_rot[1] - leftcut]
@@ -484,7 +496,7 @@ def make_fig1(hband='galfit_u2698/ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci.
     ax0.set_aspect('equal', adjustable='datalim')  # set axes aspect equal
     h1, _ = im0d.legend_elements()
     h2, _ = im0m.legend_elements()
-    ax0.legend([h1[0], h2[0]], [r'\textbf{\textit{HST H}}', mge_lab], loc='upper left')  # set legend!
+    ax0.legend([h1[0], h2[0]], [r'\textbf{HST \textit{H}}', mge_lab], loc='upper left')  # set legend!
 
     # PLOT COMPASS IN ax0 (North is up, East is to the left)
     x0 = -70.  # 55.  # x origin of compass
@@ -525,8 +537,6 @@ def make_fig1(hband='galfit_u2698/ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci.
     #print(rah_rot[1120, 992], dech_rot[1120, 992])  # 50.51284123408508 40.8639595629505
     #print(ras[111], decs[163])                      # 50.51212638887222 40.86396666666667
 
-    #print(oop)
-
     # CRVAL1 = 5.051190416665E+01 (RA; value at CRPIX1, CUNIT1 = deg)
     # CRPIX1 = 1.510000000000E+02 (index runs from 1 to len(axis)) == pixel 150 in python
     # CRVAL2 = 4.086390000000E+01 (DEC; value at CRPIX2, CUNIT2 = deg)
@@ -548,13 +558,14 @@ def make_fig1(hband='galfit_u2698/ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci.
     # PLOT DUST CONTOURS (I - H)
     # lvs = np.linspace(0.15, 2.5, 25)  # dust contour levels
     # lvs = np.linspace(1.7, 2.5, 10)  # dust contour levels
+    #lvs = np.linspace(1.74, 3., 16)  # dust contour levels
     lvs = np.linspace(1.87, 3., 10)  # dust contour levels
     ax3.contour(ih_rot, levels=lvs, colors=concol, linewidths=.75, alpha=alph, extent=shortext_rot)  #
     # PLOT ZOOM-IN HST H-BAND IMAGE CONTOURS
     ax4.axis('equal')  # set axis equal
     # ax4.set_xlabel(xylabel)
     # ax4.set_ylabel(xylabel)
-    # NOT USING PLACEHOLDER NOW?!
+
     placehold = np.zeros(shape=img1zoom_rot.shape) + 100  # set image background = "0" (100 bc in mag units)
     im1 = ax4.imshow(placehold, origin='lower', vmax=np.amax(magh), vmin=np.amin(magh), cmap='Greys',
                      extent=shortext_rot)
@@ -563,7 +574,7 @@ def make_fig1(hband='galfit_u2698/ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci.
     ctm = ax4.contour(modzoom_rot, levels, colors='r', linestyles='solid', extent=shortext_rot)
     h1c, _ = ctd.legend_elements()  # add same style legend as in ax0
     h2c, _ = ctm.legend_elements()  # add same style legend as in ax0
-    ax4.legend([h1c[0], h2c[0]], [r'\textbf{\textit{HST H}}', mge_lab], loc='upper left')  # set legend!
+    ax4.legend([h1c[0], h2c[0]], [r'\textbf{HST \textit{H}}', mge_lab], loc='upper left')  # set legend!
 
     # AXIS LABELS
     ax0.set_xlabel(r'$\Delta$ RA [arcsec]')
@@ -583,10 +594,10 @@ def make_fig1(hband='galfit_u2698/ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci.
     ax4.set_xlim([shortext_rot[0], shortext_rot[1]])
 
     # IMAGE LABEL TEXT
-    ax1.text(hx, hy, r'\textbf{\textit{HST H}}', color='k')
-    ax2.text(hx, hy, r'\textbf{\textit{HST I}}', color='k')
+    ax1.text(hx, hy, r'\textbf{HST \textit{H}}', color='k')
+    ax2.text(hx, hy, r'\textbf{HST \textit{I}}', color='k')
     ax3.text(hx, hy, r'\textbf{ALMA CO($2 - 1$)}', color=bc)  # 'c'
-    ax3.text(-0.4, ihy, r'\textbf{\textit{HST I -- H}}', color=concol, alpha=alph)
+    ax3.text(-0.4, ihy, r'\textbf{HST \textit{I -- H}}', color=concol, alpha=alph)
     # ax4.text(1.5, -1.95, r'\textbf{\textit{HST H}}', color='k')
     # ax4.text(2., 1.8, r'\textbf{\textit{HST H}}', color='k')
 
