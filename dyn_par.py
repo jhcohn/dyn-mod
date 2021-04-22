@@ -321,7 +321,7 @@ def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, fix
                     'lax': 'pgc_11179_fluxmap_20kms_jonathan_casaimview_strictmasklax.fits',
                     'ext0756': 'pgc_11179_fluxmap_20kms_jonathan_casaimview_strictmask0756.fits'}
 
-        mges = {'ahe': 'pgc_11179_ahe_mge.txt', 'rhe': 'pgc_11179_rhe_mge.txt', 'rre': 'pgc_11179_rre_mge.txt',
+        mges = {'ahe': 'pgc_11179_ahe_mge.txt', 'rhe': 'pgc_11179_rhe_mge.txt', 'reg': 'pgc_11179_reg_mge.txt',
                 'ahepsf': 'pgc_11179_ahepsf_mge.txt', 'rhepsf': 'pgc_11179_rhepsf_mge.txt',
                 'rrepsf': 'pgc_11179_rrepsf_mge.txt',
                 'akin': 'pgc_11179_mge_akin.txt'}  # 'yildirim_table_11179.txt'}
@@ -340,8 +340,10 @@ def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, fix
         x_fwhm = 0.29  # arcsec
         y_fwhm = 0.16  # arcsec
         PAbeam = 86.97  # 86.78  # PA of beam [deg] (as defined in casa/the ALMA data)
-        dist = 98.  # Mpc
+        dist = 89.9 # 98.  # Mpc
+        # https://ned.ipac.caltech.edu/byname?objname=PGC%2011179&hconst=74&omegam=0.308&omegav=0.692&corr_z=1 -> 89.91
         # https://ned.ipac.caltech.edu/byname?objname=PGC%2011179&hconst=67.8&omegam=0.308&omegav=0.692&wmap=4&corr_z=1
+        ## -> 98.13
         vsysrange = [6600, 7600]
         zfix = 0.02289
 
@@ -653,17 +655,17 @@ def make_the_files(galaxy, base_id, pri, masktype, mgetype, os, gs, sigtype, fix
 
 
 # SETTINGS / CHOICES
-galaxy = '2698'  # '11179' # 2698, 11179, 384
+galaxy = '11179'  # 2698, 11179, 384
 # bid = 'fixbh7500000000' # 'weird'  # preliminary, finaltests, pre2, pretest, pre3, weird
-bid = 'finaltests'
+bid = 'prelim'
 # fixbh numbers: median 2461189947.064265, +/-1sig 2526552381.586655,2395489164.9312243 ;;
 # +/-3sig 2667403123.112414,2275153534.726537 ;; +/-systemic 2.46+0.70=3160000000,2.46-0.78=1680000000
 pri = 'priset3'  # 'prepri', 'wide', 'mid', 'narrow', 'priset2', 'priset3' (fiducial), 'fullpriors'
 masktype = 'baseline'  # 'strict'  # 'lax'  # 'baseline'
-mgetype = 'rhe'  # 'rhe'  # 'rhe'  # 'ahe'  # 'rhe'  # 'rre'  # 'akin'
+mgetype = 'reg'  # 'ahe', 'rhe', 'rre', 'reg', 'akin'
 os = 4  # 1 2 3 4 6 8 10 12 14 16
 gs = 31  # beam grid size
-fixedsig = 10  # hold turbulent velocity dispersion (sigma) fixed: float or False
+fixedsig = False  # hold turbulent velocity dispersion (sigma) fixed: float or False  # False, 1, 5, 10
 sigtype = 'flat'  # flat, exp, gauss
 # rfit = 0.7
 vrad = False  # include radial velocity

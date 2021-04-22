@@ -448,7 +448,8 @@ def galfit_to_mge(galfit_out, zeropoint, texp, write_new=None, glx='UGC 2698'):
     return es, sigmas, qs, ys, xs, pas
 
 
-def galfit_to_paper(galfit_out, zeropoint, texp, mag_sol=3.37, pix_scale=0.1, apcorr=0., dust=0.075, write_new=None):
+def galfit_to_paper(galfit_out, zeropoint, texp, mag_sol=3.37, pix_scale=0.1, apcorr=0., dust=0.075, write_new=None,
+                    galaxy='UGC 2698'):
     """
 
     :param galfit_out: the galfit restart file produced by a galfit run that has converged
@@ -536,7 +537,7 @@ def galfit_to_paper(galfit_out, zeropoint, texp, mag_sol=3.37, pix_scale=0.1, ap
 
     if write_new is not None:
         with open(write_new, 'w+') as newfile:
-            newfile.write('# UGC 2698 MGE output from GALFIT, converted to paper units\n')
+            newfile.write('# ' + galaxy + ' MGE output from GALFIT, converted to paper units\n')
             newfile.write('# Calculated using zeropoint =' + str(zeropoint) + ', exposure time=' + str(texp) + ' s, ' +
                           'pixel scale=' + str(pix_scale) + ' arcsec/pix, an extinction correction of ' + str(dust) +
                           " mag in the H-band, " + "and eqns 1-3 of Cappellari's MGE fit sectors readme\n")
@@ -687,6 +688,7 @@ if __name__ == "__main__":
     base = '/Users/jonathancohn/Documents/mge/'
     dm = '/Users/jonathancohn/Documents/dyn_mod/'
     u2698 = '/Users/jonathancohn/Documents/dyn_mod/ugc_2698/'
+    p11179 = '/Users/jonathancohn/Documents/dyn_mod/pgc_11179/'
     fj = '/Users/jonathancohn/Documents/dyn_mod/for_jonathan/'
     # gf = '/Users/jonathancohn/Documents/dyn_mod/galfit_u2698/'
     gu = '/Users/jonathancohn/Documents/dyn_mod/galfit_u2698/'
@@ -695,11 +697,15 @@ if __name__ == "__main__":
 
     reg_p11179 = {'img': fj+'PGC11179_F160W_drz_sci.fits', 'mask': fj+'PGC11179_F160W_drz_mask.fits',
                   'mge': gp+'mge_pgc_11179_reg_linear.txt', 'conv': gp+'convmge_pgc_11179_reg_linear.txt',
-                  'out': gp+'galfit_out_p11179_reg_linear.fits', 'new' :gp+'galfit_in_p11179_reg_linear.txt',
+                  'new': gp+'galfit_in_p11179_reg_linear.txt', 'out': gp+'galfit_out_p11179_reg_linear.fits',
                   'cons': gp+'constraint_p11179_n10.txt', 'outconv': base+'convgalfit_out_p11179_reg_linear.txt',
-                  'glx': 'PGC 11179', 'zp': 24.662, 'exp': 1354.463046}
+                  'glx': 'PGC 11179', 'use': p11179+'pgc_11179_reg_mge.txt', 'zp': 24.662, 'exp': 1354.463046,
+                  'scale': 0.06, 'dust': 0.096}
     # zeropoint: https://www.stsci.edu/hst/instrumentation/wfc3/data-analysis/photometric-calibration/ir-photometric-calibration#section-cc19dbfc-8f60-4870-8765-43810de39924
 
+    galfit_to_paper(gp + 'galfit.01', reg_p11179['zp'], reg_p11179['exp'], mag_sol=3.37, pix_scale=reg_p11179['scale'],
+                    apcorr=0., dust=reg_p11179['dust'], write_new=reg_p11179['use'], galaxy='PGC 11179')
+    print(oop)
     galfit_to_mge(gp + 'galfit.01', reg_p11179['zp'], reg_p11179['exp'], reg_p11179['outconv'])
     print(oop)
     mge_to_galfit(reg_p11179['mge'], zeropoint=reg_p11179['zp'], img=reg_p11179['img'], mask=reg_p11179['mask'],
