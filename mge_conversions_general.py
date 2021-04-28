@@ -230,7 +230,7 @@ def mge_to_psfgalfit(mge_file, zeropoint, img=None, mask=None, copy_file=None, g
 
 
 def mge_to_galfit(mge_file, zeropoint, img=None, mask=None, copy_file=None, galfit_out=None, write_converted=None,
-                  new_galfit=None, constraint=None, sky=None, rms=None, glx='UGC 2698'):
+                  new_galfit=None, constraint=None, psf=None, sky=None, rms=None, glx='UGC 2698'):
                   # texp=None, gain=None, ax1=1620, ax2=1231, scale=0.100):  # pa=-7.5697
 
     hdu = fits.open(img)
@@ -299,6 +299,8 @@ def mge_to_galfit(mge_file, zeropoint, img=None, mask=None, copy_file=None, galf
                         wline = 'A) '  + img + '      # Input data image (FITS file)\n'
                     elif line.startswith('B)'):
                         wline = 'B) '  + galfit_out + '      # Output data image block\n'
+                    elif line.startswith('D)'):
+                        wline = 'D) ' + psf + '          # Input PSF image and (optional) diffusion kernel\n'
                     elif line.startswith('F)'):
                         wline = 'F) '  + mask + '      # Bad pixel mask (FITS image or ASCII coord list)\n'
                     elif line.startswith('G)'):
@@ -688,31 +690,65 @@ if __name__ == "__main__":
     base = '/Users/jonathancohn/Documents/mge/'
     dm = '/Users/jonathancohn/Documents/dyn_mod/'
     u2698 = '/Users/jonathancohn/Documents/dyn_mod/ugc_2698/'
+    n384 = '/Users/jonathancohn/Documents/dyn_mod/ngc_384/'
     p11179 = '/Users/jonathancohn/Documents/dyn_mod/pgc_11179/'
     fj = '/Users/jonathancohn/Documents/dyn_mod/for_jonathan/'
     # gf = '/Users/jonathancohn/Documents/dyn_mod/galfit_u2698/'
     gu = '/Users/jonathancohn/Documents/dyn_mod/galfit_u2698/'
     gf = '/Users/jonathancohn/Documents/dyn_mod/galfit/'
     gp = gf + 'p11179/'
+    gn = gf + 'n384/'
 
+    reg_p11179_fpa = {'img': fj+'PGC11179_F160W_drz_sci.fits', 'mask': fj+'PGC11179_F160W_drz_mask.fits',
+                      'cap': gp+'mge_pgc_11179_reg_linear.txt', 'conv': gp+'convmge_pgc_11179_reg_linear.txt',
+                      'new': gp+'galfit_in_p11179_reg_linear_n8_pafree.txt',
+                      'out': gp+'galfit_out_p11179_reg_linear_pafree.fits',
+                      'cons': gp+'constraint_p11179_n8_pafree.txt', 'gfit': gp+'galfit.03',
+                      'outconv': base+'convgalfit_out_p11179_reg_linear_pafree.txt', 'psf': fj+'psfH.fits',
+                      'glx': 'PGC 11179', 'use': p11179+'pgc_11179_reg_mge_pafree.txt', 'zp': 24.662,
+                      'exp': 1354.463046, 'scale': 0.06, 'dust': 0.096}  # dust from Yildirim+2017
     reg_p11179 = {'img': fj+'PGC11179_F160W_drz_sci.fits', 'mask': fj+'PGC11179_F160W_drz_mask.fits',
-                  'mge': gp+'mge_pgc_11179_reg_linear.txt', 'conv': gp+'convmge_pgc_11179_reg_linear.txt',
+                  'cap': gp+'mge_pgc_11179_reg_linear.txt', 'conv': gp+'convmge_pgc_11179_reg_linear.txt',
                   'new': gp+'galfit_in_p11179_reg_linear.txt', 'out': gp+'galfit_out_p11179_reg_linear.fits',
-                  'cons': gp+'constraint_p11179_n10.txt', 'outconv': base+'convgalfit_out_p11179_reg_linear.txt',
-                  'glx': 'PGC 11179', 'use': p11179+'pgc_11179_reg_mge.txt', 'zp': 24.662, 'exp': 1354.463046,
-                  'scale': 0.06, 'dust': 0.096}
+                  'cons': gp+'constraint_p11179_n10.txt', 'outconv': base+'convgalfit_out_p11179_reg_linear_corr.txt',
+                  'psf': fj+'psfH.fits', 'glx': 'PGC 11179', 'use': p11179+'pgc_11179_reg_mge.txt',
+                  'gfit': gp+'galfit.02', 'zp': 24.662, 'exp': 1354.463046, 'scale': 0.06, 'dust': 0.096}
+    # dust from Yildirim+2017
     # zeropoint: https://www.stsci.edu/hst/instrumentation/wfc3/data-analysis/photometric-calibration/ir-photometric-calibration#section-cc19dbfc-8f60-4870-8765-43810de39924
+    reg_n384 = {'img': fj+'NGC0384_F160W_drz_sci.fits', 'mask': fj+'NGC0384_F160W_drz_mask.fits', 'psf': fj+'psfH.fits',
+                'cap': gn+'mge_ngc_384_reg_linear.txt', 'conv': gn+'convmge_ngc_384_reg_linear.txt',
+                'new': gn+'galfit_in_n384_reg_linear.txt', 'out': gn+'galfit_out_n384_reg_linear.fits',
+                'cons': gn+'constraint_n384_n11.txt', 'outconv': base+'convgalfit_out_n384_reg_linear.txt',
+                'glx': 'NGC 384', 'use': n384+'ngc_384_reg_mge.txt', 'zp': 24.662, 'exp': 1354.463046, 'scale': 0.06,
+                'dust': 0.032}  # texp, scale same as P11179, dust from Yildirim+2017
 
-    galfit_to_paper(gp + 'galfit.01', reg_p11179['zp'], reg_p11179['exp'], mag_sol=3.37, pix_scale=reg_p11179['scale'],
+    '''  #### NGC 384
+    mge_to_galfit(reg_n384['cap'], zeropoint=reg_n384['zp'], img=reg_n384['img'], mask=reg_n384['mask'],
+                  copy_file=gu+'galfit_params_mge_055_zp25.txt', galfit_out=reg_n384['out'], psf=reg_n384['psf'],
+                  write_converted=reg_n384['conv'], new_galfit=reg_n384['new'], constraint=reg_n384['cons'],
+                  sky=None, rms=None, glx=reg_n384['glx'])
+    print(oops)
+    #### NGC 384 '''  #
+    # '''  #### PGC 11179 FREE PA
+    galfit_to_paper(reg_p11179_fpa['gfit'], reg_p11179_fpa['zp'], reg_p11179_fpa['exp'], mag_sol=3.37,
+                    pix_scale=reg_p11179_fpa['scale'], apcorr=0., dust=reg_p11179_fpa['dust'],
+                    write_new=reg_p11179_fpa['use'], galaxy=reg_p11179_fpa['glx'])
+    #print(oop)
+    galfit_to_mge(reg_p11179_fpa['gfit'], reg_p11179_fpa['zp'], reg_p11179_fpa['exp'], reg_p11179_fpa['outconv'])
+    print(oop)
+    #### PGC 11179 '''  #
+    '''  #### PGC 11179
+    galfit_to_paper(gp + 'galfit.02', reg_p11179['zp'], reg_p11179['exp'], mag_sol=3.37, pix_scale=reg_p11179['scale'],
                     apcorr=0., dust=reg_p11179['dust'], write_new=reg_p11179['use'], galaxy='PGC 11179')
     print(oop)
-    galfit_to_mge(gp + 'galfit.01', reg_p11179['zp'], reg_p11179['exp'], reg_p11179['outconv'])
+    galfit_to_mge(gp + 'galfit.02', reg_p11179['zp'], reg_p11179['exp'], reg_p11179['outconv'])
     print(oop)
-    mge_to_galfit(reg_p11179['mge'], zeropoint=reg_p11179['zp'], img=reg_p11179['img'], mask=reg_p11179['mask'],
+    mge_to_galfit(reg_p11179['[cap'], zeropoint=reg_p11179['zp'], img=reg_p11179['img'], mask=reg_p11179['mask'],
                   copy_file=gu+'galfit_params_mge_055_zp25.txt', galfit_out=reg_p11179['out'],
                   write_converted=reg_p11179['conv'], new_galfit=reg_p11179['new'], constraint=reg_p11179['cons'],
-                  sky=None, rms=None, glx=reg_p11179['glx'])
+                  psf=reg_p11179['psf'], sky=None, rms=None, glx=reg_p11179['glx'])
     print(oops)
+    #### PGC 11179 '''  #
 
     zp = 24.6949
     texp = 898.467164

@@ -535,25 +535,54 @@ if __name__ == '__main__':
     fj = '/Users/jonathancohn/Documents/dyn_mod/for_jonathan/'
     gf = '/Users/jonathancohn/Documents/dyn_mod/galfit/'
     gp = gf + 'p11179/'
+    gn = gf + 'n384/'
 
     # TRY: not dividing by texp to do the exposure time=1 with akin's model
     # AND compare only to mine calculated from fixed models!
 
     reg_p11179 = {'img': fj+'PGC11179_F160W_drz_sci.fits', 'mask': fj+'PGC11179_F160W_drz_mask.fits',
                   'out': gp+'mge_pgc_11179_reg_linear.txt', 'psf': fj+'psfH.fits', 'glx': 'PGC 11179', 'scale': 0.06,
-                  'sky': 0., 'exp': 1354.463046, 'num': None, 'per': False, 'converged': gp+'galfit.01'}
+                  'sky': 0., 'exp': 1354.463046, 'num': None, 'per': False, 'converged': gp+'galfit.02'}
+    reg_p11179_fpa = {'img': fj+'PGC11179_F160W_drz_sci.fits', 'mask': fj+'PGC11179_F160W_drz_mask.fits',
+                      'out': gp+'mge_pgc_11179_reg_linear.txt', 'psf': fj+'psfH.fits', 'glx': 'PGC 11179',
+                      'scale': 0.06, 'sky': 0., 'exp': 1354.463046, 'num': None, 'per': False,
+                      'converged': gp+'galfit.03'}
+    reg_p11179_fpan9 = {'img': fj+'PGC11179_F160W_drz_sci.fits', 'mask': fj+'PGC11179_F160W_drz_mask.fits',
+                        'out': gp+'mge_pgc_11179_reg_linear.txt', 'psf': fj+'psfH.fits', 'glx': 'PGC 11179',
+                        'scale': 0.06, 'sky': 0., 'exp': 1354.463046, 'num': None, 'per': False,
+                        'converged': gp+'galfit.04'}
+    reg_n384 = {'img': fj+'NGC0384_F160W_drz_sci.fits', 'mask': fj+'NGC0384_F160W_drz_mask.fits',
+                'out': gn+'mge_ngc_384_reg_linear.txt', 'psf': fj+'psfH.fits', 'glx': 'NGC 384', 'scale': 0.06,
+                'sky': 0., 'exp': 1354.463046, 'num': None, 'per': False, 'converged': gn+'galfit.01'}
     # if num==None, 'out' includes 'linear'; sky already subtracted
 
     # (galfit_out=None, texp=898.467164, sky=339.493665331, xi=830, xf=933, yi=440, yf=543,yctr=491.0699, xctr=880.8322)
+    # '''  #### PGC 11179 PA FREE, n9
+    display_mod(reg_p11179_fpan9['converged'], texp=reg_p11179_fpan9['exp'], sky=reg_p11179_fpan9['sky'], xi=1415,
+                xf=1518, yi=1348, yf=1451)
+    print(oop)
+    #### PGC 11179 PA FREE, n9 '''
+    '''  #### PGC 11179 PA FREE
+
+    display_mod(reg_p11179_fpa['converged'], texp=reg_p11179_fpa['exp'], sky=reg_p11179_fpa['sky'], xi=1415, xf=1518,
+                yi=1348, yf=1451)
+    print(oop)
+    #### PGC 11179 PA FREE '''
+    '''  #### PGC 11179
     display_mod(reg_p11179['converged'], texp=reg_p11179['exp'], sky=reg_p11179['sky'], xi=1415, xf=1518, yi=1348,
                 yf=1451)
     print(oop)
-
     fit_img(reg_p11179['img'], reg_p11179['mask'], reg_p11179['psf'], pfrac=0.01, num=reg_p11179['num'],
             write_out=reg_p11179['out'], plots=True, qlims=None, persec=reg_p11179['per'], sky=reg_p11179['sky'],
             galaxy=reg_p11179['glx'], scale1=reg_p11179['scale'])
     print(oops)
-
+    #### PGC 11179 '''
+    '''  #### NGC 384
+    fit_img(reg_n384['img'], reg_n384['mask'], reg_n384['psf'], pfrac=0.01, num=reg_n384['num'],
+            write_out=reg_n384['out'], plots=True, qlims=None, persec=reg_n384['per'], sky=reg_n384['sky'],
+            galaxy=reg_n384['glx'], scale1=reg_n384['scale'])
+    print(oop)
+    #### NGC 384 '''
 
     '''  #
     mods = [base+'galfit_out_rrenewsky_test.fits', base+'galfit_out_rhenewsky_test.fits',
