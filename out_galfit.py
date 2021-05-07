@@ -8,7 +8,7 @@ from scipy import interpolate
 
 gf = '/Users/jonathancohn/Documents/dyn_mod/galfit/'
 fj = '/Users/jonathancohn/Documents/dyn_mod/for_jonathan/'
-base = '/Users/jonathancohn/Documents/dyn_mod/galfit_u2698/'
+base = '/Users/jonathancohn/Documents/dyn_mod/galfit/u2698/'
 # out = base + 'galfit_regH_combmask_mge_n10_q06_zp25.fits'
 # out = base + 'galfit_ahcorr_mge_n10_055_zp25.fits'  # 'galfit_mge_055_zp25.fits'
 # 'galfit_mge_055_zp24_myconstraint_reset_take2.fits'
@@ -199,7 +199,7 @@ def sb_compare3(in_filename, out_filename, just_out, table_img, table_mod, table
 
 
 def sb_prof_compare(in_filename, out_filename, just_out, table_img, table_mod, qbounds=[0., 1.], sky=None, scale=0.1,
-                    modtype=None, es=True, mask=None, glx='UGC 2698'):
+                    modtype=None, es=True, mask=None, glx='UGC 2698', ryl=0.15, ylo=200., yhi=3e6):
     '''
 
     :param in_filename:
@@ -227,6 +227,8 @@ def sb_prof_compare(in_filename, out_filename, just_out, table_img, table_mod, q
                 data1 = hdu[1].data  # input image
                 data2 = hdu[2].data  # model
                 data3 = hdu[3].data  # residual
+                if hasattr(sky, "__len__"):
+                    data2 += sky
                 fits.writeto(just_out, data2, hdr)
 
     if not os.path.exists(table_img):
@@ -257,15 +259,15 @@ def sb_prof_compare(in_filename, out_filename, just_out, table_img, table_mod, q
     ax[1].set_xlabel('arcsec')
 
     if es:
-        ax[0].set_ylim(200., 3. * 10 ** 6)  # 2e-3, 3.*10**3
+        ax[0].set_ylim(ylo, yhi)  # 2e-3, 3.*10**3 ;; 200., 3. * 10 ** 6
         ax[0].set_ylabel('Mean counts (electrons) along semi-major axis')
     else:
         ax[0].set_ylim(8e-2, 3.*10**3)  # 2e-3, 3.*10**3
     ax[0].set_xlim(0.5, 400.)
-    ax[1].set_ylim(-0.15, 0.15)  # -0.4, 0.4)  #
+    ax[1].set_ylim(-ryl, ryl)  # -0.4, 0.4)  # yl = 0.15
 
     f = interpolate.interp1d(smas_mod, intens_mod, fill_value="extrapolate")  # x, y
-    if sky is not None:
+    if sky is not None and not hasattr(sky, "__len__"):
         intens_mod_samex = f(smas_img) - sky
     else:
         intens_mod_samex = f(smas_img)
@@ -368,7 +370,6 @@ def plot3(img, masked_img=None, normed=True, clipreg=None, indivs=False, clipran
     cbar = ax.cax.colorbar(im)
     cbar = grid.cbar_axes[0].colorbar(im)
     plt.show()
-    plt.clf()
 
 
 def compare_sbs(img_labs=None, mod_labs=None, colors=None, table_imgs=None, table_mods=None, psf=False, sky=None,
@@ -626,7 +627,99 @@ just_output_ben_fix = base + 'galfit_out_u2698_ben_fixedmod_zp24_model.fits'
 # sb_prof_compare(re, output_block_akin_corrdt, just_output_akin_corrdt, table_img_re, table_akin_corrdt, qbounds=qb, es=True, modtype='akin')
 # sb_prof_compare(re, output_block_akin_dt, just_output_akin_dt, table_img_re, table_akin_dt, qbounds=qb, es=True, modtype='akin')
 
-# ''' #### PGC 11179 PA free, n9
+# ''' #### NGC 384, adjusted, n10
+plot3(gf+'n384/galfit_out_n384_reg_linear_hadj_n10.fits', clipreg=[1270,1470,1355,1555], indivs=False,
+      cliprange=True)
+sb_prof_compare(fj+'NGC0384_F160W_drz_sci_adjusted.fits',  # for x0, y0 used: 1458, 1368
+                gf+'n384/galfit_out_n384_reg_linear_hadj_n10.fits',
+                gf+'n384/galfit_out_n384_reg_linear_hadj_n10_model.fits',
+                gf+'n384/out_tab_n384_reg_linear_hadj_n10_img.txt',
+                gf + 'n384/out_tab_n384_reg_linear_hadj_n10_mod.txt', scale=0.06, modtype='reg', es=True, sky=0.,
+                mask=fj+'NGC0384_F160W_drz_mask.fits', glx='NGC 384', ryl=1., ylo=30., yhi=3e5)
+print(oop)
+#### NGC 384, adjusted, n10 '''
+''' #### PGC 11179, adjusted, n9, skyfree, NOT YET CVG
+plot3(gf+'p11179/galfit_out_p11179_reg_linear_hadj_sky_n9.fits', clipreg=[1300,1500,1370,1570], indivs=False,
+      cliprange=True)
+sb_prof_compare(fj+'PGC11179_F160W_drz_sci_adjusted.fits',
+                gf+'p11179/galfit_out_p11179_reg_linear_hadj_sky_n9.fits',  # NOT YET CVG
+                gf+'p11179/galfit_out_p11179_reg_linear_hadj_sky_n9_model.fits',  # NOT YET CVG
+                gf+'p11179/out_tab_p11179_reg_linear_hadj_sky_n9_img.txt',
+                gf + 'p11179/out_tab_p11179_reg_linear_hadj_sky_n9_mod.txt', scale=0.06, modtype='reg', es=True,
+                sky=-0.4331, mask=None, glx='PGC 11179', ryl=1., ylo=30., yhi=3e5)
+print(oop)
+#### PGC 11179, adjusted, n9, skyfree, NOT YET CVG '''
+''' #### PGC 11179, adjusted, n9, skyfree allpars
+plot3(gf+'p11179/galfit_out_p11179_reg_linear_hadj_skyallpars_n9.fits', clipreg=[1300,1500,1370,1570], indivs=False,
+      cliprange=True)
+with fits.open(fj + 'PGC11179_F160W_drz_sci_adjusted.fits') as img:
+    skybkgd = np.zeros(shape=img[0].data.shape)
+xc = len(skybkgd) / 2.
+yc = len(skybkgd[0]) / 2.
+for i in range(len(skybkgd)):
+    for j in range(len(skybkgd[0])):
+        skybkgd[i, j] = 0.6470 + 4.697e-03 * (i - xc) + 2.384e-03 * (j - yc)
+sb_prof_compare(fj+'PGC11179_F160W_drz_sci_adjusted.fits',
+                gf+'p11179/galfit_out_p11179_reg_linear_hadj_skyallpars_n9.fits',
+                gf+'p11179/galfit_out_p11179_reg_linear_hadj_skyallpars_n9_modelwithsky.fits',  # _model.fits
+                gf+'p11179/out_tab_p11179_reg_linear_hadj_skyallpars_n9_img.txt',
+                gf + 'p11179/out_tab_p11179_reg_linear_hadj_skyallpars_n9_modwithsky.txt',  # _mod.txt
+                scale=0.06, modtype='reg', sky=skybkgd, es=True, mask=fj+'PGC11179_F160W_drz_mask', glx='PGC 11179',
+                ryl=1., ylo=30., yhi=3e5)
+print(oop)
+#### PGC 11179, adjusted, n9, skyfree allpars '''
+''' #### PGC 11179, adjusted, n8, PA FREE, skyfree allpars
+plot3(gf+'p11179/galfit_out_p11179_reg_linear_hadj_pafree_skyallpars_n8.fits', clipreg=[1300,1500,1370,1570],
+      indivs=False, cliprange=True)
+# [1000,1800,1070,1870]
+with fits.open(fj + 'PGC11179_F160W_drz_sci_adjusted.fits') as img:
+    skybkgd = np.zeros(shape=img[0].data.shape)
+xc = len(skybkgd) / 2.
+yc = len(skybkgd[0]) / 2.
+for i in range(len(skybkgd)):
+    for j in range(len(skybkgd[0])):
+        skybkgd[i, j] = 0.4005 + 4.652e-03 * (i - xc) + 2.342e-03 * (j - yc)
+sb_prof_compare(fj+'PGC11179_F160W_drz_sci_adjusted.fits',
+                gf+'p11179/galfit_out_p11179_reg_linear_hadj_pafree_skyallpars_n8.fits',
+                gf+'p11179/galfit_out_p11179_reg_linear_hadj_pafree_skyallpars_n8_modelwithsky.fits',  # _model.fits
+                gf+'p11179/out_tab_p11179_reg_linear_hadj_pafree_skyallpars_n8_img.txt',
+                gf + 'p11179/out_tab_p11179_reg_linear_hadj_pafree_skyallpars_n8_modwithsky.txt',  # _mod.txt
+                scale=0.06, modtype='reg', sky=skybkgd, es=True, mask=fj+'PGC11179_F160W_drz_mask', glx='PGC 11179',
+                ryl=1., ylo=30., yhi=3e5)
+print(oop)
+#### PGC 11179, adjusted, n8, PA FREE, skyfree allpars '''
+''' #### PGC 11179, adjusted, n9, PA FREE, skyfree
+plot3(gf+'p11179/galfit_out_p11179_reg_linear_hadj_pafree_sky_n8.fits', clipreg=[1300,1500,1370,1570], indivs=False,
+      cliprange=True)
+sb_prof_compare(fj+'PGC11179_F160W_drz_sci_adjusted.fits',
+                gf+'p11179/galfit_out_p11179_reg_linear_hadj_pafree_sky_n8.fits',
+                gf+'p11179/galfit_out_p11179_reg_linear_hadj_pafree_sky_n8_model.fits',
+                gf+'p11179/out_tab_p11179_reg_linear_hadj_pafree_sky_n8_img.txt',
+                gf + 'p11179/out_tab_p11179_reg_linear_hadj_pafree_sky_n8_mod.txt', scale=0.06, modtype='reg', es=True,
+                mask=None, glx='PGC 11179', ryl=1., ylo=30., yhi=3e5)
+print(oop)
+#### PGC 11179, adjusted, n9, PA FREE, skyfree '''
+''' #### PGC 11179, adjusted, n9, PA FREE
+plot3(gf+'p11179/galfit_out_p11179_reg_linear_hadj_pafree_n9.fits', clipreg=[1300,1500,1370,1570], indivs=False,
+      cliprange=True)
+sb_prof_compare(fj+'PGC11179_F160W_drz_sci_adjusted.fits', gf+'p11179/galfit_out_p11179_reg_linear_hadj_pafree_n9.fits',
+                gf+'p11179/galfit_out_p11179_reg_linear_hadj_pafree_n9_model.fits',
+                gf+'p11179/out_tab_p11179_reg_linear_hadj_pafree_n9_img.txt',
+                gf + 'p11179/out_tab_p11179_reg_linear_hadj_pafree_n9_mod.txt', scale=0.06, modtype='reg', es=True,
+                mask=None, glx='PGC 11179', ryl=1., ylo=30., yhi=3e5)
+print(oop)
+#### PGC 11179, adjusted, n9, PA FREE '''
+''' #### PGC 11179, adjusted, n9
+plot3(gf+'p11179/galfit_out_p11179_reg_linear_hadj_n9.fits', clipreg=[1300,1500,1370,1570], indivs=False,
+      cliprange=True)
+sb_prof_compare(fj+'PGC11179_F160W_drz_sci_adjusted.fits', gf+'p11179/galfit_out_p11179_reg_linear_hadj_n9.fits',
+                gf+'p11179/galfit_out_p11179_reg_linear_hadj_n9_model.fits',
+                gf+'p11179/out_tab_p11179_reg_linear_hadj_n9_img.txt',
+                gf + 'p11179/out_tab_p11179_reg_linear_hadj_n9_mod.txt', scale=0.06, modtype='reg', es=True,
+                mask=None, glx='PGC 11179', ryl=1., ylo=30., yhi=3e5)
+print(oop)
+#### PGC 11179, adjusted, n9 '''
+''' #### PGC 11179 PA free, n9
 plot3(gf+'p11179/galfit_out_p11179_reg_linear_n9_pafree.fits', clipreg=[1300,1500,1370,1570], indivs=False, cliprange=True)
 sb_prof_compare(fj+'PGC11179_F160W_drz_sci.fits', gf+'p11179/galfit_out_p11179_reg_linear_n9_pafree.fits',
                 gf+'p11179/galfit_out_p11179_reg_linear_n9_pafree_model.fits',

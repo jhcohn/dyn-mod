@@ -208,7 +208,7 @@ def display_mod(galfit_out=None, texp=898.467164, sky=339.493665331, xi=830, xf=
     # The PSF needs to be the one for the high-resolution image used in the centre.
     # Here this is the WFC3/F160W image (we use a Gaussian PSF for simplicity)
     if not psf_file.startswith('/'):
-        psf_file = '/Users/jonathancohn/Documents/dyn_mod/galfit_u2698/' + psf_file
+        psf_file = '/Users/jonathancohn/Documents/dyn_mod/galfit/u2698/' + psf_file
     m_psf = fit_psf(psf_file)
     sigma_psf = m_psf.sol[1]
     norm_psf = m_psf.sol[0] / np.sum(m_psf.sol[0])
@@ -551,13 +551,93 @@ if __name__ == '__main__':
                         'out': gp+'mge_pgc_11179_reg_linear.txt', 'psf': fj+'psfH.fits', 'glx': 'PGC 11179',
                         'scale': 0.06, 'sky': 0., 'exp': 1354.463046, 'num': None, 'per': False,
                         'converged': gp+'galfit.04'}
+    reg_p11179_adj = {'img': fj+'PGC11179_F160W_drz_sci_adjusted.fits', 'mask': fj+'PGC11179_F160W_drz_mask.fits',
+                      'out': gp+'mge_pgc_11179_reg_linear_hadj_n9.txt', 'psf': fj+'psfH.fits', 'glx': 'PGC 11179',
+                      'scale': 0.06, 'sky': 0., 'exp': 1354.463046, 'num': None, 'per': False,
+                      'converged': gp+'galfit.05'}
+    reg_p11179_adjfpa = {'img': fj+'PGC11179_F160W_drz_sci_adjusted.fits', 'mask': fj+'PGC11179_F160W_drz_mask.fits',
+                         'out': gp+'mge_pgc_11179_reg_linear_hadj_pafree_n9.txt', 'psf': fj+'psfH.fits',
+                         'glx': 'PGC 11179', 'scale': 0.06, 'sky': 0., 'exp': 1354.463046, 'num': None, 'per': False,
+                         'converged': gp+'galfit.06'}
+    reg_p11179_adjfpasky = {'img': fj+'PGC11179_F160W_drz_sci_adjusted.fits', 'mask': fj+'PGC11179_F160W_drz_mask.fits',
+                            'out': gp+'mge_pgc_11179_reg_linear_hadj_pafree_sky.txt', 'psf': fj+'psfH.fits',
+                            'glx': 'PGC 11179', 'scale': 0.06, 'sky': -0.06201, 'exp': 1354.463046, 'num': None,
+                            'per': False, 'converged': gp+'galfit.07'}
+    reg_p11179_adjfpaskyallpars = {'img': fj+'PGC11179_F160W_drz_sci_adjusted.fits',
+                                   'mask': fj+'PGC11179_F160W_drz_mask.fits',
+                                   'out': gp+'mge_pgc_11179_reg_linear_hadj_pafree_skyallpars_n8.txt',
+                                   'psf': fj+'psfH.fits', 'glx': 'PGC 11179', 'scale': 0.06, 'sky': 0.,
+                                   'exp': 1354.463046, 'num': None, 'per': False, 'converged': gp+'galfit.08'}
+    reg_p11179_adjskyallpars = {'img': fj+'PGC11179_F160W_drz_sci_adjusted.fits',
+                                'mask': fj+'PGC11179_F160W_drz_mask.fits',
+                                'out': gp+'mge_pgc_11179_reg_linear_hadj_skyallpars_n9.txt', 'psf': fj+'psfH.fits',
+                                'glx': 'PGC 11179', 'scale': 0.06, 'sky': 0., 'exp': 1354.463046, 'num': None,
+                                'per': False, 'converged': gp+'galfit.09'}
+    reg_p11179_adjskynotcvg = {'img': fj+'PGC11179_F160W_drz_sci_adjusted.fits',
+                               'mask': fj+'PGC11179_F160W_drz_mask.fits',
+                               'out': gp+'mge_pgc_11179_reg_linear_hadj_sky_n9notcvg.txt', 'psf': fj+'psfH.fits',
+                               'glx': 'PGC 11179', 'scale': 0.06, 'sky': -0.4331, 'exp': 1354.463046, 'num': None,
+                               'per': False, 'converged': gp+'galfit.11'}  # galfit.10, galfit.11 not converged yet!
+    with fits.open(fj+'PGC11179_F160W_drz_sci_adjusted.fits') as img:
+        skybkgd = np.zeros(shape=img[0].data.shape)
+        skybkgd2 = np.zeros(shape=img[0].data.shape)
+    xc = len(skybkgd)/2.
+    yc = len(skybkgd[0])/2.
+    for i in range(len(skybkgd)):
+        for j in range(len(skybkgd[0])):
+            skybkgd[i,j] = 0.4005 + 4.652e-03*(i-xc) + 2.342e-03*(j-yc)
+            skybkgd2[i, j] = 0.6470 + 4.697e-03 * (i - xc) + 2.384e-03 * (j - yc)
+    reg_p11179_adjfpaskyallpars['sky'] = skybkgd
+    reg_p11179_adjskyallpars['sky'] = skybkgd2
     reg_n384 = {'img': fj+'NGC0384_F160W_drz_sci.fits', 'mask': fj+'NGC0384_F160W_drz_mask.fits',
                 'out': gn+'mge_ngc_384_reg_linear.txt', 'psf': fj+'psfH.fits', 'glx': 'NGC 384', 'scale': 0.06,
                 'sky': 0., 'exp': 1354.463046, 'num': None, 'per': False, 'converged': gn+'galfit.01'}
+    reg_n384_adj = {'img': fj+'NGC0384_F160W_drz_sci_adjusted.fits', 'mask': fj+'NGC0384_F160W_drz_mask.fits',
+                    'out': gn+'mge_ngc_384_reg_linear_hadj_n10.txt', 'psf': fj+'psfH.fits', 'glx': 'NGC 384',
+                    'scale': 0.06, 'sky': 0., 'exp': 1354.463046, 'num': None, 'per': False,
+                    'converged': gn+'galfit.04'}
     # if num==None, 'out' includes 'linear'; sky already subtracted
 
     # (galfit_out=None, texp=898.467164, sky=339.493665331, xi=830, xf=933, yi=440, yf=543,yctr=491.0699, xctr=880.8322)
-    # '''  #### PGC 11179 PA FREE, n9
+
+    # '''  #### NGC 384, adjusted H, n10
+    display_mod(reg_n384_adj['converged'], texp=reg_n384_adj['exp'], sky=reg_n384_adj['sky'], xi=1415, xf=1518, yi=1318,
+                yf=1421)
+    print(oop)
+    #### NGC 384, adjusted H, n10 '''
+    '''  #### PGC 11179, adjusted H, n9, INCLUDING SKY; NOT YET CVG
+    display_mod(reg_p11179_adjskynotcvg['converged'], texp=reg_p11179_adjskynotcvg['exp'],
+                sky=reg_p11179_adjskynotcvg['sky'], xi=1415, xf=1518, yi=1348, yf=1451)
+    print(oop)
+    #### PGC 11179 PA, adjusted H, n9, INCLUDING SKY; NOT YET CVG '''
+    '''  #### PGC 11179, adjusted H, n9, INCLUDING SKY ALLPARS
+    display_mod(reg_p11179_adjskyallpars['converged'], texp=reg_p11179_adjskyallpars['exp'],
+                sky=reg_p11179_adjskyallpars['sky'], xi=1415, xf=1518, yi=1348, yf=1451)
+    print(oop)
+    #### PGC 11179 PA, adjusted H, n9, INCLUDING SKY ALLPARS '''
+    '''  #### PGC 11179, adjusted H, n9, PA FREE, INCLUDING SKY ALLPARS
+    display_mod(reg_p11179_adjfpaskyallpars['converged'], texp=reg_p11179_adjfpaskyallpars['exp'],
+                sky=reg_p11179_adjfpaskyallpars['sky'], xi=1415, xf=1518, yi=1348, yf=1451)
+    print(oop)
+    #### PGC 11179 PA, adjusted H, n9, PA FREE, INCLUDING SKY ALLPARS '''
+    '''  #### PGC 11179, adjusted H, n9, PA FREE, INCLUDING SKY
+    #fit_img(reg_p11179_adjfpasky['img'], reg_p11179_adjfpasky['mask'], reg_p11179_adjfpasky['psf'], pfrac=0.01,
+    #        num=reg_p11179_adjfpasky['num'], write_out=reg_p11179_adjfpasky['out'], plots=True, qlims=None,
+    #        persec=reg_p11179_adjfpasky['per'], sky=reg_p11179_adjfpasky['sky'], galaxy=reg_p11179_adjfpasky['glx'],
+    #        scale1=reg_p11179_adjfpasky['scale'])
+    #print(oop)
+    #### PGC 11179 PA, adjusted H, n9, PA FREE, INCLUDING SKY '''
+    '''  #### PGC 11179, adjusted H, n9, PA FREE
+    display_mod(reg_p11179_adjfpa['converged'], texp=reg_p11179_adjfpa['exp'], sky=reg_p11179_adjfpa['sky'], xi=1415,
+                xf=1518, yi=1348, yf=1451)
+    print(oop)
+    #### PGC 11179 PA, adjusted H, n9, PA FREE '''
+    '''  #### PGC 11179, adjusted H, n9
+    display_mod(reg_p11179_adj['converged'], texp=reg_p11179_adj['exp'], sky=reg_p11179_adj['sky'], xi=1415, xf=1518,
+                yi=1348, yf=1451)
+    print(oop)
+    #### PGC 11179 PA, adjusted H, n9 '''
+    '''  #### PGC 11179 PA FREE, n9
     display_mod(reg_p11179_fpan9['converged'], texp=reg_p11179_fpan9['exp'], sky=reg_p11179_fpan9['sky'], xi=1415,
                 xf=1518, yi=1348, yf=1451)
     print(oop)

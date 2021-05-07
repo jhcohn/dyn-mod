@@ -555,7 +555,7 @@ def galfit_to_paper(galfit_out, zeropoint, texp, mag_sol=3.37, pix_scale=0.1, ap
 
 def convert_mges():
     base = '/Users/jonathancohn/Documents/mge/'
-    gf = '/Users/jonathancohn/Documents/dyn_mod/galfit_u2698/'
+    gf = '/Users/jonathancohn/Documents/dyn_mod/galfit/u2698/'
 
 
     zp = 24.6949
@@ -609,7 +609,7 @@ def convert_mges():
 
 
 def convert_mge_galfitpsf():
-    gf = '/Users/jonathancohn/Documents/dyn_mod/galfit_u2698/'
+    gf = '/Users/jonathancohn/Documents/dyn_mod/galfit/u2698/'
 
     zp = 24.6949
     texp = 898.467164
@@ -694,7 +694,7 @@ if __name__ == "__main__":
     p11179 = '/Users/jonathancohn/Documents/dyn_mod/pgc_11179/'
     fj = '/Users/jonathancohn/Documents/dyn_mod/for_jonathan/'
     # gf = '/Users/jonathancohn/Documents/dyn_mod/galfit_u2698/'
-    gu = '/Users/jonathancohn/Documents/dyn_mod/galfit_u2698/'
+    gu = '/Users/jonathancohn/Documents/dyn_mod/galfit/u2698/'
     gf = '/Users/jonathancohn/Documents/dyn_mod/galfit/'
     gp = gf + 'p11179/'
     gn = gf + 'n384/'
@@ -707,12 +707,72 @@ if __name__ == "__main__":
                       'outconv': base+'convgalfit_out_p11179_reg_linear_pafree.txt', 'psf': fj+'psfH.fits',
                       'glx': 'PGC 11179', 'use': p11179+'pgc_11179_reg_mge_pafree.txt', 'zp': 24.662,
                       'exp': 1354.463046, 'scale': 0.06, 'dust': 0.096}  # dust from Yildirim+2017
-    reg_p11179 = {'img': fj+'PGC11179_F160W_drz_sci.fits', 'mask': fj+'PGC11179_F160W_drz_mask.fits',
-                  'cap': gp+'mge_pgc_11179_reg_linear.txt', 'conv': gp+'convmge_pgc_11179_reg_linear.txt',
-                  'new': gp+'galfit_in_p11179_reg_linear.txt', 'out': gp+'galfit_out_p11179_reg_linear.fits',
-                  'cons': gp+'constraint_p11179_n10.txt', 'outconv': base+'convgalfit_out_p11179_reg_linear_corr.txt',
-                  'psf': fj+'psfH.fits', 'glx': 'PGC 11179', 'use': p11179+'pgc_11179_reg_mge.txt',
-                  'gfit': gp+'galfit.02', 'zp': 24.662, 'exp': 1354.463046, 'scale': 0.06, 'dust': 0.096}
+
+    reg_p11179_adj = {'img': fj+'PGC11179_F160W_drz_sci_adjusted.fits', 'mask': fj+'PGC11179_F160W_drz_mask.fits',
+                      'cap': gp+'mge_pgc_11179_reg_linear_hadj_n9.txt',
+                      'conv': gp+'convmge_pgc_11179_reg_linear_hadj_n9.txt',
+                      'new': gp+'galfit_in_p11179_reg_linear_hadj_n9.txt',
+                      'out': gp+'galfit_out_p11179_reg_linear_hadj_n9.fits',
+                      'cons': gp+'constraint_p11179_n9.txt', 'gfit': gp+'galfit.05',
+                      'outconv': base+'convgalfit_out_p11179_reg_linear_hadj_n9.txt', 'psf': fj+'psfH.fits',
+                      'glx': 'PGC 11179', 'use': p11179+'pgc_11179_reg_mge_hadj.txt', 'zp': 24.662, 'exp': 1354.463046,
+                      'scale': 0.06, 'dust': 0.096}  # dust from Yildirim+2017
+
+    reg_p11179_adjfpa = {'img': fj+'PGC11179_F160W_drz_sci_adjusted.fits', 'mask': fj+'PGC11179_F160W_drz_mask.fits',
+                         'cap': gp+'mge_pgc_11179_reg_linear_hadj_pafree_n9.txt',
+                         'conv': gp+'convmge_pgc_11179_reg_linear_hadj_pafree_n9.txt',
+                         'new': gp+'galfit_in_p11179_reg_linear_hadj_pafree_n9.txt',
+                         'out': gp+'galfit_out_p11179_reg_linear_hadj_pafree_n9.fits',
+                         'cons': gp+'constraint_p11179_n9.txt', 'gfit': gp+'galfit.06',
+                         'outconv': base+'convgalfit_out_p11179_reg_linear_hadj_pafree_n9.txt', 'psf': fj+'psfH.fits',
+                         'glx': 'PGC 11179', 'use': p11179+'pgc_11179_reg_mge_pafree_hadj.txt', 'zp': 24.662,
+                         'exp': 1354.463046, 'scale': 0.06, 'dust': 0.096}  # dust from Yildirim+2017
+
+    reg_p11179_adjsky = {'img': fj+'PGC11179_F160W_drz_sci_adjusted.fits', 'mask': fj+'PGC11179_F160W_drz_mask.fits',
+                         'cap': gp+'mge_pgc_11179_reg_linear_hadj_sky.txt',
+                         'conv': gp+'convmge_pgc_11179_reg_linear_hadj_sky_n9.txt',  # NOT YET CVG!!
+                         'new': gp+'galfit_in_p11179_reg_linear_hadj_sky_n9.txt',
+                         'out': gp+'galfit_out_p11179_reg_linear_hadj_sky_n9.fits',
+                         'cons': gp+'constraint_p11179_n9_sky.txt', 'gfit': gp+'galfit.11',
+                         'outconv': base+'convgalfit_out_p11179_reg_linear_hadj_sky_n9.txt', 'psf': fj+'psfH.fits',
+                         'glx': 'PGC 11179', 'use': p11179+'pgc_11179_reg_mge_sky_hadj.txt', 'zp': 24.662,
+                         'exp': 1354.463046, 'scale': 0.06, 'dust': 0.096}  # dust from Yildirim+2017
+
+    reg_p11179_adjskyall = {'img': fj+'PGC11179_F160W_drz_sci_adjusted.fits', 'mask': fj+'PGC11179_F160W_drz_mask.fits',
+                            'cap': gp+'mge_pgc_11179_reg_linear_hadj_skyallpars.txt',
+                            'conv': gp+'convmge_pgc_11179_reg_linear_hadj_skyallpars_n9.txt',
+                            'new': gp+'galfit_in_p11179_reg_linear_hadj_skyallpars_n9.txt',
+                            'out': gp+'galfit_out_p11179_reg_linear_hadj_skyallpars_n9.fits',
+                            'cons': gp+'constraint_p11179_n9_sky.txt', 'gfit': gp+'galfit.09',
+                            'outconv': base+'convgalfit_out_p11179_reg_linear_hadj_skyallpars_n9.txt',
+                            'psf': fj+'psfH.fits', 'glx': 'PGC 11179',
+                            'use': p11179+'pgc_11179_reg_mge_skyallpars_hadj.txt', 'zp': 24.662, 'exp': 1354.463046,
+                            'scale': 0.06, 'dust': 0.096}  # dust from Yildirim+2017
+
+    reg_p11179_adjfpasky = {'img': fj+'PGC11179_F160W_drz_sci_adjusted.fits',
+                            'mask': fj+'PGC11179_F160W_drz_mask.fits',
+                            'cap': gp+'mge_pgc_11179_reg_linear_hadj_sky_pafree.txt',
+                            'conv': gp+'convmge_pgc_11179_reg_linear_hadj_sky_pafree_n8.txt',
+                            'new': gp+'galfit_in_p11179_reg_linear_hadj_sky_pafree_n8.txt',
+                            'out': gp+'galfit_out_p11179_reg_linear_hadj_sky_pafree_n8.fits',
+                            'cons': gp+'constraint_p11179_n8_pafree_sky.txt', 'gfit': gp+'galfit.07',
+                            'outconv': base+'convgalfit_out_p11179_reg_linear_hadj_sky_pafree_n8.txt',
+                            'psf': fj+'psfH.fits', 'glx': 'PGC 11179',
+                            'use': p11179+'pgc_11179_reg_mge_sky_pafree_hadj.txt', 'zp': 24.662, 'exp': 1354.463046,
+                            'scale': 0.06, 'dust': 0.096}  # dust from Yildirim+2017
+
+    reg_p11179_adjfpaskyall = {'img': fj+'PGC11179_F160W_drz_sci_adjusted.fits',
+                               'mask': fj+'PGC11179_F160W_drz_mask.fits',
+                               'cap': gp+'mge_pgc_11179_reg_linear_hadj_skyallpars_pafree.txt',
+                               'conv': gp+'convmge_pgc_11179_reg_linear_hadj_skyallpars_pafree_n8.txt',
+                               'new': gp+'galfit_in_p11179_reg_linear_hadj_skyallpars_pafree_n8.txt',
+                               'out': gp+'galfit_out_p11179_reg_linear_hadj_skyallpars_pafree_n8.fits',
+                               'cons': gp+'constraint_p11179_n8_pafree_sky.txt', 'gfit': gp+'galfit.08',
+                               'outconv': base+'convgalfit_out_p11179_reg_linear_hadj_skyallpars_pafree_n8.txt',
+                               'psf': fj+'psfH.fits', 'glx': 'PGC 11179',
+                               'use': p11179+'pgc_11179_reg_mge_skyallpars_pafree_hadj.txt', 'zp': 24.662,
+                               'exp': 1354.463046, 'scale': 0.06, 'dust': 0.096}  # dust from Yildirim+2017
+
     # dust from Yildirim+2017
     # zeropoint: https://www.stsci.edu/hst/instrumentation/wfc3/data-analysis/photometric-calibration/ir-photometric-calibration#section-cc19dbfc-8f60-4870-8765-43810de39924
     reg_n384 = {'img': fj+'NGC0384_F160W_drz_sci.fits', 'mask': fj+'NGC0384_F160W_drz_mask.fits', 'psf': fj+'psfH.fits',
@@ -721,7 +781,23 @@ if __name__ == "__main__":
                 'cons': gn+'constraint_n384_n11.txt', 'outconv': base+'convgalfit_out_n384_reg_linear.txt',
                 'glx': 'NGC 384', 'use': n384+'ngc_384_reg_mge.txt', 'zp': 24.662, 'exp': 1354.463046, 'scale': 0.06,
                 'dust': 0.032}  # texp, scale same as P11179, dust from Yildirim+2017
+    reg_n384_adj = {'img': fj+'NGC0384_F160W_drz_sci_adjusted.fits', 'mask': fj+'NGC0384_F160W_drz_mask.fits',
+                    'psf': fj+'psfH.fits', 'cap': gn+'mge_ngc_384_reg_linear.txt',
+                    'conv': gn+'convmge_ngc_384_reg_linear_hadj_n10.txt',
+                    'new': gn+'galfit_in_n384_reg_linear_hadj_n10.txt',
+                    'out': gn+'galfit_out_n384_reg_linear_hadj_n10.fits',
+                    'cons': gn+'constraint_n384_n10.txt', 'outconv': base+'convgalfit_out_n384_reg_linear_hadj_n10.txt',
+                    'gfit': gn+'galfit.04', 'glx': 'NGC 384', 'use': n384+'ngc_384_reg_mge_hadj_n10.txt', 'zp': 24.662,
+                    'exp': 1354.463046, 'scale': 0.06, 'dust': 0.032}
+    # NGC 384: texp, scale same as P11179, dust from Yildirim+2017
 
+    # '''  #### NGC 384, adjusted, n10
+    galfit_to_paper(reg_n384_adj['gfit'], reg_n384_adj['zp'], reg_n384_adj['exp'], mag_sol=3.37,
+                    pix_scale=reg_n384_adj['scale'], apcorr=0., dust=reg_n384_adj['dust'],
+                    write_new=reg_n384_adj['use'], galaxy=reg_n384_adj['glx'])
+    galfit_to_mge(reg_n384_adj['gfit'], reg_n384_adj['zp'], reg_n384_adj['exp'], reg_n384_adj['outconv'])
+    print(oops)
+    #### NGC 384, adjusted, n10 '''  #
     '''  #### NGC 384
     mge_to_galfit(reg_n384['cap'], zeropoint=reg_n384['zp'], img=reg_n384['img'], mask=reg_n384['mask'],
                   copy_file=gu+'galfit_params_mge_055_zp25.txt', galfit_out=reg_n384['out'], psf=reg_n384['psf'],
@@ -729,15 +805,76 @@ if __name__ == "__main__":
                   sky=None, rms=None, glx=reg_n384['glx'])
     print(oops)
     #### NGC 384 '''  #
-    # '''  #### PGC 11179 FREE PA
+    '''  #### PGC 11179, adjusted, n9, PA FREE, sky free
+    galfit_to_paper(reg_p11179_adjfpasky['gfit'], reg_p11179_adjfpasky['zp'], reg_p11179_adjfpasky['exp'],
+                    mag_sol=3.37, pix_scale=reg_p11179_adjfpasky['scale'], apcorr=0.,
+                    dust=reg_p11179_adjfpasky['dust'], write_new=reg_p11179_adjfpasky['use'],
+                    galaxy=reg_p11179_adjfpasky['glx'])
+    # print(oop)
+    galfit_to_mge(reg_p11179_adjfpasky['gfit'], reg_p11179_adjfpasky['zp'], reg_p11179_adjfpasky['exp'],
+                  reg_p11179_adjfpasky['outconv'])
+    print(oop)
+    #### PGC 11179, adjusted, n9, PA FREE, sky free '''  #
+    '''  #### PGC 11179, adjusted, n9, PA FREE, sky ALL PARS free
+    galfit_to_paper(reg_p11179_adjfpaskyall['gfit'], reg_p11179_adjfpaskyall['zp'], reg_p11179_adjfpaskyall['exp'],
+                    mag_sol=3.37, pix_scale=reg_p11179_adjfpaskyall['scale'], apcorr=0.,
+                    dust=reg_p11179_adjfpaskyall['dust'], write_new=reg_p11179_adjfpaskyall['use'],
+                    galaxy=reg_p11179_adjfpaskyall['glx'])
+    # print(oop)
+    galfit_to_mge(reg_p11179_adjfpaskyall['gfit'], reg_p11179_adjfpaskyall['zp'], reg_p11179_adjfpaskyall['exp'],
+                  reg_p11179_adjfpaskyall['outconv'])
+    print(oop)
+    #### PGC 11179, adjusted, n9, PA FREE, sky ALL PARS free '''  #
+    '''  #### PGC 11179, adjusted, n9, sky ALL PARS free
+    galfit_to_paper(reg_p11179_adjskyall['gfit'], reg_p11179_adjskyall['zp'], reg_p11179_adjskyall['exp'], mag_sol=3.37,
+                    pix_scale=reg_p11179_adjskyall['scale'], apcorr=0., dust=reg_p11179_adjskyall['dust'],
+                    write_new=reg_p11179_adjskyall['use'], galaxy=reg_p11179_adjskyall['glx'])
+    # print(oop)
+    galfit_to_mge(reg_p11179_adjskyall['gfit'], reg_p11179_adjskyall['zp'], reg_p11179_adjskyall['exp'],
+                  reg_p11179_adjskyall['outconv'])
+    print(oop)
+    #### PGC 11179, adjusted, n9, sky ALL PARS free '''  #
+    '''  #### PGC 11179, adjusted, n9, sky free
+    galfit_to_paper(reg_p11179_adjsky['gfit'], reg_p11179_adjsky['zp'], reg_p11179_adjsky['exp'], mag_sol=3.37,
+                    pix_scale=reg_p11179_adjsky['scale'], apcorr=0., dust=reg_p11179_adjsky['dust'],
+                    write_new=reg_p11179_adjsky['use'], galaxy=reg_p11179_adjsky['glx'])
+    # print(oop)
+    galfit_to_mge(reg_p11179_adjsky['gfit'], reg_p11179_adjsky['zp'], reg_p11179_adjsky['exp'],
+                  reg_p11179_adjsky['outconv'])
+    print(oop)
+    #### PGC 11179, adjusted, n9, sky free '''  #
+    '''  #### PGC 11179, adjusted, n9, PA FREE
+    galfit_to_paper(reg_p11179_adjfpa['gfit'], reg_p11179_adjfpa['zp'], reg_p11179_adjfpa['exp'], mag_sol=3.37,
+                    pix_scale=reg_p11179_adjfpa['scale'], apcorr=0., dust=reg_p11179_adjfpa['dust'],
+                    write_new=reg_p11179_adjfpa['use'], galaxy=reg_p11179_adjfpa['glx'])
+    # print(oop)
+    galfit_to_mge(reg_p11179_adjfpa['gfit'], reg_p11179_adjfpa['zp'], reg_p11179_adjfpa['exp'],
+                  reg_p11179_adjfpa['outconv'])
+    print(oop)
+    #### PGC 11179, adjusted, n9, PA FREE '''  #
+    '''  #### PGC 11179, adjusted, n9
+    galfit_to_paper(reg_p11179_adj['gfit'], reg_p11179_adj['zp'], reg_p11179_adj['exp'], mag_sol=3.37,
+                    pix_scale=reg_p11179_adj['scale'], apcorr=0., dust=reg_p11179_adj['dust'],
+                    write_new=reg_p11179_adj['use'], galaxy=reg_p11179_adj['glx'])
+    # print(oop)
+    galfit_to_mge(reg_p11179_adj['gfit'], reg_p11179_adj['zp'], reg_p11179_adj['exp'], reg_p11179_adj['outconv'])
+    print(oop)
+    #### PGC 11179, adjusted, n9 '''  #
+    '''  #### PGC 11179 FREE PA
     galfit_to_paper(reg_p11179_fpa['gfit'], reg_p11179_fpa['zp'], reg_p11179_fpa['exp'], mag_sol=3.37,
                     pix_scale=reg_p11179_fpa['scale'], apcorr=0., dust=reg_p11179_fpa['dust'],
                     write_new=reg_p11179_fpa['use'], galaxy=reg_p11179_fpa['glx'])
     #print(oop)
     galfit_to_mge(reg_p11179_fpa['gfit'], reg_p11179_fpa['zp'], reg_p11179_fpa['exp'], reg_p11179_fpa['outconv'])
     print(oop)
-    #### PGC 11179 '''  #
-    '''  #### PGC 11179
+    #### PGC 11179 FREE PA '''  #
+    '''  #### PGC 11179 ORIG
+    reg_p11179 = {'img': fj+'PGC11179_F160W_drz_sci.fits', 'mask': fj+'PGC11179_F160W_drz_mask.fits',
+              'cap': gp+'mge_pgc_11179_reg_linear.txt', 'conv': gp+'convmge_pgc_11179_reg_linear.txt',
+              'new': gp+'galfit_in_p11179_reg_linear.txt', 'out': gp+'galfit_out_p11179_reg_linear.fits',
+              'cons': gp+'constraint_p11179_n10.txt', 'outconv': base+'convgalfit_out_p11179_reg_linear_corr.txt',
+              'psf': fj+'psfH.fits', 'glx': 'PGC 11179', 'use': p11179+'pgc_11179_reg_mge.txt',
+              'gfit': gp+'galfit.02', 'zp': 24.662, 'exp': 1354.463046, 'scale': 0.06, 'dust': 0.096}
     galfit_to_paper(gp + 'galfit.02', reg_p11179['zp'], reg_p11179['exp'], mag_sol=3.37, pix_scale=reg_p11179['scale'],
                     apcorr=0., dust=reg_p11179['dust'], write_new=reg_p11179['use'], galaxy='PGC 11179')
     print(oop)
@@ -748,7 +885,7 @@ if __name__ == "__main__":
                   write_converted=reg_p11179['conv'], new_galfit=reg_p11179['new'], constraint=reg_p11179['cons'],
                   psf=reg_p11179['psf'], sky=None, rms=None, glx=reg_p11179['glx'])
     print(oops)
-    #### PGC 11179 '''  #
+    #### PGC 11179 ORIG '''  #
 
     zp = 24.6949
     texp = 898.467164

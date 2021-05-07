@@ -304,7 +304,7 @@ def multi_vcirc(files, inc=60., mbh=0., distance=91., rad=np.logspace(-1,2,25), 
     mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']  # for \text command
     if ml == 1.0:
         ml = int(ml)
-    plt.ylabel(r'$v_{c,\star}$ [km s$^{-1}$], assuming $(M/L)_H=' + str(ml) + 'M_\odot/L_\odot$')
+    plt.ylabel(r'$v_{c,\star}$ [km s$^{-1}$], assuming $(M/L)_H=' + str(ml) + '\ M_\odot/L_\odot$')
     plt.xlabel(r'Radius [arcsec]')
     plt.xscale('log')
     # plt.yscale('log')
@@ -397,6 +397,8 @@ def load_mge(filename, logged=False):
 if __name__ == '__main__':
     dm = '/Users/jonathancohn/Documents/dyn_mod/'
     ugc = dm + 'ugc_2698/'
+    p1 = dm + 'pgc_11179/'
+    n3 = dm + 'ngc_384/'
     mdir = '/Users/jonathancohn/Documents/mge/'
 
     '''  # NGC 4111 STUFF HERE!
@@ -412,6 +414,7 @@ if __name__ == '__main__':
     print(oop)
     # '''  #
 
+    ##### UGC 2698 #####
     mge_rre = ugc + 'ugc_2698_rre_mge.txt'
     mge_rhe = ugc + 'ugc_2698_rhe_mge.txt'
     mge_ahe = ugc + 'ugc_2698_ahe_mge.txt'
@@ -435,6 +438,49 @@ if __name__ == '__main__':
     my_incs = [67.59, 67.61, 67.56]
     mge_labs = [r'original $H$-band', r'dust-masked $H$-band', r'dust-corrected $H$-band']
     radcomp = np.logspace(-1., 0.5, 1000)  # np.logspace(-.7, -0.6, 1000)  # np.logspace(-.77, -0.75, 50)
+
+
+    ##### NGC 384 #####
+    mge_n384_akin = n3 + 'ngc_384_mge_akin.txt'
+    mge_n384_reg_hadj_n10 = n3 + 'ngc_384_reg_mge_hadj_n10.txt'
+
+    ngc_mges = [mge_n384_reg_hadj_n10, mge_n384_akin]
+    ngc_min_qs = [0.5033, 0.5361]
+    ngc_incs = [65., 65.]
+    ngc_mge_labs = ['reg H', 'Akin']
+    ngc_fmts = ['ro', 'k*']
+
+
+    ##### PGC 11179 #####
+    mge_p11179_akin = p1 + 'pgc_11179_mge_akin.txt'
+    mge_p1179_reg_hadj = p1 + 'pgc_11179_reg_mge_hadj.txt'
+    mge_p1179_reg_hadj_sky = p1 + 'pgc_11179_reg_mge_sky_hadj.txt'
+    mge_p1179_reg_hadj_skyall = p1 + 'pgc_11179_reg_mge_skyallpars_hadj.txt'
+    mge_p1179_reg_pafree_hadj = p1 + 'pgc_11179_reg_mge_pafree_hadj.txt'
+    mge_p1179_reg_pafree_hadj_sky = p1 + 'pgc_11179_reg_mge_sky_pafree_hadj.txt'
+    mge_p1179_reg_pafree_hadj_skyall = p1 + 'pgc_11179_reg_mge_skyallpars_pafree_hadj.txt'
+
+    pgc_mges = [mge_p1179_reg_hadj, mge_p1179_reg_hadj_sky, mge_p1179_reg_hadj_skyall, mge_p1179_reg_pafree_hadj,
+                mge_p1179_reg_pafree_hadj_sky, mge_p1179_reg_pafree_hadj_skyall, mge_p11179_akin]
+    pgc_min_qs = [0.526, 0.526, 0.5235, 0.2332, 0.5303, 0.5298, 0.2793]
+    #pgc_incs = [60., 60., 60., 80., 60., 60., 80.]
+    pgc_incs = [80., 80., 80., 80., 80., 80., 80.]
+    pgc_mge_labs = ['reg H', 'reg H, sky free', 'reg H, all sky free', 'reg H, PA free', 'reg H, PA free, sky free',
+                    'reg H, PA free, all sky free', 'Akin']
+    pgc_fmts = ['or', 'ob', 'og', '+r', '+b', '+g', 'k*']
+
+
+    # RUNNING THINGS
+    '''  NGC 384 #
+    multi_vcirc(ngc_mges, inc=ngc_incs, mbh=0., distance=56., rad=np.logspace(-2.,1.,25), ml=1., mge_labs=ngc_mge_labs,
+                fmts=ngc_fmts, zoom=False)
+    print(oop)
+    # NGC 384 ''' #
+    # '''  PGC 11179 #
+    multi_vcirc(pgc_mges, inc=pgc_incs, mbh=0., distance=89., rad=np.logspace(-2.,1.,25), ml=1., mge_labs=pgc_mge_labs,
+                fmts=pgc_fmts, zoom=False)
+    print(oop)
+    # PGC 11179 ''' #
 #    multi_vcirc(my_mges, inc=67.61, mbh=2461189947.064265, distance=91., rad=radcomp, ml=1.70, mge_labs=mge_labs,
     #multi_vcirc(my_mges, inc=67.56, mbh=3154810151.4633145, distance=91., rad=radcomp, ml=1.58, mge_labs=[r'dust-corrected $H$-band'],
     #            fmts=fmts, zoom=False)  #
