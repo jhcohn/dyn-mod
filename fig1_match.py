@@ -184,10 +184,10 @@ def dust_and_co(parfile, beamloc=(-1.,-1.), incl_beam=True, xmatch=66, ymatch=32
     return d0, min0, max0, extent, cmap_0, ebeam
 
 
-def make_fig1(hband='galfit_u2698/ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci.fits',
-              iband='galfit_u2698/ugc2698_f814w_pxfr075_pxs010_drc_align_sci.fits',
+def make_fig1(hband='galfit/u2698/ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci.fits',
+              iband='galfit/u2698/ugc2698_f814w_pxfr075_pxs010_drc_align_sci.fits',
               parfile=None, zp_I=24.684, zp_H=24.6949, texp_I=805., texp_H=898.467164, xi=830-1, xf=930-1, yi=440-1,
-              yf=543-1, x_galcen=880.8322-1, y_galcen=491.0699-1, resolution=0.1, galfit_out='galfit_u2698/galfit.121',
+              yf=543-1, x_galcen=880.8322-1, y_galcen=491.0699-1, resolution=0.1, galfit_out='galfit/u2698/galfit.121',
               sky=339.493665331, incl_beam=True, arcsec=False):  # sky=337.5
     # 491.33878521953153 879.9361312648741
 
@@ -212,6 +212,46 @@ def make_fig1(hband='galfit_u2698/ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci.
     # GALFIT RHE cen: 880.6707 491.1347
     # RHE xloc yloc = 126.85356933052101 150.96256939040606
 
+    '''  #
+    alma = '/Users/jonathancohn/Documents/ALMA_DRP/2016.1.01010.S_U2698.S/science_goal.uid___A001_X87a_X677/' +\
+           'group.uid___A001_X87a_X678/member.uid___A001_X87a_X679/product/' +\
+           'uid___A001_X87a_X679.UGC_2698_sci.spw18.mfs.I.pbcor.fits'
+    with fits.open(alma) as al:
+        almadat = al[0].data[0][0][0:2500, 0:2500]
+        print(almadat.shape)
+    from photutils.centroids import centroid_com, centroid_2dg  # centroid_quadratic,
+    # print(np.isnan(almadat))
+    # almadat = np.nan_to_num(almadat)
+    hmask = '/Users/jonathancohn/Documents/dyn_mod/galfit/u2698/f160w_maskedgemask_px010.fits'
+    with fits.open(hmask) as hm:
+        hmaskdat = hm[0].data
+    hmaskdat[hmaskdat > 0] = True
+    hmaskdat[hmask == 0] = False
+    #plt.imshow(hmaskdat, origin='lower')
+    #plt.colorbar()
+    #plt.show()
+    hdat[np.abs(hdat) > 100] = 0.
+    xh,yh = centroid_2dg(hdat)#, mask=hmaskdat)
+    print(xh, yh)
+    plt.imshow(hdat, origin='lower')
+    plt.colorbar()
+    plt.plot(xh, yh, 'r*')
+    plt.show()
+    print(oop)
+
+    almadat[np.abs(almadat) < 5e-5] = 0.
+    ##almadat = almadat[1220:1300, 1200:1260]   # y,x  # USED THIS!
+    # almadat = almadat[1175:1350, 1175:1350]  # [0:2500, 0:2500]
+    ##x,y = centroid_2dg(almadat, mask=np.isnan(almadat))  # USED THIS!
+    ##print(x,y)  # 32.25052683654215 40.894463154204175 --> 1200+32.25 = xcen = 1232.25; 1220+40.89446 = 1260.89446
+    print(almadat.shape)
+    x,y = 1232.25, 1260.89446  # RA,dec corresponds to ALMA data cube pixel 127, 151
+    plt.imshow(almadat, origin='lower')
+    plt.plot(x,y, 'r*')
+    plt.show()
+    print(oop)
+    # '''  #
+
     #
     locations_find_galaxy = {'x_galcen': 879.9361312648741, 'y_galcen': 491.33878521953153, 'hlabel_x': 1.8, 'hlabel_y':
                              1.8, 'ihlabel_y': -2.15, 'beamloc': (1.8,-2.), 'alma_x': 115, 'alma_y': 158}
@@ -225,12 +265,14 @@ def make_fig1(hband='galfit_u2698/ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci.
                            -2.2, 'beamloc': (1.85, -2.), 'alma_x': 118, 'alma_y': 160}
     locations_recenttry = {'x_galcen': 879.6707, 'y_galcen': 490.1347, 'hlabel_x': 1.9, 'hlabel_y': 1.7, 'ihlabel_y':
                            -2.2, 'beamloc': (1.85, -2.), 'alma_x': 119, 'alma_y': 159}
+    locations_centroid = {'x_galcen': 880., 'y_galcen': 491., 'hlabel_x': 2., 'hlabel_y': 1.7, 'ihlabel_y':
+                          -2.2, 'beamloc': (1.85, -2.), 'alma_x': 127, 'alma_y': 151}
     # locations_zerozero: ALMA: RA, DEC 03:22:02.898, 40.51.50.068 ;;;; galcen? HST: 3:22:02.914, 40.51.50.248
     # (matches ALMA 118 160, not 127 151)
     #using_locs = locations_galfitrhe
     #using_locs = locations_recenttry
     #using_locs = locations_shouldbcorr
-    using_locs = locations_zerozero
+    using_locs = locations_centroid
 
     x_galcen = using_locs['x_galcen']
     y_galcen = using_locs['y_galcen']
@@ -626,7 +668,7 @@ def make_fig1(hband='galfit_u2698/ugc2698_f160w_pxfr075_pxs010_drz_rapidnuc_sci.
 if __name__ == '__main__':
 
     direc = '/Users/jonathancohn/Documents/dyn_mod/'
-    gf = direc + 'galfit_u2698/'
+    gf = direc + 'galfit/u2698/'
     u2698 = direc + 'ugc_2698/'
 
     make_fig1(galfit_out=gf + 'galfit.121', parfile=u2698 + 'ugc_2698_finaltests_fiducial_out.txt')
