@@ -288,7 +288,9 @@ def multi_vcirc(files, inc=60., mbh=False, distance=91., rad=np.logspace(-1,2,25
     mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']  # for \text command
     if ml == 1.0:
         ml = int(ml)
-    fig = plt.figure(figsize=(8,6))
+    fig, ax = plt.subplots(2,1, figsize=(7,16), sharex=True)  # rows,cols, figsize=(w,h)
+    fig.subplots_adjust(hspace=0.0)
+
     for f in range(len(files)):
         comp, surf, sigma, qObs = load_mge(files[f], logged=False)
 
@@ -296,28 +298,33 @@ def multi_vcirc(files, inc=60., mbh=False, distance=91., rad=np.logspace(-1,2,25
         vc2 = interpolate.interp1d(rad, vcirc, fill_value='extrapolate')
         vcirc2 = vc2(np.logspace(-2, 2., 50))
 
-        if conv_mass:
-            # v = sqrt(GM/R) -> v^2 = GM/R -> Rv^2/G = M
-            pc = 3.086e16
-            G_basic = 6.67e-11
-            Msol = 1.989e30
-            m_per_km = 1e3
-            G_pc = G_basic * Msol / pc / m_per_km**2  # [Msol^-1 * pc * km^2 * s^-2]
-            # but radii are in arcsec!
-            ac_per_rad = 206265.
-            pc_per_ac = distance * 1e6 / ac_per_rad  # distance is in Mpc; this is: [pc arcsec^-1]
-            G_ac = G_pc / pc_per_ac  # [Msol^-1 * ac * km^2 * s^-2]
-            mcirc = vcirc**2 * rad / G_ac / 1e9
+        # PLOT VCIRC
+        ax[0].plot(rad, vcirc, fmts[f], markerfacecolor='none', label=r'MGE: ' + mge_labs[f])
+        # ax[0].set_ylabel(r'$v_{c,\star}$ [km s$^{-1}$], assuming $(M/L)_H=' + str(ml) + '\ M_\odot/L_\odot$')
+        ax[0].set_ylabel(r'$v_{c,\star}$ [km s$^{-1}$]')
+        ax[0].set_title(r'Assuming $(M/L)_H=' + str(ml) + r'\ M_\odot/L_\odot$')
 
-            plt.plot(rad, mcirc, fmts[f], markerfacecolor='none', label=r'MGE: ' + mge_labs[f])
-            if mbh:
-                plt.axhline(y=mbh[f], color=fmts[f][0], ls=lss[f], label=r'Best-fit MBH (' + mge_labs[f] + ')')
-            plt.ylabel(r'$\frac{M_{\rm{enc},\star}}{10^9 M_\odot}$, assuming $(M/L)_H=' + str(ml) + '\ M_\odot/L_\odot$')
-            plt.yscale('log')
+        # CONVERT TO MASS!
+        # v = sqrt(GM/R) -> v^2 = GM/R -> Rv^2/G = M
+        pc = 3.086e16
+        G_basic = 6.67e-11
+        Msol = 1.989e30
+        m_per_km = 1e3
+        G_pc = G_basic * Msol / pc / m_per_km**2  # [Msol^-1 * pc * km^2 * s^-2]
+        # but radii are in arcsec!
+        ac_per_rad = 206265.
+        pc_per_ac = distance * 1e6 / ac_per_rad  # distance is in Mpc; this is: [pc arcsec^-1]
+        G_ac = G_pc / pc_per_ac  # [Msol^-1 * ac * km^2 * s^-2]
+        mcirc = vcirc**2 * rad / G_ac / 1e9
 
-        else:
-            plt.plot(rad, vcirc, fmts[f], markerfacecolor='none', label=r'MGE: ' + mge_labs[f])
-            plt.ylabel(r'$v_{c,\star}$ [km s$^{-1}$], assuming $(M/L)_H=' + str(ml) + '\ M_\odot/L_\odot$')
+        # PLOT ENCLOSED MASS
+        ax[1].plot(rad, mcirc, fmts[f], markerfacecolor='none', label=r'MGE: ' + mge_labs[f])
+        if mbh:
+            plt.axhline(y=mbh[f], color=fmts[f][0], ls=lss[f], label=r'Best-fit MBH (' + mge_labs[f] + ')')
+        #ax[1].set_ylabel(r'$\frac{M_{\rm{enc},\star}}{10^9 M_\odot}$, assuming $(M/L)_H=' + str(ml) +
+        #                 '\ M_\odot/L_\odot$')
+        ax[1].set_ylabel(r'$M_{\rm{enc},\star} [10^9 M_\odot]$')
+        ax[1].set_yscale('log')
 
     #mbh_curve = np.sqrt(0.00429897278 * mbh / (rad * distance * 1e6 / 206265))
     #idx = np.argwhere(np.diff(np.sign(vcirc - mbh_curve))).flatten()
@@ -326,15 +333,15 @@ def multi_vcirc(files, inc=60., mbh=False, distance=91., rad=np.logspace(-1,2,25
     #    plt.ylabel(r'$v_{\text{c}}$ [km s$^{-1}$], assuming $(M/L)_H=M_\odot/L_\odot$')
     #else:
     # plt.ylabel(r'$v_{c,\star}$ [km s$^{-1}$], assuming $(M/L)_H=' + str(ml) + '\ M_\odot/L_\odot$')
-    plt.xlabel(r'Radius [arcsec]')
-    plt.xscale('log')
+    ax[1].set_xlabel(r'Radius [arcsec]')
+    ax[1].set_xscale('log')
     # plt.yscale('log')
     if zoom:
         plt.xlim(0.04, 8.)
         plt.ylim(75., 750.)
     # plt.ylim(1., 10**3.)
     # plt.xlim(np.min(rad), np.max(rad))
-    plt.legend()  # lower right  # loc='upper left'
+    ax[0].legend()  # lower right  # loc='upper left'
     plt.show()
 
 #----------------------------------------------------------------------
