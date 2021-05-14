@@ -281,8 +281,13 @@ def rsoi(file, inc, mbh, distance, rad, ml, mge_lab, zoom=False):
     plt.show()
 
 
-def multi_vcirc(files, inc=60., mbh=0., distance=91., rad=np.logspace(-1,2,25), ml=1.0, mge_labs=None, fmts=None,
-                zoom=False):
+def multi_vcirc(files, inc=60., mbh=False, distance=91., rad=np.logspace(-1,2,25), ml=1.0, mge_labs=None, fmts=None,
+                lss=None, zoom=False, conv_mass=False):
+    import matplotlib as mpl
+    mpl.rcParams['text.usetex'] = True
+    mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']  # for \text command
+    if ml == 1.0:
+        ml = int(ml)
     fig = plt.figure(figsize=(8,6))
     for f in range(len(files)):
         comp, surf, sigma, qObs = load_mge(files[f], logged=False)
@@ -291,20 +296,36 @@ def multi_vcirc(files, inc=60., mbh=0., distance=91., rad=np.logspace(-1,2,25), 
         vc2 = interpolate.interp1d(rad, vcirc, fill_value='extrapolate')
         vcirc2 = vc2(np.logspace(-2, 2., 50))
 
-        plt.plot(rad, vcirc, fmts[f], markerfacecolor='none', label=r'MGE: ' + mge_labs[f])
+        if conv_mass:
+            # v = sqrt(GM/R) -> v^2 = GM/R -> Rv^2/G = M
+            pc = 3.086e16
+            G_basic = 6.67e-11
+            Msol = 1.989e30
+            m_per_km = 1e3
+            G_pc = G_basic * Msol / pc / m_per_km**2  # [Msol^-1 * pc * km^2 * s^-2]
+            # but radii are in arcsec!
+            ac_per_rad = 206265.
+            pc_per_ac = distance * 1e6 / ac_per_rad  # distance is in Mpc; this is: [pc arcsec^-1]
+            G_ac = G_pc / pc_per_ac  # [Msol^-1 * ac * km^2 * s^-2]
+            mcirc = vcirc**2 * rad / G_ac / 1e9
 
-    mbh_curve = np.sqrt(0.00429897278 * mbh / (rad * distance * 1e6 / 206265))
-    idx = np.argwhere(np.diff(np.sign(vcirc - mbh_curve))).flatten()
+            plt.plot(rad, mcirc, fmts[f], markerfacecolor='none', label=r'MGE: ' + mge_labs[f])
+            if mbh:
+                plt.axhline(y=mbh[f], color=fmts[f][0], ls=lss[f], label=r'Best-fit MBH (' + mge_labs[f] + ')')
+            plt.ylabel(r'$\frac{M_{\rm{enc},\star}}{10^9 M_\odot}$, assuming $(M/L)_H=' + str(ml) + '\ M_\odot/L_\odot$')
+            plt.yscale('log')
+
+        else:
+            plt.plot(rad, vcirc, fmts[f], markerfacecolor='none', label=r'MGE: ' + mge_labs[f])
+            plt.ylabel(r'$v_{c,\star}$ [km s$^{-1}$], assuming $(M/L)_H=' + str(ml) + '\ M_\odot/L_\odot$')
+
+    #mbh_curve = np.sqrt(0.00429897278 * mbh / (rad * distance * 1e6 / 206265))
+    #idx = np.argwhere(np.diff(np.sign(vcirc - mbh_curve))).flatten()
 
     #if ml == 1:
     #    plt.ylabel(r'$v_{\text{c}}$ [km s$^{-1}$], assuming $(M/L)_H=M_\odot/L_\odot$')
     #else:
-    import matplotlib as mpl
-    mpl.rcParams['text.usetex'] = True
-    mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']  # for \text command
-    if ml == 1.0:
-        ml = int(ml)
-    plt.ylabel(r'$v_{c,\star}$ [km s$^{-1}$], assuming $(M/L)_H=' + str(ml) + '\ M_\odot/L_\odot$')
+    # plt.ylabel(r'$v_{c,\star}$ [km s$^{-1}$], assuming $(M/L)_H=' + str(ml) + '\ M_\odot/L_\odot$')
     plt.xlabel(r'Radius [arcsec]')
     plt.xscale('log')
     # plt.yscale('log')
@@ -431,7 +452,9 @@ if __name__ == '__main__':
     mge_labs = ['reg H, reg mask', 'reg H, dust mask', 'dust-corr H, reg mask', 'Akin']
     mges_psf = [mge_rrepsf, mge_rhepsf, mge_ahepsf]
     mge_psflabs = ['reg H, reg mask, AGN', 'reg H, dust mask, AGN', 'dust-corr H, reg mask, AGN']
-    fmts = ['+k', 'om', 'sb', '*r']
+    fmts = ['k+', 'mo', 'bs', 'r*']
+    lss = ['-', '--', ':']
+    mbhs = [1.71, 2.46, 3.15]  # best-fit MBHs / 1e9
     fmts_psf = ['+k', 'om', 'sb']
 
     my_mges = [mge_rre, mge_rhe, mge_ahe]
@@ -476,7 +499,7 @@ if __name__ == '__main__':
                 fmts=ngc_fmts, zoom=False)
     print(oop)
     # NGC 384 ''' #
-    # '''  PGC 11179 #
+    '''  PGC 11179 #
     multi_vcirc(pgc_mges, inc=pgc_incs, mbh=0., distance=89., rad=np.logspace(-2.,1.,25), ml=1., mge_labs=pgc_mge_labs,
                 fmts=pgc_fmts, zoom=False)
     print(oop)
@@ -486,8 +509,8 @@ if __name__ == '__main__':
     #            fmts=fmts, zoom=False)  #
     #multi_vcirc(my_mges, inc=67.59, mbh=1708653896.954655, distance=91., rad=radcomp, ml=1.94, mge_labs=[r'original $H$-band'],
     #            fmts=fmts, zoom=False)  #
-    multi_vcirc(my_mges, inc=my_incs, mbh=0., distance=91., rad=np.logspace(-1., 0.55, 25), ml=1., mge_labs=mge_labs,  # -1.7, 0.6, 25
-                fmts=fmts, zoom=False)
+    multi_vcirc(my_mges, inc=my_incs, mbh=None, distance=91., rad=np.logspace(-1., 0.55, 25), ml=1., mge_labs=mge_labs,  # -1.7, 0.6, 25
+                fmts=fmts, zoom=False, conv_mass=True, lss=lss)
     print(oop)
     multi_vcirc(all_mges, inc=67.6, mbh=0., distance=91., rad=np.logspace(-1., 0.5, 25), ml=1., mge_labs=all_mge_labs,  # -1.7, 0.6, 25
                 fmts=all_fmts, zoom=False)
