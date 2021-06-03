@@ -39,28 +39,108 @@ masked_dustcorr_counts = 'ugc2698_f160w_pxfr075_pxs010_ahcorr_rapidnuc_sci_nonan
 base = '/Users/jonathancohn/Documents/dyn_mod/galfit/u2698/'
 gf = '/Users/jonathancohn/Documents/dyn_mod/galfit/'
 fj = '/Users/jonathancohn/Documents/dyn_mod/for_jonathan/'
+hst_p = '/Users/jonathancohn/Documents/hst_pgc11179/'
 n384_h = fj + 'NGC0384_F160W_drz_sci.fits'
 n384_adj_h = fj + 'NGC0384_F160W_drz_sci_adjusted.fits'
+n384_adj_h_n7 = fj + 'NGC0384_F160W_drz_sci_adjusted_n7.fits'
+n384_adj_h_inclsky = fj + 'NGC0384_F160W_drz_sci_adjusted_inclsky.fits'
+n384_hmask = fj + 'NGC0384_F160W_drz_mask.fits'
+n384_hmask_extended = fj + 'NGC0384_F160W_drz_mask_extended.fits'
 p11179_h = fj + 'PGC11179_F160W_drz_sci.fits'
 p11179_adj_h = fj + 'PGC11179_F160W_drz_sci_adjusted.fits'
+p11179_adj_h_n7 = fj + 'PGC11179_F160W_drz_sci_adjusted_n7.fits'
+p11179_adj_h_inclsky = fj + 'PGC11179_F160W_drz_sci_adjusted_inclsky.fits'
+p11179_f814w = hst_p + 'p11179_f814w_drizflc_006_sci.fits'
+
 
 # BEFORE running an image in GALFIT, check the units: if the units are in electrons, ensure the gain=1, NCOMBINE=1
 # Elif the units are in counts, gain=2.5 and NCOMBINE=the number of combined images
 # Note: if units are in counts/sec or electrons/sec, multiply the image by its exposure time, or set EXPTIME=1.0
 
 
-with fits.open(fj+'PGC11179_F814W_drc_sci_copy.fits') as pgci:
-    hdr = pgci[0].header
-    data = pgci[0].data
+with fits.open(n384_hmask_extended) as nm:
+    hdr = nm[0].header
+    data = nm[0].data
 
-plt.imshow(data, origin='lower', vmax=1.2e4, vmin=-1e3)
-plt.colorbar()
+with fits.open(n384_adj_h) as nm:
+    hdrh = nm[0].header
+    datah = nm[0].data
+
+# swap 0,1 in mask
+data[data==0] = 2.  # choice of 2 here is arbitrary
+data[data==1] = 0.
+data[data==2] = 1.
+
+fig, ax = plt.subplots(1,2, figsize=(10,5), sharey=True)
+fig.subplots_adjust(hspace=0.01)
+
+im = ax[0].imshow(data*datah, origin='lower', vmax=500, vmin=0)
+#plt.colorbar(im)
+im2 = ax[1].imshow(datah, origin='lower', vmax=500, vmin=0)
+#plt.colorbar(im2)
 plt.show()
 print(oop)
 
-hdr['BUNIT'] = 'cps'
-hdr['history'] = 'changed BUNIT from ELECTRONS to cps for display purposes only'
-fits.writeto(fj+'PGC11179_F814W_drc_sci_copy_cps.fits', data, hdr)  # regH, correcting header info for GALFIT input!
+
+with fits.open(n384_hmask) as nm:  # n384_hmask # n384_adj_h
+    hdr = nm[0].header
+    data = nm[0].data
+
+# adjust mask based on neighbor galaxy position in n384_adj_h
+# data[0:1200, 2000:] = 0.  # for the H-band image
+data[0:1200, 2000:] = 1  # for the mask!
+
+#plt.imshow(data, origin='lower', vmax=500, vmin=0)  # view n384_adj_h
+plt.imshow(data, origin='lower')
+plt.colorbar()
+plt.show()
+
+hdr['history'] = 'added large masking region to block out more of the neighbor galaxy'
+fits.writeto(n384_hmask_extended, data, hdr)  # N384 mask, with the mask region around the neighboring galaxy extended
+print(oop)
+
+
+with fits.open(p11179_adj_h) as ph:
+    print(ph.info())
+    hdr = ph[0].header
+    data = ph[0].data
+
+data += 5.
+hdr['history'] = 'added 5 to the data as artificial sky'
+fits.writeto(p11179_adj_h_inclsky, data, hdr)  # regH, correcting header info for GALFIT input!
+#print(oop)
+
+with fits.open(n384_adj_h) as nh:
+    print(nh.info())
+    hdr = nh[0].header
+    data = nh[0].data
+
+data += 10.
+hdr['history'] = 'added 10 to the data as artificial sky'
+fits.writeto(n384_adj_h_inclsky, data, hdr)  # regH, correcting header info for GALFIT input!
+print(oop)
+
+
+with fits.open(p11179_h) as ph:
+    print(ph.info())
+    hdr = ph[0].header
+    data = ph[0].data
+
+hdr['CCDGAIN'] = 1.0
+hdr['history'] = 'changed gain to 1, because image is actually in e, NOT counts'
+hdr['history'] = 'keeping full exposure time'
+fits.writeto(p11179_adj_h_n7, data, hdr)  # regH, correcting header info for GALFIT input!
+#print(oop)
+
+with fits.open(n384_h) as nh:
+    print(nh.info())
+    hdr = nh[0].header
+    data = nh[0].data
+
+hdr['CCDGAIN'] = 1.0
+hdr['history'] = 'changed gain to 1, because image is actually in e, NOT counts'
+hdr['history'] = 'keeping full exposure time'
+fits.writeto(n384_adj_h_n7, data, hdr)  # regH, correcting header info for GALFIT input!
 print(oop)
 
 
@@ -88,6 +168,21 @@ hdr['history'] = 'changed NCOMBINE to 1, keeping full exposure time'
 fits.writeto(n384_adj_h, data, hdr)  # regH, correcting header info for GALFIT input!
 print(oop)
 
+'''  #
+with fits.open(fj+'PGC11179_F814W_drc_sci_copy.fits') as pgci:
+    hdr = pgci[0].header
+    data = pgci[0].data
+
+plt.imshow(data, origin='lower', vmax=1.2e4, vmin=-1e3)
+plt.colorbar()
+plt.show()
+print(oop)
+
+hdr['BUNIT'] = 'cps'
+hdr['history'] = 'changed BUNIT from ELECTRONS to cps for display purposes only'
+fits.writeto(fj+'PGC11179_F814W_drc_sci_copy_cps.fits', data, hdr)  # regH, correcting header info for GALFIT input!
+print(oop)
+# '''  #
 
 with fits.open(hband_e_akint) as he:
     hdrhe = he[0].header
