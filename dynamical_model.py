@@ -951,14 +951,15 @@ def map_averaging(m1, xpix, ypix, binNum, x_in, nPixels):
     :return: m1, with pixels averaged in the Voronoi bin regions generated in ModelGrid.just_the_bins
     """
 
-    flattened_binned_m1 = np.zeros(shape=max(binNum) + 1)  # flatten and bin the moment 1 map
+    # flatten and bin the moment 1 map
+    flattened_binned_m1 = np.zeros(shape=max(binNum) + 1)
     for xy in range(len(x_in)):
         flattened_binned_m1[binNum[xy]] += m1[ypix[xy], xpix[xy]] / nPixels[binNum[xy]]
 
-    # convert the flattened binned moment 1 map into a vector of the same size as the x & y inputs
+    # convert the flattened & binned moment 1 map into a vector of the same size as the x & y inputs
     full_binned_m1 = np.zeros(shape=len(binNum))
     for xy in range(len(x_in)):
-        full_binned_m1[xy] += flattened_binned_m1[binNum[xy]]
+        full_binned_m1[xy] += flattened_binned_m1[binNum[xy]]  # this assigns each pixel its bin num in a 1D array
 
     # create the binned moment maps for display
     m1_vb = np.zeros(shape=m1.shape)
@@ -1084,14 +1085,16 @@ class ModelGrid:
         print(self.zred, self.z_fixed) # zred = 0.021531124489166463, z_fixed = 0.02152
         print(len(self.freq_ax))  # 120
         print(np.median(self.freq_ax) / 1e9)  # 225.5792831710296
-        print(oop)
+        #print(oop)
         # -> z_fixed CO line = 225.681338 ;;  using zred instead: CO line = 225.67888
         print(vel_ax[2]-vel_ax[1], vel_ax[3]-vel_ax[2], velwidth)  # all = 25.754395
         print(vel_ax[self.zrange[0]], vel_ax[self.zrange[1]])  # -583.7219933918362 599.2785140192336
         print(self.vsys-vel_ax[self.zrange[0]], self.vsys-vel_ax[self.zrange[1]], self.vsys)
         print((vel_ax[self.zrange[1]] - vel_ax[self.zrange[0]])/(self.zrange[1]-self.zrange[0]))
-        print(self.vsys-vel_ax[29], self.vsys-vel_ax[77])  # 6955.573148035577 5959.362194426275 (delta-V = 996.210954)
+        print(self.vsys-vel_ax[29]+velwidth/2., self.vsys-vel_ax[77]-velwidth/2.)  # 6955.573148035577 5959.362194426275 (delta-V = 996.210954)
+        # with +/-velwidth/2: 6965.950345469006 5948.984996992846 (delta-V = 1016.96535) 6966.0 - 5949.0
         # in non-python: velocity appears in channels 30 through 78; in python, this is 29 through 77, or 29:78
+        print(oop)
         print((vel_ax[77]-vel_ax[29])/(77-29))
         print((vel_ax[68] - vel_ax[20])/(68-20))
         print(vel_ax[68] - vel_ax[67])  # 20.754394866866733
@@ -1303,11 +1306,44 @@ class ModelGrid:
             cube_model[fr] = self.weight * np.exp(-(self.freq_ax[fr] - self.freq_obs) ** 2 /
                                                   (2 * self.delta_freq_obs ** 2))
 
+        '''  # TESTING PGC BADNESS
+        print(self.freq_ax/1e11)  # 2.250 -> 2.257
+        print(np.amin(self.freq_obs)/1e11, np.amax(self.freq_obs)/1e11, np.median(self.freq_obs)/1e11)
+        print(np.amin(self.freq_ax/1e11), np.amax(self.freq_ax/1e11))
+        print(oop)
+        # fiducial u2698: obs: 2.23770->2.26646, ax: 2.25243->2.26118
+        # 6840: obs: 2.23886->2.27605, ax: 2.250403->2.257635
+        # 6800: obs: 2.23857->2.27575, ax: 2.250403->2.257635
+        # vsys=5000 -> 225208336387.62103 228948701582.17313 226750172996.83344
+        # vsys=6000 -> 2.244718619243182 2.281999954071433 2.26008656432037
+        # vsys=7000 -> 2.237401885859719 2.2745617009639476 2.2527197386198488
+        # fiducial: 2.252-> 2.261; -> 2.2377009236492555 2.266463666904251 2.2568970902375725
+
+        plt.imshow(self.freq_obs, origin='lower', vmin=np.amin(self.freq_ax), vmax=np.amax(self.freq_ax))
+        plt.colorbar()
+        plt.show()
+        print(len(self.freq_ax), len(self.z_ax))
+        print(oop)
+        # '''  #
+
         # RE-SAMPLE BACK TO CORRECT PIXEL SCALE (take avg of sxs sub-pixels for real alma pixel) --> intrinsic data cube
         if self.os == 1:
             intrinsic_cube = cube_model
         else:  # intrinsic_cube = block_reduce(cube_model, self.os, np.mean)
             intrinsic_cube = rebin(cube_model, self.os, self.os, avg=False)  # this must use avg=False
+
+        # '''  # TESTING PGC BADNESS
+        collapsedmod = np.zeros(shape=intrinsic_cube[0].shape)
+        for iz in range(len(intrinsic_cube)):
+            #plt.imshow(intrinsic_cube[iz], origin='lower')
+            #plt.colorbar()
+            #plt.pause(0.4)
+            #plt.clf()
+            collapsedmod += intrinsic_cube[iz]
+        plt.imshow(collapsedmod, origin='lower')
+        plt.colorbar()
+        plt.show()
+        # '''  #
 
         tc = time.time()
         # CONVERT INTRINSIC TO OBSERVED (convolve each slice of intrinsic_cube with ALMA beam --> observed data cube)
@@ -1332,6 +1368,42 @@ class ModelGrid:
         # CALCULATE THE ELLIPSE MASK DIRECTLY ON THE DOWN-SAMPLED SCALE
         self.ell_ds = ellipse_fitting(data_ds, self.rfit, self.xell / self.ds, self.yell / self.ds2,
                                       self.resolution * self.ds, self.theta_ell, self.q_ell)  # create ellipse mask
+
+        '''  # TESTING PGC BADNESS
+        collapseddat = np.zeros(shape=data_ds[0].shape)
+        collapsedmod = np.zeros(shape=data_ds[0].shape)
+        for iz in range(len(data_ds)):
+            plt.imshow(ap_ds[iz] * self.ell_ds, origin='lower')
+            plt.colorbar()
+            plt.pause(0.4)
+            plt.clf()
+            collapseddat += data_ds[iz]
+            collapsedmod += ap_ds[iz]
+        plt.imshow(collapsedmod, origin='lower')
+        plt.colorbar()
+        plt.show()
+        plt.imshow(collapseddat, origin='lower')
+        plt.colorbar()
+        plt.show()
+
+        # APPLY THE ELLIPTICAL MASK TO MODEL CUBE & INPUT DATA: ONLY COMPARE DATA & MODEL WITHIN THIS FITTING ELLIPSE!
+        data_ds *= self.ell_ds
+        ap_ds *= self.ell_ds
+        n_pts = np.sum(self.ell_ds) * len(self.z_ax)  # total number of pixels compared in chi^2 calculation!
+
+        collapseddat = np.zeros(shape=data_ds[0].shape)
+        collapsedmod = np.zeros(shape=data_ds[0].shape)
+        for iz in range(len(data_ds)):
+            collapseddat += data_ds[iz]
+            collapsedmod += ap_ds[iz]
+        plt.imshow(collapsedmod, origin='lower')
+        plt.colorbar()
+        plt.show()
+        plt.imshow(collapseddat, origin='lower')
+        plt.colorbar()
+        plt.show()
+        print(oop)
+        # '''  #
 
         # APPLY THE ELLIPTICAL MASK TO MODEL CUBE & INPUT DATA: ONLY COMPARE DATA & MODEL WITHIN THIS FITTING ELLIPSE!
         data_ds *= self.ell_ds
@@ -1704,9 +1776,9 @@ class ModelGrid:
         #from mpl_toolkits.axes_grid1 import make_axes_locatable
         #divider1 = make_axes_locatable(ax[0])
         # CONVERT FROM Jy/beam TO mJy/beam
-        slice *= 1e3 * self.pvd_width
+        slice *= 1e3 * self.pvd_width  # multiply by extraction width to convert from average to sum!
         slice1 = slice
-        slice2 *= 1e3 * self.pvd_width
+        slice2 *= 1e3 * self.pvd_width  # multiply by extraction width to convert from average to sum!
         vmin = np.amin([slice, slice2])
         vmax = np.amax([slice, slice2])
 
@@ -3012,6 +3084,13 @@ class ModelGrid:
         vmin = np.amin([slice, slice2])
         vmax = np.amax([slice, slice2])
 
+        print(vel_ax)
+        print(oop)
+        #hdu = fits.ImageHDU()
+        #hdu.data = slice
+        #hdu.writeto('ugc_2689_pvd.fits')
+        #print(oop)
+
         # fig, ax = plt.subplots(3, 1, sharex=True, figsize=(6, 12))
         # plt.subplots_adjust(hspace=0.02)
         # ax12.set_title(r'PVD', fontsize=fs)
@@ -3055,7 +3134,7 @@ class ModelGrid:
         import pickle
         basename = str(mciter)
         if parfile != 'fiducial':
-            basename += parfile
+            basename += '_' + parfile
         if not use_dcube:
             basename += '_usemodcube'
         if reb:
@@ -3068,8 +3147,8 @@ class ModelGrid:
             basename += '_earlybin_ds'
         if not reb and not voronoi and not earlybin and not earlyvor:
             basename += '_novor_corr'
-        mc_filename = 'mom_unc' + basename + '.pkl'
-        mc_filename = 'mom_unc_1000_usemodcube_novor_corr.pkl'
+        mc_filename = 'mom_unc_' + basename + '.pkl'
+        # mc_filename = 'mom_unc_1000_usemodcube_novor_corr.pkl'
 
         self.ell_ds[self.ell_ds == 0.] = np.nan
 
@@ -5049,13 +5128,14 @@ if __name__ == "__main__":
     # without lucyvb: 31.6683722%
     # MBH = 2461189947.064265 -> (0.780351818 [with lucyvb], 0.779418793 [without lucyvb])
     chi_sq = mg.chi2()  # 6495.965711236455 (1.2275067481550368)  # 6498.030199144044 (1.227896863027975)
-    mg.montecarlo_moms(mciter=1000, pars_backup=params, voronoi=False, reb=False, earlybin=False, earlyvor=False,
-                       use_dcube=False, snr=10, yy=7, xx=11, parfile='fiducial')  # fiducial  # fixbh5e9
+    #mg.montecarlo_moms(mciter=1000, pars_backup=params, voronoi=False, reb=False, earlybin=False, earlyvor=False,
+    #                   use_dcube=False, snr=10, yy=7, xx=11, parfile='fp3')  # fiducial  # fixbh5e9  # ds11
     # montecarlo_moms: yy,xx = 7,11 ;; 30,35
     mg.final4(incl_beam=True, fs=15, pars_backup=params, mc_filename='mom_unc_1000_usemodcube_novor_corr.pkl')  # fs=12
     # mom_unc1000_novor_corr.pkl  # mom_unc_1000_usemodcube_novor_corr  # mom_unc1000fixbh5e9_novor_corr
+    # mom_unc1000ds11_usemodcube_novor_corr # mom_unc_1000_fp3_usemodcube_novor_corr
     #mg.manual_final4(incl_beam=True, fs=12, pars_backup=params)
-    # mg.orig_final4(incl_beam=True, fs=12, pars_backup=params)
+    # mg.orig_final4(incl_beam=True, fs=12, pars_backup=params)m1_mc1000_ds11_usemodcube_novorr_corr_resid
     #mg.vor_moms(incl_beam=True, fs=12, pars_backup=params, just1=True, beamcol='k') # , frac=True)
     #mg.vor_moms(incl_beam=True, fs=12, pars_backup=params, just1=False, beamcol='w', frac=True)
     #mg.pvd()
