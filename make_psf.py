@@ -154,20 +154,26 @@ f_psfz[pyctr_z-44:pyctr_z+45, pxctr_z-44:pxctr_z+45] = dat_psfz  # correct!!!!!!
 #plt.plot(pxctr_m, pyctr_m, 'r*')
 #plt.show()
 
+# MAKE SURE to replace UVIS2 science image with zeroes!!!!! THIS WORKED!!!!!!!!!!!!!!!!!!!!
+# p11179_f814w_drizflc_pxf08_006_psf_take2_sci.fits
 with fits.open(p11179_f814w_psfz, 'update') as hdu:
+    hdu[1].data = np.zeros(shape=f_psfz.shape)
     hdu[4].data = f_psfz
     # hdu.writeto('psf_rzq_test.fits')
     hdu.flush()
     # can view these directly e.g. using: "ds9 ic0b14rxq_flc.fits[4]" on the command line!
 
 with fits.open(p11179_f814w_psfx, 'update') as hdu:
+    hdu[1].data = np.zeros(shape=f_psfx.shape)
     hdu[4].data = f_psfx
     # hdu.writeto('psf_rxq_test.fits')
     hdu.flush()
     # can view these directly e.g. using: "ds9 ic0b14rxq_flc.fits[4]" on the command line!
 
 with fits.open(p11179_f814w_psfm, 'update') as hdu:
-    hdr = hdu[0].header
+    hdu[1].data = np.zeros(shape=f_psfm.shape)
+    hdu[4].data = f_psfm
+    '''  #
     dat0 = hdu[0].data
     # dats = hdu['SCI'].data
     dat1 = hdu[1].data  # sci uvis2
@@ -178,8 +184,6 @@ with fits.open(p11179_f814w_psfm, 'update') as hdu:
     dat6 = hdu[6].data  # dq uvis1
     hdu[4].data = f_psfm
     # hdu.writeto('psf_rmq_test.fits')
-    hdu.flush()
-    # can view these directly e.g. using: "ds9 ic0b14rmq_flc.fits[4]" on the command line!
     print(dat0)
     # print(dats.shape)
     print(dat1.shape)
@@ -187,6 +191,10 @@ with fits.open(p11179_f814w_psfm, 'update') as hdu:
     print(dat3.shape)
     print(dat4.shape)
     print(dat5.shape)
+    # '''  #
+    hdu.flush()
+    # can view these directly e.g. using: "ds9 ic0b14rmq_flc.fits[4]" on the command line!
+
 
 print(oops)
 
