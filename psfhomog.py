@@ -99,6 +99,12 @@ p11179_adj_h = fj + 'PGC11179_F160W_drz_sci_adjusted.fits'
 n384_f814w_pxf08 = hst_n + 'n384_f814w_drizflc_pxf08_006_sci.fits'
 p11179_f814w_pxf08 = hst_p + 'p11179_f814w_drizflc_006_sci.fits'  # pxf08!
 
+# WRITE CONVOLVED I-BAND IMAGES
+n384_I_convolved_wamp = hst_n + 'n384_f814w_drizflc_pxf08_006_sci_convolved_wamp.fits'
+n384_I_convolved_namp = hst_n + 'n384_f814w_drizflc_pxf08_006_sci_convolved_namp.fits'
+p11179_I_convolved_wamp = hst_p + 'p11179_f814w_drizflc_pxf08_006_sci_convolved_wamp.fits'
+p11179_I_convolved_namp = hst_p + 'p11179_f814w_drizflc_pxf08_006_sci_convolved_namp.fits'
+
 # FINAL PSFs
 p11179_driz_f814w_psf = hst_p + 'p11179_f814w_drizflc_pxf08_006_psf_take2_sci.fits'
 p11179_driz_f814w_psfcen = hst_p + 'p11179_f814w_drizflc_pxf08_006_psf_centroid_sci.fits'
@@ -157,6 +163,7 @@ def twoD_gaussian(x, height, center_x, center_y, width_x, width_y):
     return height*np.exp(-(((center_x-x[0])/width_x)**2+((center_y-x[1])/width_y)**2)/2)
 
 def conv(pars, dataI):
+    #center_x, center_y, width_x, width_y = pars
     height, center_x, center_y, width_x, width_y = pars
     #height, width_x, width_y = pars
     #center_x, center_y = 40., 40.
@@ -168,6 +175,7 @@ def conv(pars, dataI):
     twoDG = np.exp(-(((center_x - x) / width_x) ** 2 + ((center_y - y) / width_y) ** 2) / 2)
 
     return convolution.convolve(dataI * height, twoDG)
+    #return convolution.convolve(dataI, twoDG)
 
 def zero_conv(pars, dataH, dataI):
 
@@ -178,33 +186,57 @@ def zero_conv(pars, dataH, dataI):
     # return np.exp(-np.nansum(icon - dataH))
 
 
+# NORMALIZE PSFs!
+dat_psfH /= np.nanmax(dat_psfH)
+dat_ngc_psfcen_f814w /= np.nanmax(dat_ngc_psfcen_f814w)
+dat_pgc_psfcen_f814w /= np.nanmax(dat_pgc_psfcen_f814w)
+
 # psfH peak is centered on 40,40; current peak is at NGC 1927,1922 -> 1882:1882+81, 1887:1887+81
-# dat_psfi = dat_ngc_psfcen_f814w[1882:1882+81, 1887:1887+81]  # correct!
-dat_psfi = dat_pgc_psfcen_f814w[1606:1606+81, 1542:1542+81]
+dat_npsfi = dat_ngc_psfcen_f814w[1882:1882+81, 1887:1887+81]  # correct!
+dat_ppsfi = dat_pgc_psfcen_f814w[1606:1606+81, 1542:1542+81]
 # psfH peak is centered on 40,40; current peak is at PGC 1646.4766,1582.24407 -> 1606:1606+81, 1542:1542+81
 #g2di = do_2dgaussfit(dat_psfi)  # [1.04957099e-03 1.46476646e+02 8.22440674e+01 8.65402657e-01 8.51768218e-01] # p11179
-#plt.imshow(dat_psfi, origin='lower')
+#plt.imshow(dat_ppsfi, origin='lower')
 #plt.colorbar()
 #plt.show()
-#print(oops)
-g2di = do_2dgaussfit(dat_psfi)  # [1.10704459e-03 4.01447195e+01 4.01799546e+01 8.18216509e-01 8.47028033e-01] # n384
+#plt.imshow(dat_npsfi, origin='lower')
+#plt.colorbar()
+#plt.show()
+#plt.imshow(dat_psfH, origin='lower')
+#plt.colorbar()
+#plt.show()
+
+g2di = do_2dgaussfit(dat_npsfi)  # [1.10704459e-03 4.01447195e+01 4.01799546e+01 8.18216509e-01 8.47028033e-01] # n384
 g2dh = do_2dgaussfit(dat_psfH)  # [ 0.04847133 40.03064685 39.91339118  1.45843277  1.49161195]  # PSF H
+#print(oops)
 
-# dat_psfi *= g2dh[0] / g2di[0]
-
-
-diff_g2d = np.sqrt(g2dh**2 - g2di**2)
-print(diff_g2d)
-guess_g2d_offset = (160., 40., 40., 1.2, 1.2)
+#diff_g2d = np.sqrt(g2dh**2 - g2di**2)
+#print(diff_g2d)
+use_guess = (2., 40., 40., 1.2, 1.2)
+# guess_g2d_offset = (160., 40., 40., 1.2, 1.2)
 #guess_g2d_offset = (160., 1.2, 1.2)
 # guess_g2d_best = (159., 40., 40., diff_g2d[3], diff_g2d[4])
 #z = zero_conv(pars=guess_g2d_best, dataH=dat_psfH, dataI=dat_psfi)
 #print(z, 'check')
 #z = zero_conv(pars=guess_g2d_offset, dataH=dat_psfH, dataI=dat_psfi)
 #print(z, 'check')
-sol = optimize.fmin(zero_conv, x0=guess_g2d_offset, args=(dat_psfH, dat_psfi))
-print(sol, 'fmin solution')
-print(diff_g2d)
+n_sol = optimize.fmin(zero_conv, x0=use_guess, args=(dat_psfH, dat_npsfi))
+n_sol[0] = 1.
+icon = conv(n_sol, dat_npsfi)
+plt.imshow((icon - dat_psfH)/dat_psfH, origin='lower')
+plt.colorbar()
+plt.show()
+print(oops)
+# [ 2.48427812 40.21211581 40.35469594  1.09370082  1.06636333]
+# n_sol = optimize.minimize(zero_conv, x0=use_guess, args=(dat_psfH, dat_npsfi))  # same error without height as fmin!
+# [ 2.0272873  40.12498261 40.02682619  1.09610137  1.05941339]
+print(n_sol)
+p_sol = optimize.fmin(zero_conv, x0=use_guess, args=(dat_psfH, dat_ppsfi))
+print(p_sol)
+#v print(oop)
+sol_plot = n_sol
+#print(sol, 'fmin solution')
+#print(diff_g2d)
 # NGC 384:
 # [120.0546269   40.21214241  40.35472934   1.09384867   1.06637347] fmin solution (including centerx,y) 0.0004500262
 # [121.55822138   1.13873817   1.15121924] fmin solution (NOT including centerx,y) 0.0010782303
@@ -213,11 +245,32 @@ print(diff_g2d)
 # [121.82100697   1.10433544   1.05780877] fmin solution (NOT including centerx,y) 0.0005105181
 
 # MAKE GALAXY PLOTS
-sol[0] = 1.  # comment out for withamp; else, noamp!
-sol[1] = sol[1]+60.  # 200 vs 80 -> midpoint 100 instead of 40, so add 60!
-sol[2] = sol[2]+60.  # 200 vs 80 -> midpoint 100 instead of 40, so add 60!
-# icon = conv(sol, dataI=dat_nI[1820:2021, 1830:2031])  # NGC 384
-icon = conv(sol, dataI=dat_pI[1550:1751, 1500:1701])  # PGC 11179
+sol_plot[0] = 1.  # comment out for withamp; else, noamp!
+sol_plot[1] = sol_plot[1]+60.  # 200 vs 80 -> midpoint 100 instead of 40, so add 60!
+sol_plot[2] = sol_plot[2]+60.  # 200 vs 80 -> midpoint 100 instead of 40, so add 60!
+# icon = conv(n_sol, dataI=dat_nI[1820:2021, 1830:2031])  # NGC 384
+icon = conv(sol_plot, dataI=dat_pI[1550:1751, 1500:1701])  # PGC 11179
+
+# '''  # MAKE AND SAVE NEW CONVOLVED GALAXY FILES
+n_sol = (120.0546, 1922.2121, 1927.3547, 1.0938, 1.0664)
+# n_sol = (1., 1922.2121, 1927.3547, 1.0938, 1.0664)
+sol = optimize.fmin(zero_conv, x0=guess_g2d_offset, args=(dat_psfH, dat_psfi))
+
+ni_con = conv(n_sol, dataI=dat_nI)  # Centers that used 40, 40: [1882:1882+81, 1887:1887+81])  # NGC 384
+
+plt.imshow(ni_con, origin='lower')
+plt.colorbar()
+plt.show()
+
+p_sol = (121.8429, 1646.1250, 1582.0269, 1.0962, 1.0593)
+# p_sol = (1., 1646.1250, 1582.0269, 1.0962, 1.0593)
+pi_con = conv(p_sol, dataI=dat_pI)  # Centers that used 40, 40: [1606:1606+81, 1542:1542+81])  # PGC 11179
+plt.imshow(pi_con, origin='lower')
+plt.colorbar()
+plt.show()
+
+print(oops)
+# '''  # FINISH SAVING NEW CONVOLVED GALAXY FILES
 
 fig, ax = plt.subplots(1, 2, figsize=(12,5))
 plt.subplots_adjust(wspace=0.05)
